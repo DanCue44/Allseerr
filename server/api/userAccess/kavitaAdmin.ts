@@ -492,7 +492,8 @@ export class KavitaAdminAPI implements UserAccessAppClient {
   /**
    * An auth key the person signs in with. Kavita only lets people make
    * their own keys, so Allseerr signs in as them with their password and
-   * makes it, or finds the one it made before.
+   * makes it, or finds the one it made before. The account the API key
+   * belongs to needs no password, since Allseerr already signs in as it.
    */
   public async createUserKey(
     account: RemoteAccount,
@@ -500,7 +501,15 @@ export class KavitaAdminAPI implements UserAccessAppClient {
     password?: string
   ): Promise<AppUserKey | null> {
     if (!password) {
-      return null;
+      if ((await this.ownAccountId()) !== account.id) {
+        return null;
+      }
+
+      const keys = await this.call((headers) =>
+        this.axios.get<KavitaAuthKey[]>('/api/Account/auth-keys', { headers })
+      );
+
+      return this.findOrCreateKey(name, keys, (run) => this.call(run));
     }
 
     try {
@@ -514,31 +523,47 @@ export class KavitaAdminAPI implements UserAccessAppClient {
         throw new UserAccessAppError('Kavita did not sign the person in.');
       }
 
-      const existing = login.data.authKeys?.find(
-        (authKey) => authKey.name.toLowerCase() === name.toLowerCase()
+      return await this.findOrCreateKey(name, login.data.authKeys, (run) =>
+        run({ Authorization: `Bearer ${token}` }).then(
+          (response) => response.data
+        )
       );
-
-      if (existing) {
-        return { id: String(existing.id), key: existing.key };
-      }
-
-      const created = await this.axios.post<KavitaAuthKey>(
-        '/api/Account/create-auth-key',
-        { keyLength: KAVITA_AUTH_KEY_LENGTH, name },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
-      if (!created.data?.key) {
-        throw new UserAccessAppError('Kavita did not return the new key.');
-      }
-
-      return { id: String(created.data.id), key: created.data.key };
     } catch (e) {
       if (e instanceof UserAccessAppError) {
         throw e;
       }
       throw new UserAccessAppError(describeAppError('Kavita', e));
     }
+  }
+
+  private async findOrCreateKey(
+    name: string,
+    keys: KavitaAuthKey[] | null | undefined,
+    send: <T>(
+      run: (headers: Record<string, string>) => Promise<{ data: T }>
+    ) => Promise<T>
+  ): Promise<AppUserKey> {
+    const existing = keys?.find(
+      (authKey) => authKey.name.toLowerCase() === name.toLowerCase()
+    );
+
+    if (existing) {
+      return { id: String(existing.id), key: existing.key };
+    }
+
+    const created = await send((headers) =>
+      this.axios.post<KavitaAuthKey>(
+        '/api/Account/create-auth-key',
+        { keyLength: KAVITA_AUTH_KEY_LENGTH, name },
+        { headers }
+      )
+    );
+
+    if (!created?.key) {
+      throw new UserAccessAppError('Kavita did not return the new key.');
+    }
+
+    return { id: String(created.id), key: created.key };
   }
 
   public async isUserKeyValid(

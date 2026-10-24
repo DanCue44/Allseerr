@@ -237,6 +237,11 @@ nobookendsRoutes.post<{ app: string }>(
     try {
       return res.status(200).json(await connectNoBookEnds(req.user, app));
     } catch (e) {
+      if (e instanceof ReadingAppError && e.signIn) {
+        return res
+          .status(e.status)
+          .json({ message: e.message, signIn: e.signIn });
+      }
       return next(readingAppError(e, app));
     }
   }

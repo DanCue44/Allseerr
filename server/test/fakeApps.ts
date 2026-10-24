@@ -273,6 +273,14 @@ export const startFakeKavita = async (apiKey: string) => {
   // Tokens of people signed in as themselves, which only reach their own
   // calls
   const memberTokens = new Map<string, FakeKavitaMember>();
+  // The API key belongs to the first member, the admin
+  const tokenOwner = (authorization?: string) => {
+    const token = authorization?.replace('Bearer ', '') ?? '';
+    return (
+      memberTokens.get(token) ??
+      (validTokens.has(token) ? members[0] : undefined)
+    );
+  };
 
   const app = await startFake((req, url, body) => {
     const b = body as Record<string, unknown>;
@@ -290,7 +298,7 @@ export const startFakeKavita = async (apiKey: string) => {
       }
       const token = `token-${++tokens}`;
       validTokens.add(token);
-      return { status: 200, body: { username: 'admin', token } };
+      return { status: 200, body: { username: members[0].username, token } };
     }
     if (url.pathname === '/api/Account/login' && req.method === 'POST') {
       const member = members.find(
@@ -312,10 +320,15 @@ export const startFakeKavita = async (apiKey: string) => {
         },
       };
     }
+    if (url.pathname === '/api/Account/auth-keys' && req.method === 'GET') {
+      const member = tokenOwner(req.headers.authorization);
+      if (!member) {
+        return { status: 401 };
+      }
+      return { status: 200, body: member.authKeys ?? [] };
+    }
     if (url.pathname === '/api/Account/create-auth-key') {
-      const member = memberTokens.get(
-        req.headers.authorization?.replace('Bearer ', '') ?? ''
-      );
+      const member = tokenOwner(req.headers.authorization);
       if (!member) {
         return { status: 401 };
       }

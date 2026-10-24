@@ -111,6 +111,12 @@ beforeEach(() => {
   abs.apiKeys.splice(0);
   abs.server.version = '2.37.1';
   kavita.members.splice(1);
+  Object.assign(kavita.members[0], {
+    username: 'admin',
+    email: 'admin@example.com',
+    password: undefined,
+    authKeys: undefined,
+  });
   komga.users.splice(1);
   notifications.mock.resetCalls();
   resetReadingAppAttempts();
@@ -734,6 +740,11 @@ describe('NoBookEnds reading apps', () => {
       res.body.message,
       'You already have a Kavita account. Sign in to Kavita in NoBookEnds with your own password.'
     );
+    // NoBookEnds fills in its sign in with these
+    assert.deepEqual(res.body.signIn, {
+      serverUrl: 'https://kavita.example.com',
+      username: 'demo',
+    });
     assert.equal(kavita.members[1].password, 'their-own-password');
     assert.equal(kavita.members[1].authKeys, undefined);
 
@@ -747,6 +758,36 @@ describe('NoBookEnds reading apps', () => {
       .post(`/user/${user.id}/settings/apps/kavita/password`)
       .expect(409);
     assert.equal(kavita.members[1].password, 'their-own-password');
+  });
+
+  it("makes a key for the API key's own Kavita account without a password", async () => {
+    const user = await demo();
+    await grant(user, 'kavita');
+    // The admin reads with their own account, the one Allseerr signs in as
+    Object.assign(kavita.members[0], {
+      username: 'demo',
+      email: 'demo@seerr.dev',
+      password: 'their-own-password',
+    });
+    const key = await noBookEndsKey(user);
+
+    const res = await request(app)
+      .post('/nobookends/reading-apps/kavita/connect')
+      .set('X-API-Key', key);
+
+    assert.equal(res.status, 200);
+    assert.equal(res.body.username, 'demo');
+    const admin = kavita.members[0];
+    assert.equal(admin.authKeys?.[0].name, NOBOOKENDS_KEY_NAME);
+    assert.equal(res.body.apiKey, admin.authKeys?.[0].key);
+    assert.equal(res.body.password, undefined);
+    assert.equal(admin.password, 'their-own-password');
+
+    const again = await request(app)
+      .post('/nobookends/reading-apps/kavita/connect')
+      .set('X-API-Key', key);
+    assert.equal(again.body.apiKey, res.body.apiKey);
+    assert.equal(admin.authKeys?.length, 1);
   });
 
   it('changes the password of a Kavita account Allseerr made to make a key', async () => {

@@ -47,7 +47,9 @@ export const NOBOOKENDS_KEY_NAME = 'NoBookEnds (via Allseerr)';
 export class ReadingAppError extends Error {
   constructor(
     public status: 403 | 404 | 409,
-    message: string
+    message: string,
+    // Where the person signs in themselves, when Allseerr cannot
+    public signIn?: { serverUrl: string; username: string }
   ) {
     super(message);
     this.name = 'ReadingAppError';
@@ -489,18 +491,20 @@ export const connectNoBookEnds = async (
         await client.deleteUserKey(saved.id).catch(() => undefined);
       }
 
-      // Kavita only makes a key for someone signed in as them, which needs
-      // their password. One Allseerr made itself is changed first; a
-      // person's own account keeps theirs.
-      if (app === 'kavita' && !password) {
-        password = (await resetForNoBookEnds(user, account)).password;
-      }
-
-      const key = await client.createUserKey(
+      let key = await client.createUserKey(
         remote,
         NOBOOKENDS_KEY_NAME,
         password
       );
+
+      // Kavita only makes a key for someone signed in as them, which needs
+      // their password. One Allseerr made itself is changed first; a
+      // person's own account keeps theirs.
+      if (!key && app === 'kavita' && !password) {
+        password = (await resetForNoBookEnds(user, account, connection))
+          .password;
+        key = await client.createUserKey(remote, NOBOOKENDS_KEY_NAME, password);
+      }
 
       if (key) {
         account.nobookendsToken = sealSecret(key.key);
@@ -517,7 +521,9 @@ export const connectNoBookEnds = async (
     // No key to sign in with, so a password shown once does it
     return {
       ...connection,
-      password: password ?? (await resetForNoBookEnds(user, account)).password,
+      password:
+        password ??
+        (await resetForNoBookEnds(user, account, connection)).password,
     };
   } catch (e) {
     if (e instanceof ReadingAppError) {
@@ -538,14 +544,18 @@ export const connectNoBookEnds = async (
 
 const resetForNoBookEnds = (
   user: User,
-  account: UserAppAccount
+  account: UserAppAccount,
+  connection: NoBookEndsConnection
 ): Promise<NewAppPassword> => {
   const name = USER_ACCESS_APP_NAMES[account.app];
 
+  // NoBookEnds opens its sign in with the address and name filled in, so
+  // only the password is left to type
   if (!account.madeByAllseerr) {
     throw new ReadingAppError(
       409,
-      `You already have a ${name} account. Sign in to ${name} in NoBookEnds with your own password.`
+      `You already have a ${name} account. Sign in to ${name} in NoBookEnds with your own password.`,
+      { serverUrl: connection.serverUrl, username: connection.username }
     );
   }
 
