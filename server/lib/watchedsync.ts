@@ -76,7 +76,10 @@ class WatchedSync {
   private running = false;
   private lastRunAt = 0;
   private lastFullAt = 0;
-  private serverTokens = new Map<number, { token: string; at: number }>();
+  private serverTokens = new Map<
+    number,
+    { account: string; token: string | null; at: number }
+  >();
 
   public status(): { running: boolean } {
     return { running: this.running };
@@ -211,11 +214,19 @@ class WatchedSync {
         }
       };
 
+      const refused = new WatchedError(
+        403,
+        'Plex did not accept your account for this server. Sign in with Plex again and retry.'
+      );
+
       try {
         await mark(
           new PlexAPI({ plexToken: await this.plexServerToken(account) })
         );
       } catch (e) {
+        if (e instanceof NoAccessError) {
+          throw refused;
+        }
         if (statusOf(e) !== 401) {
           throw e;
         }
@@ -227,11 +238,8 @@ class WatchedSync {
             })
           );
         } catch (e2) {
-          if (statusOf(e2) === 401) {
-            throw new WatchedError(
-              403,
-              'Plex did not accept your account for this server. Sign in with Plex again and retry.'
-            );
+          if (e2 instanceof NoAccessError || statusOf(e2) === 401) {
+            throw refused;
           }
           throw e2;
         }
@@ -341,18 +349,47 @@ class WatchedSync {
     const accountToken = user.plexToken ?? '';
     const kept = this.serverTokens.get(user.id);
 
-    if (!fresh && kept && Date.now() - kept.at < SERVER_TOKEN_TTL_MS) {
+    if (
+      !fresh &&
+      kept &&
+      kept.account === accountToken &&
+      Date.now() - kept.at < SERVER_TOKEN_TTL_MS
+    ) {
+      if (kept.token === null) {
+        throw new NoAccessError('plex.tv turned the account token down lately');
+      }
+
       return kept.token;
     }
 
-    const machineId = getSettings().plex.machineId;
-    const devices = await new PlexTvAPI(accountToken).getDevices();
-    const server = devices.find(
-      (device) => device.clientIdentifier === machineId
-    );
-    const token = server?.accessToken ?? accountToken;
+    const machineId = getSettings().plex.machineId ?? '';
+    let serverToken: string | null;
 
-    this.serverTokens.set(user.id, { token, at: Date.now() });
+    try {
+      serverToken = await new PlexTvAPI(accountToken).getServerAccessToken(
+        machineId
+      );
+    } catch (e) {
+      // A token plex.tv no longer knows: the person has to sign in again
+      if (statusOf(e) === 401 || statusOf(e) === 422) {
+        this.serverTokens.set(user.id, {
+          account: accountToken,
+          token: null,
+          at: Date.now(),
+        });
+        throw new NoAccessError('plex.tv turned the account token down');
+      }
+      throw e;
+    }
+
+    // Not listed: the owner's own token still opens a server plex.tv has
+    // not caught up on
+    const token = serverToken ?? accountToken;
+    this.serverTokens.set(user.id, {
+      account: accountToken,
+      token,
+      at: Date.now(),
+    });
 
     return token;
   }

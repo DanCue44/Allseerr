@@ -477,6 +477,25 @@ class PlexTvAPI extends ExternalAPI {
     }
   }
 
+  /**
+   * The token that opens one server for this account: the account's own for
+   * a server it owns, a server token for one shared with it. Null when
+   * plex.tv does not list that server for the account. Says nothing in the
+   * log about a rejected account token; the caller decides what it means.
+   */
+  public async getServerAccessToken(machineId: string): Promise<string | null> {
+    const response = await this.axios.get<
+      { clientIdentifier: string; accessToken?: string }[]
+    >('/api/v2/resources?includeHttps=1', {
+      headers: { Accept: 'application/json' },
+    });
+    const server = (response.data ?? []).find(
+      (resource) => resource.clientIdentifier === machineId
+    );
+
+    return server?.accessToken ?? null;
+  }
+
   public async pingToken() {
     try {
       const response = await this.axios.get('/api/v2/ping', {
