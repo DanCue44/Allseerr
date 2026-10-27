@@ -6,6 +6,7 @@ import type { LibraryReconcileResult } from '@server/lib/plexLibraries';
 import { reconcileLibraries } from '@server/lib/plexLibraries';
 import type { Library, PlexSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
+import type { PlexViewFields } from '@server/lib/watchedState';
 import logger from '@server/logger';
 import { ApiError } from '@server/types/error';
 import { requestErrorLogFields } from '@server/utils/requestError';
@@ -71,6 +72,9 @@ export interface PlexMetadata {
   parentIndex?: number;
   leafCount: number;
   viewedLeafCount: number;
+  viewCount?: number;
+  viewOffset?: number;
+  lastViewedAt?: number;
   addedAt: number;
   updatedAt: number;
   Media: Media[];
@@ -95,6 +99,19 @@ interface Media {
 interface PlexMetadataResponse {
   MediaContainer: {
     Metadata: PlexMetadata[];
+  };
+}
+
+/** A library item with the view fields the token's own account sees */
+export interface PlexViewItem extends PlexViewFields {
+  ratingKey: string;
+  type: 'movie' | 'show';
+}
+
+interface PlexViewResponse {
+  MediaContainer: {
+    totalSize?: number;
+    Metadata?: PlexViewItem[];
   };
 }
 
@@ -281,6 +298,50 @@ class PlexAPI extends ExternalAPI {
     );
 
     return response.MediaContainer.Metadata;
+  }
+
+  /**
+   * A library's movies or shows with the view state the token's own account
+   * has (play counts, episodes seen, where a movie was left). `since` (unix
+   * seconds) keeps it to titles viewed from then on.
+   */
+  public async getViewState(
+    sectionId: string,
+    type: 'movie' | 'show',
+    {
+      offset = 0,
+      size = 500,
+      since,
+    }: { offset?: number; size?: number; since?: number } = {}
+  ): Promise<{ totalSize: number; items: PlexViewItem[] }> {
+    const response = await this.get<PlexViewResponse>(
+      `/library/sections/${sectionId}/all?type=${type === 'show' ? 2 : 1}` +
+        // Only the counts are wanted, not the files, people and art
+        '&excludeElements=Media,Genre,Director,Writer,Producer,Country,Role,Collection,Field,Guid,Image,Label,Rating,UltraBlurColors' +
+        '&excludeFields=summary,tagline' +
+        (since ? `&lastViewedAt>>=${since}` : ''),
+      {
+        headers: {
+          'X-Plex-Container-Start': `${offset}`,
+          'X-Plex-Container-Size': `${size}`,
+        },
+      }
+    );
+
+    return {
+      totalSize: response.MediaContainer.totalSize ?? 0,
+      items: response.MediaContainer.Metadata ?? [],
+    };
+  }
+
+  /**
+   * Marks an item (a movie, show, season or episode) watched or unwatched
+   * for the token's own account. Marking a show marks every episode.
+   */
+  public async setWatched(ratingKey: string, watched: boolean): Promise<void> {
+    await this.axios.get(watched ? '/:/scrobble' : '/:/unscrobble', {
+      params: { identifier: 'com.plexapp.plugins.library', key: ratingKey },
+    });
   }
 }
 

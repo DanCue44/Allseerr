@@ -98,6 +98,7 @@ const CreditGrid = ({
           summary={media.overview}
           mediaType={media.mediaType as 'movie' | 'tv'}
           status={media.mediaInfo?.status}
+          watched={media.mediaInfo?.watched}
           canExpand
         />
         {media.caption && (

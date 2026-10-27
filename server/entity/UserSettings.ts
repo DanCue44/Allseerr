@@ -96,6 +96,10 @@ export class UserSettings {
   @Column({ nullable: true })
   public watchlistSyncTv?: boolean;
 
+  // Leave out titles already watched on the media server from Discover and search
+  @Column({ nullable: true })
+  public hideWatched?: boolean;
+
   @Column({
     type: 'text',
     nullable: true,

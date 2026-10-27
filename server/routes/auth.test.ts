@@ -630,6 +630,7 @@ describe('GET /auth/me', () => {
       'accentColor',
       'bookLanguage',
       'discoverRegion',
+      'hideWatched',
       'locale',
       'notificationTypes',
       'originalLanguage',

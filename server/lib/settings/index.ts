@@ -656,6 +656,7 @@ export type JobId =
   | 'plex-recently-added-scan'
   | 'plex-full-scan'
   | 'plex-watchlist-sync'
+  | 'plex-watched-sync'
   | 'plex-refresh-token'
   | 'radarr-scan'
   | 'sonarr-scan'
@@ -666,6 +667,7 @@ export type JobId =
   | 'download-sync-reset'
   | 'jellyfin-recently-added-scan'
   | 'jellyfin-full-scan'
+  | 'jellyfin-watched-sync'
   | 'image-cache-cleanup'
   | 'availability-sync'
   | 'process-blocklisted-tags'
@@ -936,6 +938,9 @@ class Settings {
         'plex-watchlist-sync': {
           schedule: '0 */3 * * * *',
         },
+        'plex-watched-sync': {
+          schedule: '0 */10 * * * *',
+        },
         'plex-refresh-token': {
           schedule: '0 0 5 * * *',
         },
@@ -968,6 +973,9 @@ class Settings {
         },
         'jellyfin-full-scan': {
           schedule: '0 0 3 * * *',
+        },
+        'jellyfin-watched-sync': {
+          schedule: '0 */10 * * * *',
         },
         'image-cache-cleanup': {
           schedule: '0 0 5 * * *',

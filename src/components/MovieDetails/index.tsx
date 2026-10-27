@@ -24,6 +24,7 @@ import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
+import WatchedButton from '@app/components/WatchedButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -623,6 +624,11 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
                 )}
               </>
             )}
+          <WatchedButton
+            media={data.mediaInfo}
+            title={data.title}
+            onUpdate={() => revalidate()}
+          />
           <FavoriteButton
             tmdbId={data.id}
             mediaType="movie"

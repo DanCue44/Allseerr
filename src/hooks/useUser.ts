@@ -43,6 +43,7 @@ export interface UserSettings {
   notificationTypes: Partial<NotificationAgentTypes>;
   watchlistSyncMovies?: boolean;
   watchlistSyncTv?: boolean;
+  hideWatched?: boolean;
 }
 
 interface UserHookResponse {

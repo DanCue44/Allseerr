@@ -40,6 +40,7 @@ import {
   isBazarrConfigured,
   searchMediaSubtitles,
 } from '@server/lib/subtitles';
+import watchedSync, { WatchedError } from '@server/lib/watchedsync';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
 import { Router } from 'express';
@@ -291,6 +292,41 @@ mediaRoutes.post<
     await mediaRepository.save(media);
 
     return res.status(200).json(media);
+  }
+);
+
+mediaRoutes.post<{ id: string }, unknown, { watched?: boolean }>(
+  '/:id/watched',
+  isAuthenticated(),
+  async (req, res, next) => {
+    try {
+      const media = await getRepository(Media).findOne({
+        where: { id: Number(req.params.id) },
+      });
+
+      if (!media || !req.user) {
+        return next({ status: 404, message: 'Media not found' });
+      }
+
+      const state = await watchedSync.setWatched(
+        req.user,
+        media,
+        req.body?.watched !== false
+      );
+
+      return res.status(200).json(state);
+    } catch (e) {
+      if (e instanceof WatchedError) {
+        return next({ status: e.status, message: e.message });
+      }
+
+      logger.error('Something went wrong marking media watched', {
+        label: 'Media',
+        mediaId: req.params.id,
+        errorMessage: e.message,
+      });
+      next({ status: 500, message: 'Failed to update watched state' });
+    }
   }
 );
 

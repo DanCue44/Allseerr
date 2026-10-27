@@ -48,6 +48,7 @@ import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
+import WatchedButton from '@app/components/WatchedButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -804,6 +805,12 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
                 </span>
               </Button>
             )}
+          <WatchedButton
+            media={data.mediaInfo}
+            title={data.title}
+            onUpdate={() => revalidate()}
+            className={pillIcon}
+          />
           <FavoriteButton
             tmdbId={data.id}
             mediaType="movie"

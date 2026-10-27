@@ -28,6 +28,7 @@ import SeasonRolloverNotice from '@app/components/SeasonRolloverNotice';
 import Slider from '@app/components/Slider';
 import StatusBadge from '@app/components/StatusBadge';
 import Season from '@app/components/TvDetails/Season';
+import WatchedButton from '@app/components/WatchedButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -680,6 +681,11 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                 )}
               </>
             )}
+          <WatchedButton
+            media={data?.mediaInfo}
+            title={data.name}
+            onUpdate={() => revalidate()}
+          />
           <FavoriteButton tmdbId={data.id} mediaType="tv" title={data.name} />
           <div className="z-20">
             <PlayButton links={mediaLinks} />

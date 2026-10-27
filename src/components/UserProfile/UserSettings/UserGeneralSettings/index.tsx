@@ -81,6 +81,9 @@ const messages = defineMessages(
     languageDefault: 'Default ({language})',
     validationemailrequired: 'Email required',
     validationemailformat: 'Valid email required',
+    hidewatched: 'Hide Watched Titles',
+    hidewatchedtip:
+      'Leave out movies and series you have already watched on your media server from Discover and search',
     plexwatchlistsyncmovies: 'Auto-Request Movies',
     plexwatchlistsyncmoviestip:
       'Automatically request movies on your <PlexWatchlistSupportLink>Plex Watchlist</PlexWatchlistSupportLink>',
@@ -202,6 +205,7 @@ const UserGeneralSettings = () => {
           tvRatingLimit: data?.tvRatingLimit ?? '',
           watchlistSyncMovies: data?.watchlistSyncMovies,
           watchlistSyncTv: data?.watchlistSyncTv,
+          hideWatched: data?.hideWatched,
           accentColor: data?.accentColor ?? '',
           bookLanguage: data?.bookLanguage ?? '',
         }}
@@ -237,6 +241,7 @@ const UserGeneralSettings = () => {
                 : {}),
               watchlistSyncMovies: values.watchlistSyncMovies,
               watchlistSyncTv: values.watchlistSyncTv,
+              hideWatched: values.hideWatched,
               accentColor: values.accentColor || null,
               bookLanguage: values.bookLanguage || null,
             });
@@ -774,6 +779,26 @@ const UserGeneralSettings = () => {
                     </div>
                   </div>
                 </>
+              )}
+              {user?.userType !== UserType.LOCAL && (
+                <div className="form-row">
+                  <label htmlFor="hideWatched" className="checkbox-label">
+                    <span>{intl.formatMessage(messages.hidewatched)}</span>
+                    <span className="label-tip">
+                      {intl.formatMessage(messages.hidewatchedtip)}
+                    </span>
+                  </label>
+                  <div className="form-input-area">
+                    <Field
+                      type="checkbox"
+                      id="hideWatched"
+                      name="hideWatched"
+                      onChange={() => {
+                        setFieldValue('hideWatched', !values.hideWatched);
+                      }}
+                    />
+                  </div>
+                </div>
               )}
               {hasPermission(
                 [Permission.AUTO_REQUEST, Permission.AUTO_REQUEST_MOVIE],

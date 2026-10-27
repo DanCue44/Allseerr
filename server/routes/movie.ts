@@ -5,6 +5,7 @@ import TheMovieDb from '@server/api/themoviedb';
 import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import WatchedItem from '@server/entity/WatchedItem';
 import { Watchlist } from '@server/entity/Watchlist';
 import logger from '@server/logger';
 import { mapMovieDetails } from '@server/models/Movie';
@@ -23,6 +24,10 @@ movieRoutes.get('/:id', async (req, res, next) => {
     });
 
     const media = await Media.getMedia(tmdbMovie.id, MediaType.MOVIE);
+
+    if (media) {
+      await WatchedItem.attach(req.user, [media]);
+    }
 
     const onUserWatchlist = await getRepository(Watchlist).exist({
       where: {

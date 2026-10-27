@@ -5,6 +5,7 @@ import CachedImage from '@app/components/Common/CachedImage';
 import FormatIcon from '@app/components/Common/FormatIcon';
 import StatusBadgeMini from '@app/components/Common/StatusBadgeMini';
 import Tooltip from '@app/components/Common/Tooltip';
+import WatchedBadge from '@app/components/Common/WatchedBadge';
 import RequestModal from '@app/components/RequestModal';
 import ErrorCard from '@app/components/TitleCard/ErrorCard';
 import Placeholder from '@app/components/TitleCard/Placeholder';
@@ -25,6 +26,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { MediaStatus } from '@server/constants/media';
 import type { Watchlist } from '@server/entity/Watchlist';
+import type { UserWatchedState } from '@server/lib/watchedState';
 import type { MediaType } from '@server/models/Search';
 import axios from 'axios';
 import Link from 'next/link';
@@ -43,6 +45,8 @@ interface TitleCardProps {
   status?: MediaStatus;
   canExpand?: boolean;
   inProgress?: boolean;
+  /** What the person has watched of it on the media server */
+  watched?: UserWatchedState;
   isAddedToWatchlist?: number | boolean;
   mutateParent?: () => void;
 }
@@ -67,6 +71,7 @@ const TitleCard = ({
   mediaType,
   isAddedToWatchlist = false,
   inProgress = false,
+  watched,
   canExpand = false,
   mutateParent,
 }: TitleCardProps) => {
@@ -484,14 +489,21 @@ const TitleCard = ({
                   </Button>
                 </Tooltip>
               )}
-            {currentStatus && currentStatus !== MediaStatus.UNKNOWN && (
+            {((currentStatus && currentStatus !== MediaStatus.UNKNOWN) ||
+              watched?.watched ||
+              watched?.inProgress) && (
               <div className="flex flex-col items-center gap-1">
+                {currentStatus && currentStatus !== MediaStatus.UNKNOWN && (
+                  <div className="pointer-events-none z-40 flex">
+                    <StatusBadgeMini
+                      status={currentStatus}
+                      inProgress={inProgress}
+                      shrink
+                    />
+                  </div>
+                )}
                 <div className="pointer-events-none z-40 flex">
-                  <StatusBadgeMini
-                    status={currentStatus}
-                    inProgress={inProgress}
-                    shrink
-                  />
+                  <WatchedBadge state={watched} shrink />
                 </div>
               </div>
             )}

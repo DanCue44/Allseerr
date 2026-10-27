@@ -4,6 +4,7 @@ import { ApiErrorCode } from '@server/constants/error';
 import { MediaServerType } from '@server/constants/server';
 import availabilitySync from '@server/lib/availabilitySync';
 import { getSettings } from '@server/lib/settings';
+import type { JellyfinUserFields } from '@server/lib/watchedState';
 import logger from '@server/logger';
 import { ApiError } from '@server/types/error';
 import { getAppVersion } from '@server/utils/appVersion';
@@ -113,6 +114,12 @@ export interface JellyfinMediaSource {
   Type: string;
   VideoType: string;
   MediaStreams: JellyfinMediaStream[];
+}
+
+/** A library item with the user's own play data */
+export interface JellyfinUserItem extends JellyfinUserFields {
+  Id: string;
+  Type: string;
 }
 
 export interface JellyfinLibraryItemExtended extends JellyfinLibraryItem {
@@ -581,6 +588,37 @@ class JellyfinAPI extends ExternalAPI {
       }
 
       throw new ApiError(e.response.status, ApiErrorCode.InvalidAuthToken);
+    }
+  }
+
+  /**
+   * A library's movies and series with the user's own play data (played,
+   * play count, episodes left, where a movie was left)
+   */
+  public async getUserItems(libraryId: string): Promise<JellyfinUserItem[]> {
+    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
+      `/Users/${this.userId ?? 'Me'}/Items?ParentId=${libraryId}&Recursive=true&IncludeItemTypes=Movie,Series&Fields=RecursiveItemCount&EnableImages=false`
+    );
+
+    return response.Items ?? [];
+  }
+
+  public async getUserItem(
+    itemId: string
+  ): Promise<JellyfinUserItem | undefined> {
+    return this.get<JellyfinUserItem>(
+      `/Users/${this.userId ?? 'Me'}/Items/${itemId}?Fields=RecursiveItemCount`
+    );
+  }
+
+  /** Marks an item played or unplayed for the user (a series marks every episode) */
+  public async setPlayed(itemId: string, played: boolean): Promise<void> {
+    const url = `/Users/${this.userId ?? 'Me'}/PlayedItems/${itemId}`;
+
+    if (played) {
+      await this.axios.post(url);
+    } else {
+      await this.axios.delete(url);
     }
   }
 

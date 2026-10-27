@@ -52,6 +52,7 @@ import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
 import RequestModal from '@app/components/RequestModal';
 import SeasonRolloverNotice from '@app/components/SeasonRolloverNotice';
+import WatchedButton from '@app/components/WatchedButton';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
@@ -850,6 +851,12 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                 </span>
               </Button>
             )}
+          <WatchedButton
+            media={data?.mediaInfo}
+            title={data.name}
+            onUpdate={() => revalidate()}
+            className={pillIcon}
+          />
           <FavoriteButton
             tmdbId={data.id}
             mediaType="tv"

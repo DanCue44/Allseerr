@@ -100,6 +100,7 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         globalBookQuotaLimit: defaultQuotas.book?.quotaLimit,
         watchlistSyncMovies: user.settings?.watchlistSyncMovies,
         watchlistSyncTv: user.settings?.watchlistSyncTv,
+        hideWatched: user.settings?.hideWatched,
       });
     } catch (e) {
       next({ status: 500, message: e.message });
@@ -205,6 +206,7 @@ userSettingsRoutes.post<
         originalLanguage: req.body.originalLanguage,
         watchlistSyncMovies: req.body.watchlistSyncMovies,
         watchlistSyncTv: req.body.watchlistSyncTv,
+        hideWatched: req.body.hideWatched,
       });
     } else {
       user.settings.locale = req.body.locale;
@@ -219,6 +221,7 @@ userSettingsRoutes.post<
       }
       user.settings.watchlistSyncMovies = req.body.watchlistSyncMovies;
       user.settings.watchlistSyncTv = req.body.watchlistSyncTv;
+      user.settings.hideWatched = req.body.hideWatched;
     }
 
     const savedUser = await userRepository.save(user);
@@ -233,6 +236,7 @@ userSettingsRoutes.post<
       bookLanguage: savedUser.settings?.bookLanguage ?? null,
       watchlistSyncMovies: savedUser.settings?.watchlistSyncMovies,
       watchlistSyncTv: savedUser.settings?.watchlistSyncTv,
+      hideWatched: savedUser.settings?.hideWatched,
       movieRatingLimit: savedUser.movieRatingLimit,
       tvRatingLimit: savedUser.tvRatingLimit,
       email: savedUser.email,

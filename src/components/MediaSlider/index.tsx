@@ -61,7 +61,7 @@ const MediaSlider = ({
   onNewTitles,
 }: MediaSliderProps) => {
   const settings = useSettings();
-  const { hasPermission } = useUser();
+  const { user, hasPermission } = useUser();
   const { data, error, setSize, size } = useSWRInfinite<MixedResult>(
     (pageIndex: number, previousPageData: MixedResult | null) => {
       if (previousPageData && pageIndex + 1 > previousPageData.totalPages) {
@@ -122,6 +122,14 @@ const MediaSlider = ({
     });
   }
 
+  if (user?.settings?.hideWatched) {
+    titles = titles.filter(
+      (i) =>
+        !(i.mediaType === 'movie' || i.mediaType === 'tv') ||
+        !i.mediaInfo?.watched?.watched
+    );
+  }
+
   useEffect(() => {
     if (
       titles.length < 24 &&
@@ -167,6 +175,7 @@ const MediaSlider = ({
               isAddedToWatchlist={title.mediaInfo?.watchlists?.length ?? 0}
               image={title.posterPath}
               status={title.mediaInfo?.status}
+              watched={title.mediaInfo?.watched}
               summary={title.overview}
               title={title.title}
               userScore={title.voteAverage}
@@ -183,6 +192,7 @@ const MediaSlider = ({
               isAddedToWatchlist={title.mediaInfo?.watchlists?.length ?? 0}
               image={title.posterPath}
               status={title.mediaInfo?.status}
+              watched={title.mediaInfo?.watched}
               summary={title.overview}
               title={title.name}
               userScore={title.voteAverage}

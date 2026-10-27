@@ -24,6 +24,7 @@ import { sonarrScanner } from '@server/lib/scanners/sonarr';
 import type { JobId } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import { isSyncRunning, syncEveryone } from '@server/lib/userAccess';
+import watchedSync from '@server/lib/watchedsync';
 import watchlistSync from '@server/lib/watchlistsync';
 import logger from '@server/logger';
 import schedule from 'node-schedule';
@@ -116,6 +117,27 @@ export const startJobs = (): void => {
         });
       }),
     });
+
+    // What each person has watched on Plex
+    scheduledJobs.push({
+      id: 'plex-watched-sync',
+      name: 'Plex Watched Sync',
+      type: 'process',
+      interval: 'minutes',
+      cronSchedule: jobs['plex-watched-sync'].schedule,
+      job: schedule.scheduleJob(jobs['plex-watched-sync'].schedule, () => {
+        logger.info('Starting scheduled job: Plex Watched Sync', {
+          label: 'Jobs',
+        });
+        watchedSync.sync().catch((e) => {
+          logger.error('Failed to sync watched state', {
+            label: 'Watched Sync',
+            errorMessage: e.message,
+          });
+        });
+      }),
+      running: () => watchedSync.status().running,
+    });
   } else if (
     mediaServerType === MediaServerType.JELLYFIN ||
     mediaServerType === MediaServerType.EMBY
@@ -155,6 +177,27 @@ export const startJobs = (): void => {
       }),
       running: () => jellyfinFullScanner.status().running,
       cancelFn: () => jellyfinFullScanner.cancel(),
+    });
+
+    // What each person has watched on Jellyfin or Emby
+    scheduledJobs.push({
+      id: 'jellyfin-watched-sync',
+      name: 'Jellyfin Watched Sync',
+      type: 'process',
+      interval: 'minutes',
+      cronSchedule: jobs['jellyfin-watched-sync'].schedule,
+      job: schedule.scheduleJob(jobs['jellyfin-watched-sync'].schedule, () => {
+        logger.info('Starting scheduled job: Jellyfin Watched Sync', {
+          label: 'Jobs',
+        });
+        watchedSync.sync().catch((e) => {
+          logger.error('Failed to sync watched state', {
+            label: 'Watched Sync',
+            errorMessage: e.message,
+          });
+        });
+      }),
+      running: () => watchedSync.status().running,
     });
   }
 

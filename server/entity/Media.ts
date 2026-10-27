@@ -21,6 +21,7 @@ import type { DownloadingItem } from '@server/lib/downloadtracker';
 import downloadTracker from '@server/lib/downloadtracker';
 import { Permission } from '@server/lib/permissions';
 import { getDefaultChaptarr, getSettings } from '@server/lib/settings';
+import type { UserWatchedState } from '@server/lib/watchedState';
 import logger from '@server/logger';
 import { DbAwareColumn, resolveDbType } from '@server/utils/DbColumnHelper';
 import { getHostname } from '@server/utils/getHostname';
@@ -38,6 +39,7 @@ import {
 import Issue from './Issue';
 import { MediaRequest } from './MediaRequest';
 import Season from './Season';
+import WatchedItem from './WatchedItem';
 
 @Entity()
 @Index(['tmdbId', 'mediaType'])
@@ -95,6 +97,8 @@ class Media {
           m.hasActiveRequest = activeIds.has(m.id);
         });
       }
+
+      await WatchedItem.attach(user, relatedMedia);
 
       return relatedMedia;
     } catch (e) {
@@ -347,6 +351,8 @@ class Media {
   public serviceUrl?: string;
   public serviceUrl4k?: string;
   public hasActiveRequest?: boolean;
+  /** The signed-in person's watched state on the media server (not a column) */
+  public watched?: UserWatchedState;
   public downloadStatus?: DownloadingItem[] = [];
   public downloadStatus4k?: DownloadingItem[] = [];
   // A book's ebook downloads are in downloadStatus, its audiobook ones here

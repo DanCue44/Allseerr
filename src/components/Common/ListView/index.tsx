@@ -57,7 +57,7 @@ const ListView = ({
   mutateParent,
 }: ListViewProps) => {
   const intl = useIntl();
-  const { hasPermission } = useUser();
+  const { user, hasPermission } = useUser();
   const [interfaceStyle] = useInterfaceStyle();
   const ambient = interfaceStyle === 'ambient';
   useVerticalScroll(onScrollBottom, !isLoading && !isEmpty && !isReachingEnd);
@@ -100,6 +100,13 @@ const ListView = ({
         })}
         {items
           ?.filter((title) => {
+            if (
+              user?.settings?.hideWatched &&
+              (title.mediaType === 'movie' || title.mediaType === 'tv') &&
+              (title as TvResult | MovieResult).mediaInfo?.watched?.watched
+            ) {
+              return false;
+            }
             if (!blocklistVisibility)
               return (
                 (title as TvResult | MovieResult).mediaInfo?.status !==
@@ -121,6 +128,7 @@ const ListView = ({
                     }
                     image={title.posterPath}
                     status={title.mediaInfo?.status}
+                    watched={title.mediaInfo?.watched}
                     summary={title.overview}
                     title={title.title}
                     userScore={title.voteAverage}
@@ -143,6 +151,7 @@ const ListView = ({
                     }
                     image={title.posterPath}
                     status={title.mediaInfo?.status}
+                    watched={title.mediaInfo?.watched}
                     summary={title.overview}
                     title={title.name}
                     userScore={title.voteAverage}

@@ -128,6 +128,7 @@ const TmdbMediaTitleCard = ({
       }
       image={title.posterPath}
       status={title.mediaInfo?.status}
+      watched={title.mediaInfo?.watched}
       summary={title.overview}
       title={title.title}
       userScore={title.voteAverage}
@@ -145,6 +146,7 @@ const TmdbMediaTitleCard = ({
       }
       image={title.posterPath}
       status={title.mediaInfo?.status}
+      watched={title.mediaInfo?.watched}
       summary={title.overview}
       title={title.name}
       userScore={title.voteAverage}

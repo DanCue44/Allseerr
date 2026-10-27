@@ -6,6 +6,7 @@ import type { TmdbKeyword } from '@server/api/themoviedb/interfaces';
 import { MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import WatchedItem from '@server/entity/WatchedItem';
 import { Watchlist } from '@server/entity/Watchlist';
 import { getSeasonEpisodeAvailability } from '@server/lib/episodeAvailability';
 import logger from '@server/logger';
@@ -32,6 +33,10 @@ tvRoutes.get('/:id', async (req, res, next) => {
       language: (req.query.language as string) ?? req.locale,
     });
     const media = await Media.getMedia(tv.id, MediaType.TV);
+
+    if (media) {
+      await WatchedItem.attach(req.user, [media]);
+    }
 
     const onUserWatchlist = await getRepository(Watchlist).exist({
       where: {

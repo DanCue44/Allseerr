@@ -30,6 +30,7 @@ export interface UserSettingsGeneralResponse {
   globalBookQuotaDays?: number;
   watchlistSyncMovies?: boolean;
   watchlistSyncTv?: boolean;
+  hideWatched?: boolean;
 }
 
 export type NotificationAgentTypes = Record<NotificationAgentKey, number>;

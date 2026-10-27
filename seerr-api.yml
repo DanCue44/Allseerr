@@ -479,6 +479,11 @@ components:
           nullable: true
           description: 'Enable watchlist sync for TV'
           example: false
+        hideWatched:
+          type: boolean
+          nullable: true
+          description: 'Leave out titles the user has watched on the media server from Discover and search'
+          example: false
     MainSettings:
       type: object
       properties:
@@ -3590,6 +3595,25 @@ components:
               type: array
               items:
                 type: string
+    UserWatchedState:
+      type: object
+      description: What the signed-in user has watched of a title on the media server, read with their own account there
+      properties:
+        watched:
+          type: boolean
+          description: Every part seen (a movie played, or every episode the server has)
+        inProgress:
+          type: boolean
+          description: Started but not finished
+        viewCount:
+          type: number
+        viewedLeafCount:
+          type: number
+        leafCount:
+          type: number
+        lastViewedAt:
+          type: string
+          nullable: true
     MediaInfo:
       type: object
       properties:
@@ -3682,6 +3706,13 @@ components:
           type: string
           example: '2020-09-12T10:00:27.000Z'
           readOnly: true
+        watched:
+          type: object
+          readOnly: true
+          nullable: true
+          description: The signed-in user's watched state, for users with a media server account
+          allOf:
+            - $ref: '#/components/schemas/UserWatchedState'
     Cast:
       type: object
       properties:
@@ -14908,6 +14939,41 @@ paths:
           description: No arr is set up for this media
         '502':
           description: The arr returned an error
+  /media/{mediaId}/watched:
+    post:
+      summary: Mark media watched or unwatched
+      description: |
+        Marks a movie or series watched or unwatched on the media server with the signed-in user's own account there, and returns what the server then reports.
+
+        Only for users signed in with Plex, Jellyfin or Emby, and for titles the server has.
+      tags:
+        - media
+      parameters:
+        - in: path
+          name: mediaId
+          description: Media ID
+          required: true
+          example: '1'
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                watched:
+                  type: boolean
+              required:
+                - watched
+      responses:
+        '200':
+          description: The user's watched state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserWatchedState'
   /media/{mediaId}/watch_data:
     get:
       summary: Get watch data
