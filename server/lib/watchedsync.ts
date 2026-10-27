@@ -1,5 +1,6 @@
 import JellyfinAPI from '@server/api/jellyfin';
 import PlexAPI from '@server/api/plexapi';
+import PlexTvAPI from '@server/api/plextv';
 import { MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
 import { getRepository } from '@server/datasource';
@@ -26,6 +27,8 @@ const PAGE_SIZE = 500;
 const FULL_EVERY_MS = 24 * 60 * 60 * 1000;
 /** A quick run reaches back this far past the last run, in case one was slow */
 const OVERLAP_MS = 10 * 60 * 1000;
+/** How long a person's server token is kept before plex.tv is asked again */
+const SERVER_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 interface TitleRef {
   mediaType: MediaType;
@@ -50,22 +53,30 @@ export class WatchedError extends Error {
 /** The media server cannot be reached: stop the run instead of failing every user */
 class ServerDownError extends Error {}
 
+/** The server turned the person's account down, even with a fresh token */
+class NoAccessError extends Error {}
+
+const statusOf = (e: { response?: { status?: number } }): number =>
+  e.response?.status ?? 0;
+
 const isServerDown = (e: { response?: unknown; code?: string }): boolean =>
   !e.response || e.code === 'ECONNREFUSED' || e.code === 'ETIMEDOUT';
-
-const isNotShared = (e: { response?: { status?: number } }): boolean =>
-  [401, 403, 404].includes(e.response?.status ?? 0);
 
 /**
  * Keeps what each person has watched on the media server, read with their
  * own account, so Allseerr can show it and hide it. Plex is asked only for
  * titles viewed since the last run, and for everything once a day; Jellyfin
  * and Emby are read in full each time, since their listing is small.
+ *
+ * A Plex account token only opens the owner's own server. Anyone the server
+ * is shared with reaches it with the server token plex.tv hands out for
+ * them, so that is looked up (and kept for a while) per person.
  */
 class WatchedSync {
   private running = false;
   private lastRunAt = 0;
   private lastFullAt = 0;
+  private serverTokens = new Map<number, { token: string; at: number }>();
 
   public status(): { running: boolean } {
     return { running: this.running };
@@ -97,6 +108,7 @@ class WatchedSync {
       const keys = await this.mediaKeys();
       const users = await this.usersWithAccounts(mediaServer);
       let synced = 0;
+      let noAccess = 0;
 
       for (const user of users) {
         try {
@@ -115,6 +127,15 @@ class WatchedSync {
           if (e instanceof ServerDownError) {
             throw e;
           }
+          if (e instanceof NoAccessError) {
+            noAccess += 1;
+            logger.debug('The media server turned down a user account', {
+              label: LABEL,
+              user: user.displayName,
+              errorMessage: e.message,
+            });
+            continue;
+          }
           logger.warn('Could not read what a user has watched', {
             label: LABEL,
             user: user.displayName,
@@ -129,7 +150,9 @@ class WatchedSync {
       }
 
       logger.info(
-        `Watched state ${fullRun ? 'read in full' : 'updated'} for ${synced} of ${users.length} users`,
+        `Watched state ${fullRun ? 'read in full' : 'updated'} for ${synced} of ${
+          users.length
+        } users${noAccess > 0 ? ` (${noAccess} without server access)` : ''}`,
         { label: LABEL }
       );
     } catch (e) {
@@ -179,13 +202,39 @@ class WatchedSync {
         throw new WatchedError(400, 'This title is not on the Plex server');
       }
 
-      const plex = new PlexAPI({ plexToken: account.plexToken });
+      const mark = async (plex: PlexAPI) => {
+        for (const key of keys) {
+          await plex.setWatched(key, watched);
+        }
+        for (const key of keys) {
+          counts = mergeCounts(counts, plexCounts(await plex.getMetadata(key)));
+        }
+      };
 
-      for (const key of keys) {
-        await plex.setWatched(key, watched);
-      }
-      for (const key of keys) {
-        counts = mergeCounts(counts, plexCounts(await plex.getMetadata(key)));
+      try {
+        await mark(
+          new PlexAPI({ plexToken: await this.plexServerToken(account) })
+        );
+      } catch (e) {
+        if (statusOf(e) !== 401) {
+          throw e;
+        }
+        // The kept server token may be stale: ask plex.tv for a new one
+        try {
+          await mark(
+            new PlexAPI({
+              plexToken: await this.plexServerToken(account, true),
+            })
+          );
+        } catch (e2) {
+          if (statusOf(e2) === 401) {
+            throw new WatchedError(
+              403,
+              'Plex did not accept your account for this server. Sign in with Plex again and retry.'
+            );
+          }
+          throw e2;
+        }
       }
     } else if (
       mediaServer === MediaServerType.JELLYFIN ||
@@ -283,6 +332,31 @@ class WatchedSync {
       .getOne();
   }
 
+  /**
+   * The token that opens this Plex server for the person: the one plex.tv
+   * lists for the server among their resources (for the owner it is their
+   * own account token). Kept for a while per person.
+   */
+  private async plexServerToken(user: User, fresh = false): Promise<string> {
+    const accountToken = user.plexToken ?? '';
+    const kept = this.serverTokens.get(user.id);
+
+    if (!fresh && kept && Date.now() - kept.at < SERVER_TOKEN_TTL_MS) {
+      return kept.token;
+    }
+
+    const machineId = getSettings().plex.machineId;
+    const devices = await new PlexTvAPI(accountToken).getDevices();
+    const server = devices.find(
+      (device) => device.clientIdentifier === machineId
+    );
+    const token = server?.accessToken ?? accountToken;
+
+    this.serverTokens.set(user.id, { token, at: Date.now() });
+
+    return token;
+  }
+
   /** Every media server item id Allseerr knows, mapped to its title */
   private async mediaKeys(): Promise<Map<string, TitleRef>> {
     const rows = await getRepository(Media)
@@ -356,12 +430,50 @@ class WatchedSync {
     counts.set(key, { ...ref, ...mergeCounts(counts.get(key), seen) });
   }
 
+  /**
+   * What the person has watched on Plex. A 401 means the kept server token
+   * went stale (or the account lost access): plex.tv is asked once more, and
+   * a second 401 gives the account up for this run.
+   */
   private async readPlex(
     user: User,
     keys: Map<string, TitleRef>,
     since?: number
   ): Promise<CountsByTitle> {
-    const plex = new PlexAPI({ plexToken: user.plexToken });
+    try {
+      return await this.readPlexWith(
+        new PlexAPI({ plexToken: await this.plexServerToken(user) }),
+        user,
+        keys,
+        since
+      );
+    } catch (e) {
+      if (statusOf(e) !== 401) {
+        throw e;
+      }
+    }
+
+    try {
+      return await this.readPlexWith(
+        new PlexAPI({ plexToken: await this.plexServerToken(user, true) }),
+        user,
+        keys,
+        since
+      );
+    } catch (e) {
+      if (statusOf(e) === 401) {
+        throw new NoAccessError('Plex answered 401 with a fresh server token');
+      }
+      throw e;
+    }
+  }
+
+  private async readPlexWith(
+    plex: PlexAPI,
+    user: User,
+    keys: Map<string, TitleRef>,
+    since?: number
+  ): Promise<CountsByTitle> {
     const libraries = getSettings().plex.libraries.filter(
       (library) =>
         library.enabled && (library.type === 'movie' || library.type === 'show')
@@ -378,18 +490,17 @@ class WatchedSync {
           page = await plex.getViewState(
             library.id,
             library.type === 'show' ? 'show' : 'movie',
-            {
-              offset,
-              size: PAGE_SIZE,
-              since,
-            }
+            { offset, size: PAGE_SIZE, since }
           );
         } catch (e) {
           if (isServerDown(e)) {
             throw new ServerDownError(`Plex cannot be reached: ${e.message}`);
           }
-          // A library not shared with this person
-          if (!isNotShared(e)) {
+          if (statusOf(e) === 401) {
+            throw e;
+          }
+          // A library not shared with this person answers 403 or 404
+          if (statusOf(e) !== 403 && statusOf(e) !== 404) {
             logger.warn('Could not read a Plex library for a user', {
               label: LABEL,
               user: user.displayName,
@@ -441,7 +552,10 @@ class WatchedSync {
             `The server cannot be reached: ${e.message}`
           );
         }
-        if (!isNotShared(e)) {
+        if (statusOf(e) === 401) {
+          throw new NoAccessError('The server answered 401');
+        }
+        if (statusOf(e) !== 403 && statusOf(e) !== 404) {
           logger.warn('Could not read a library for a user', {
             label: LABEL,
             user: user.displayName,
