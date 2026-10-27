@@ -487,7 +487,12 @@ class PlexTvAPI extends ExternalAPI {
     const response = await this.axios.get<
       { clientIdentifier: string; accessToken?: string }[]
     >('/api/v2/resources?includeHttps=1', {
-      headers: { Accept: 'application/json' },
+      // The v2 API turns a request without a client identifier down
+      headers: {
+        Accept: 'application/json',
+        'X-Plex-Client-Identifier': getSettings().clientId,
+        'X-Plex-Product': 'Allseerr',
+      },
     });
     const server = (response.data ?? []).find(
       (resource) => resource.clientIdentifier === machineId
