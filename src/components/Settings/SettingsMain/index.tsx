@@ -84,7 +84,7 @@ const messages = defineMessages('components.Settings.SettingsMain', {
     'Hide media that has been requested from the discover pages but not search results',
   cacheImages: 'Enable Image Caching',
   cacheImagesTip:
-    'Cache externally sourced images (requires a significant amount of disk space)',
+    'Cache externally sourced images (requires a significant amount of disk space). Posters are then served by Allseerr itself, so a CDN in front of it, such as Cloudflare, can cache them close to your users.',
   validationApplicationTitle: 'You must provide an application title',
   validationApplicationUrl: 'You must provide a valid URL',
   validationApplicationUrlTrailingSlash: 'URL must not end in a trailing slash',

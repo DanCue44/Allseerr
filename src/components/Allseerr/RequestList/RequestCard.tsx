@@ -937,7 +937,7 @@ const RequestCard = ({
       type="tmdb"
       src={
         title.posterPath
-          ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${title.posterPath}`
+          ? `https://image.tmdb.org/t/p/w342${title.posterPath}`
           : '/images/allseerr_poster_not_found.png'
       }
       alt=""
@@ -957,7 +957,7 @@ const RequestCard = ({
       : title.backdropPath
         ? {
             type: 'tmdb' as const,
-            src: `https://image.tmdb.org/t/p/w780${title.backdropPath}`,
+            src: `https://image.tmdb.org/t/p/w300${title.backdropPath}`,
           }
         : undefined;
 

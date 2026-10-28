@@ -2566,7 +2566,7 @@
   "components.Settings.SettingsMain.bookLanguage": "Book Language",
   "components.Settings.SettingsMain.bookLanguageTip": "Language books are requested in, unless a user picks their own. Managers can pick another when requesting.",
   "components.Settings.SettingsMain.cacheImages": "Enable Image Caching",
-  "components.Settings.SettingsMain.cacheImagesTip": "Cache externally sourced images (requires a significant amount of disk space)",
+  "components.Settings.SettingsMain.cacheImagesTip": "Cache externally sourced images (requires a significant amount of disk space). Posters are then served by Allseerr itself, so a CDN in front of it, such as Cloudflare, can cache them close to your users.",
   "components.Settings.SettingsMain.currentSeasonRolloverDelayDays": "Days Notice Before Deleting Seasons",
   "components.Settings.SettingsMain.currentSeasonRolloverDelayDaysTip": "How long admins have to keep older seasons once a new season of a current season request starts. Set to 0 to delete them right away",
   "components.Settings.SettingsMain.defaultBookFormat": "Default Book Format",

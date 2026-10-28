@@ -545,7 +545,7 @@ const RequestItem = ({ request, revalidateList }: RequestItemProps) => {
                   ? (title.artistBackdrop ?? '')
                   : isBook(title) || isComic(title)
                     ? ''
-                    : `https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/${title.backdropPath}`
+                    : `https://image.tmdb.org/t/p/w780${title.backdropPath}`
               }
               alt=""
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
@@ -601,7 +601,7 @@ const RequestItem = ({ request, revalidateList }: RequestItemProps) => {
                   type="tmdb"
                   src={
                     title.posterPath
-                      ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${title.posterPath}`
+                      ? `https://image.tmdb.org/t/p/w342${title.posterPath}`
                       : '/images/allseerr_poster_not_found.png'
                   }
                   alt=""
