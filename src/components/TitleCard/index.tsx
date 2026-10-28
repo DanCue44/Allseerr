@@ -489,24 +489,19 @@ const TitleCard = ({
                   </Button>
                 </Tooltip>
               )}
-            {((currentStatus && currentStatus !== MediaStatus.UNKNOWN) ||
-              watched?.watched ||
-              watched?.inProgress) && (
-              <div className="flex flex-col items-center gap-1">
-                {currentStatus && currentStatus !== MediaStatus.UNKNOWN && (
-                  <div className="pointer-events-none z-40 flex">
-                    <StatusBadgeMini
-                      status={currentStatus}
-                      inProgress={inProgress}
-                      shrink
-                    />
-                  </div>
-                )}
-                <div className="pointer-events-none z-40 flex">
-                  <WatchedBadge state={watched} shrink />
-                </div>
+            {currentStatus && currentStatus !== MediaStatus.UNKNOWN && (
+              <div className="pointer-events-none z-40 flex">
+                <StatusBadgeMini
+                  status={currentStatus}
+                  inProgress={inProgress}
+                  shrink
+                />
               </div>
             )}
+          </div>
+          {/* The watched eye sits on its own, in the bottom corner of the art */}
+          <div className="pointer-events-none absolute bottom-2 right-2 z-40 flex">
+            <WatchedBadge state={watched} shrink />
           </div>
           <Transition
             as={Fragment}
