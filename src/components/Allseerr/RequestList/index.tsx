@@ -4,6 +4,9 @@ import {
   LayoutToggle,
   ListFrame,
 } from '@app/components/Allseerr/Downloads/DownloadsCommon';
+import StickySummary, {
+  useScrolledPast,
+} from '@app/components/Allseerr/Downloads/StickySummary';
 import RequestCard, {
   REQUEST_LIST_GRID,
 } from '@app/components/Allseerr/RequestList/RequestCard';
@@ -54,6 +57,11 @@ const messages = defineMessages('components.Allseerr.RequestList', {
   columnStatus: 'Status',
   columnRequested: 'Requested',
   columnDetails: 'Details',
+  summaryLabel: 'Requests summary',
+  compactShowing: '{count, plural, one {# request} other {# requests}}',
+  compactPending: '{count} pending',
+  compactProcessing: '{count} processing',
+  compactAvailable: '{count} available',
   unableToConnect:
     'Unable to connect to {services}. Some information may be unavailable.',
 });
@@ -122,6 +130,9 @@ const AmbientRequestList = () => {
     useState<SortDirection>('desc');
   const [currentPageSize, setCurrentPageSize] = useState<number>(10);
   const [layout, setLayout] = useState<DownloadsLayout>('cards');
+  // The filters scroll away; a slim bar with the numbers and the layout
+  // switch takes their place under the header, as on Downloads
+  const [filtersRef, filtersScrolledPast] = useScrolledPast();
 
   const page = router.query.page ? Number(router.query.page) : 1;
   const pageIndex = page - 1;
@@ -149,6 +160,14 @@ const AmbientRequestList = () => {
   );
 
   const isManager = hasPermission(Permission.MANAGE_REQUESTS);
+  const canSeeCounts = hasPermission(Permission.MANAGE_REQUESTS);
+  const { data: counts } = useSWR<{
+    total: number;
+    pending: number;
+    processing: number;
+    available: number;
+  }>(canSeeCounts ? '/api/v1/request/count' : null);
+
   const { data: removalCount } = useSWR<{ pending: number }>(
     isManager ? '/api/v1/removal/count' : null
   );
@@ -265,7 +284,7 @@ const AmbientRequestList = () => {
         ]}
       />
 
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4" ref={filtersRef}>
         <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:gap-4">
           <h2 className="flex-none font-display text-[22px] font-medium text-as-ink">
             {intl.formatMessage(messages.requests)}
@@ -421,6 +440,52 @@ const AmbientRequestList = () => {
           </div>
         </div>
       </div>
+
+      <StickySummary
+        show={filtersScrolledPast}
+        label={intl.formatMessage(messages.summaryLabel)}
+        actions={<LayoutToggle value={layout} onChange={setLayout} compact />}
+        groups={[
+          [
+            {
+              key: 'showing',
+              text: intl.formatMessage(messages.compactShowing, {
+                count: data.pageInfo.results,
+              }),
+            },
+          ],
+          counts
+            ? (
+                [
+                  [Filter.PENDING, messages.compactPending, counts.pending],
+                  [
+                    Filter.PROCESSING,
+                    messages.compactProcessing,
+                    counts.processing,
+                  ],
+                  [
+                    Filter.AVAILABLE,
+                    messages.compactAvailable,
+                    counts.available,
+                  ],
+                ] as const
+              ).map(([key, message, count]) => ({
+                key,
+                text: intl.formatMessage(message, { count }),
+                tone:
+                  key === Filter.PENDING && count > 0
+                    ? 'text-[#f0d9a8]'
+                    : undefined,
+                active: currentFilter === key,
+                onClick: () => {
+                  setCurrentFilter(currentFilter === key ? Filter.ALL : key);
+                  resetPage();
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                },
+              }))
+            : [],
+        ]}
+      />
 
       {serviceErrors.length > 0 &&
         (isManager || hasPermission(Permission.REQUEST_ADVANCED)) && (
