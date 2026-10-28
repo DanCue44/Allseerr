@@ -427,6 +427,7 @@
   "components.Allseerr.RequestList.columnTitle": "Title",
   "components.Allseerr.RequestList.decline": "Decline",
   "components.Allseerr.RequestList.declinedReason": "Declined: {reason}",
+  "components.Allseerr.RequestList.defaultSetting": "Default",
   "components.Allseerr.RequestList.deleteRequest": "Delete Request",
   "components.Allseerr.RequestList.downloadingProgress": "Downloading {progress}%",
   "components.Allseerr.RequestList.editRequest": "Edit Request",

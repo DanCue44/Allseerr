@@ -103,6 +103,7 @@ const messages = defineMessages('components.Allseerr.RequestList', {
   labelModified: 'Modified',
   actions: 'Actions for {title}',
   keep: 'Keep',
+  defaultSetting: 'Default',
   approve: 'Approve',
   decline: 'Decline',
   editRequest: 'Edit Request',
@@ -840,7 +841,7 @@ const RequestCard = ({
         className={
           layout === 'list'
             ? 'h-[72px] animate-pulse'
-            : 'h-[232px] animate-pulse rounded-[18px] bg-as-surface'
+            : 'h-[252px] animate-pulse rounded-[18px] bg-as-surface'
         }
       />
     );
@@ -1018,26 +1019,33 @@ const RequestCard = ({
       ),
     });
   }
-  if (request.profileName) {
+  // Managers see the same three rows on every card, "Default" when the
+  // request does not override the server's own setting
+  if (isManager) {
+    const fallback = intl.formatMessage(messages.defaultSetting);
+    details.push(
+      {
+        key: 'profile',
+        label: intl.formatMessage(messages.labelProfile),
+        value: request.profileName ?? fallback,
+      },
+      {
+        key: 'folder',
+        label: intl.formatMessage(messages.labelFolder),
+        value: requestData.rootFolder ?? fallback,
+        title: requestData.rootFolder ?? undefined,
+      },
+      {
+        key: 'server',
+        label: intl.formatMessage(messages.labelServer),
+        value: serverName ?? fallback,
+      }
+    );
+  } else if (request.profileName) {
     details.push({
       key: 'profile',
       label: intl.formatMessage(messages.labelProfile),
       value: request.profileName,
-    });
-  }
-  if (isManager && requestData.rootFolder) {
-    details.push({
-      key: 'folder',
-      label: intl.formatMessage(messages.labelFolder),
-      value: requestData.rootFolder,
-      title: requestData.rootFolder,
-    });
-  }
-  if (isManager && serverName) {
-    details.push({
-      key: 'server',
-      label: intl.formatMessage(messages.labelServer),
-      value: serverName,
     });
   }
   if (
@@ -1059,15 +1067,16 @@ const RequestCard = ({
       numeric="auto"
     />
   );
+  const modifiedAgo = (
+    <FormattedRelativeTime
+      value={secondsAgo(requestData.updatedAt)}
+      updateIntervalInSeconds={1}
+      numeric="auto"
+    />
+  );
   const modified = requestData.modifiedBy
     ? intl.formatMessage(messages.byUser, {
-        date: (
-          <FormattedRelativeTime
-            value={secondsAgo(requestData.updatedAt)}
-            updateIntervalInSeconds={1}
-            numeric="auto"
-          />
-        ),
+        date: modifiedAgo,
         user: (
           <Link
             href={`/users/${requestData.modifiedBy.id}`}
@@ -1077,7 +1086,7 @@ const RequestCard = ({
           </Link>
         ),
       })
-    : undefined;
+    : modifiedAgo;
   const requesterName = requestData.requestedBy.displayName;
 
   const askFirst = (label: string, run: () => void) => () =>
@@ -1402,16 +1411,20 @@ const RequestCard = ({
         <div className="relative overflow-hidden rounded-[18px] bg-as-surface">
           <CardArt backdrop={backdrop} />
           <div className="relative flex gap-4 p-3 sm:p-4">
+            {/* The box is the size of a portrait poster for every card, so a
+                square album cover sits centered in it and the tiles line up */}
             <Link
               href={mediaPath}
               aria-label={titleName}
-              className={`relative flex-none overflow-hidden rounded-[10px] bg-as-tile shadow-lg shadow-black/40 transition hover:opacity-90 ${
-                posterSquare
-                  ? 'h-[120px] w-[120px] self-center'
-                  : 'aspect-[2/3] w-[104px] self-center sm:w-[128px]'
-              }`}
+              className="flex h-[180px] w-[120px] flex-none items-center self-center"
             >
-              {poster}
+              <span
+                className={`relative block overflow-hidden rounded-[10px] bg-as-tile shadow-lg shadow-black/40 transition hover:opacity-90 ${
+                  posterSquare ? 'h-[120px] w-[120px]' : 'h-full w-full'
+                }`}
+              >
+                {poster}
+              </span>
             </Link>
             <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
               <dl className={`flex min-w-0 flex-col gap-1 ${trailing}`}>
@@ -1426,11 +1439,9 @@ const RequestCard = ({
                 <Detail label={intl.formatMessage(messages.labelRequested)}>
                   {requestedAgo}
                 </Detail>
-                {modified && (
-                  <Detail label={intl.formatMessage(messages.labelModified)}>
-                    {modified}
-                  </Detail>
-                )}
+                <Detail label={intl.formatMessage(messages.labelModified)}>
+                  {modified}
+                </Detail>
               </dl>
               {confirmBar}
             </div>
