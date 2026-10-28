@@ -277,6 +277,11 @@ components:
         plexToken:
           type: string
           readOnly: true
+        plexTokenInvalidAt:
+          type: string
+          nullable: true
+          readOnly: true
+          description: When plex.tv last turned the stored token down. Set until the user signs in with Plex again.
         jellyfinAuthToken:
           type: string
           readOnly: true

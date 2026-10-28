@@ -156,6 +156,7 @@ export const signInWithPlex = async ({
 
       if (!keepStoredToken || !user.plexToken) {
         user.plexToken = authToken;
+        user.plexTokenInvalidAt = null;
       }
       user.plexId = account.id;
       user.avatar = account.thumb;

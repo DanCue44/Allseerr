@@ -14,6 +14,8 @@ export interface User {
   warnings: string[];
   plexUsername?: string | null;
   jellyfinUsername?: string | null;
+  // Set while plex.tv rejects the stored token; a Plex sign in clears it
+  plexTokenInvalidAt?: Date | string | null;
   username?: string;
   displayName: string;
   email: string;

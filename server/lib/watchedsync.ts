@@ -7,6 +7,7 @@ import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import { User } from '@server/entity/User';
 import WatchedItem from '@server/entity/WatchedItem';
+import { markPlexTokenInvalid } from '@server/lib/plexTokenHealth';
 import { getSettings } from '@server/lib/settings';
 import type { UserWatchedState, WatchedCounts } from '@server/lib/watchedState';
 import {
@@ -377,6 +378,7 @@ class WatchedSync {
           token: null,
           at: Date.now(),
         });
+        await markPlexTokenInvalid(user.id);
         throw new NoAccessError('plex.tv turned the account token down');
       }
       throw e;
@@ -441,10 +443,14 @@ class WatchedSync {
     const query = getRepository(User).createQueryBuilder('user');
 
     if (mediaServer === MediaServerType.PLEX) {
-      return query
-        .addSelect('user.plexToken')
-        .where("user.plexToken != ''")
-        .getMany();
+      return (
+        query
+          .addSelect('user.plexToken')
+          .where("user.plexToken != ''")
+          // An expired sign in is left alone until the person signs in again
+          .andWhere('user.plexTokenInvalidAt IS NULL')
+          .getMany()
+      );
     }
 
     return query

@@ -433,6 +433,7 @@ userSettingsRoutes.post<{ authToken: string }>(
     user.plexId = account.id;
     user.plexUsername = account.username;
     user.plexToken = account.authToken;
+    user.plexTokenInvalidAt = null;
     await userRepository.save(user);
 
     return res.status(204).send();

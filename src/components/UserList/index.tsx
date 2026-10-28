@@ -68,6 +68,7 @@ const messages = defineMessages('components.UserList', {
   deleteconfirm:
     'Are you sure you want to delete this user? All of their request data will be permanently removed.',
   localuser: 'Local User',
+  plexSignInNeeded: 'Needs Plex sign-in',
   mediaServerUser: '{mediaServerName} User',
   createlocaluser: 'Create Local User',
   creating: 'Creating…',
@@ -379,7 +380,16 @@ const UserList = () => {
 
   const userTypeBadge = (user: User) =>
     user.userType === UserType.PLEX ? (
-      <Badge badgeType="warning">{intl.formatMessage(messages.plexuser)}</Badge>
+      <>
+        <Badge badgeType="warning">
+          {intl.formatMessage(messages.plexuser)}
+        </Badge>
+        {user.plexTokenInvalidAt && (
+          <Badge badgeType="danger">
+            {intl.formatMessage(messages.plexSignInNeeded)}
+          </Badge>
+        )}
+      </>
     ) : user.userType === UserType.LOCAL ? (
       <Badge badgeType="default">
         {intl.formatMessage(messages.localuser)}

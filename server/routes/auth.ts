@@ -64,6 +64,10 @@ authRoutes.get('/me', isAuthenticated(), async (req, res) => {
     logger.warn(`User ${user.username} has no valid email address`);
   }
 
+  if (user.plexTokenInvalidAt) {
+    user.warnings.push('plexSignInRequired');
+  }
+
   return res.status(200).json({
     ...user.toJSON(),
     settings: user.settings && {

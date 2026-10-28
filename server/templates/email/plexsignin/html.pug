@@ -1,0 +1,7 @@
+extends ../_partials/layout.pug
+
+block content
+  +text
+    | #{labels.plexSignInNeeded}
+  if signInUrl
+    +button(signInUrl, labels.signInWithPlex)

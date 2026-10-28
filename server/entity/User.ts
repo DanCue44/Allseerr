@@ -114,6 +114,13 @@ export class User {
   @Column({ type: 'varchar', nullable: true, select: false })
   public plexToken?: string | null;
 
+  /**
+   * When plex.tv last turned the stored token down. A fresh sign in with
+   * Plex clears it; until then the Plex jobs leave the account alone.
+   */
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public plexTokenInvalidAt?: Date | null;
+
   @Index()
   @Column({ type: 'varchar', nullable: true, select: false })
   public apiKeyHash?: string | null;

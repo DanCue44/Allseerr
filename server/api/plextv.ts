@@ -189,6 +189,9 @@ async function mapWithConcurrency<T, R>(
 }
 
 class PlexTvAPI extends ExternalAPI {
+  /** Set once plex.tv answers that the token is no longer good */
+  public tokenRejected = false;
+
   private authToken: string;
 
   constructor(authToken: string) {
@@ -464,10 +467,21 @@ class PlexTvAPI extends ExternalAPI {
         items: filteredList,
       };
     } catch (e) {
-      logger.error('Failed to retrieve watchlist items', {
-        label: 'Plex.TV Metadata API',
-        errorMessage: e.message,
-      });
+      if (e.response?.status === 401 || e.response?.status === 422) {
+        // The token is no longer good: the caller tells the person
+        this.tokenRejected = true;
+        logger.debug(
+          'plex.tv turned the token down while reading a watchlist',
+          {
+            label: 'Plex.TV Metadata API',
+          }
+        );
+      } else {
+        logger.error('Failed to retrieve watchlist items', {
+          label: 'Plex.TV Metadata API',
+          errorMessage: e.message,
+        });
+      }
       return {
         offset,
         size,
@@ -501,7 +515,11 @@ class PlexTvAPI extends ExternalAPI {
     return server?.accessToken ?? null;
   }
 
-  public async pingToken() {
+  /**
+   * Keeps the token alive with plex.tv. Answers 'invalid' when plex.tv no
+   * longer knows it, so the person can be asked to sign in again.
+   */
+  public async pingToken(): Promise<'ok' | 'invalid' | 'unknown'> {
     try {
       const response = await this.axios.get('/api/v2/ping', {
         headers: {
@@ -511,11 +529,16 @@ class PlexTvAPI extends ExternalAPI {
       if (!response?.data?.pong) {
         throw new Error('No pong response');
       }
+      return 'ok';
     } catch (e) {
+      if (e.response?.status === 401 || e.response?.status === 422) {
+        return 'invalid';
+      }
       logger.error('Failed to ping token', {
         label: 'Plex Refresh Token',
         errorMessage: e.message,
       });
+      return 'unknown';
     }
   }
 }

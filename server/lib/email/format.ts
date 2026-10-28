@@ -22,6 +22,9 @@ const messages = defineMessages('notifications.email', {
   resetExpires: 'This link will expire in 24 hours.',
   resetIgnore:
     'If you did not initiate this request, you may safely disregard this message.',
+  plexSignInNeeded:
+    '{applicationTitle} can no longer reach Plex with your account, so your watchlist and watched history have stopped syncing. Sign in with Plex again to reconnect them.',
+  signInWithPlex: 'Sign in with Plex',
 });
 
 type EmailIntl = Pick<
@@ -139,6 +142,10 @@ export const getEmailLayoutLocals = ({
       resetPassword: intl.formatMessage(messages.resetPassword),
       resetExpires: intl.formatMessage(messages.resetExpires),
       resetIgnore: intl.formatMessage(messages.resetIgnore),
+      plexSignInNeeded: intl.formatMessage(messages.plexSignInNeeded, {
+        applicationTitle,
+      }),
+      signInWithPlex: intl.formatMessage(messages.signInWithPlex),
     },
   };
 };

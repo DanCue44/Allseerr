@@ -13,6 +13,7 @@ import {
   WatchProviderBlockedError,
 } from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
+import { markPlexTokenInvalid } from '@server/lib/plexTokenHealth';
 import logger from '@server/logger';
 import { Permission } from './permissions';
 
@@ -63,9 +64,19 @@ class WatchlistSync {
       return;
     }
 
+    if (user.plexTokenInvalidAt) {
+      // Asked to sign in again already; nothing to read until they do
+      return;
+    }
+
     const plexTvApi = new PlexTvAPI(user.plexToken);
 
     const response = await plexTvApi.getWatchlist({ size: 20 });
+
+    if (plexTvApi.tokenRejected) {
+      await markPlexTokenInvalid(user.id);
+      return;
+    }
 
     const mediaItems = await Media.getRelatedMedia(
       user,

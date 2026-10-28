@@ -304,6 +304,7 @@ describe('email templates', () => {
       ],
       ['generatedpassword', { password: 'secret-password' }],
       ['resetpassword', { resetPasswordLink: '/resetpassword/abc' }],
+      ['plexsignin', { signInUrl: '/login' }],
       ['test-email', { body: 'Test body' }],
     ];
 
