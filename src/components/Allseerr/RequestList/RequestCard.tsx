@@ -1,4 +1,6 @@
 import Spinner from '@app/assets/spinner.svg';
+import type { DownloadsLayout } from '@app/components/Allseerr/Downloads/DownloadCard';
+import { Detail } from '@app/components/Allseerr/Downloads/DownloadCard';
 import UserAvatar from '@app/components/Allseerr/RequestList/UserAvatar';
 import { statusTone } from '@app/components/Allseerr/Title/styles';
 import CachedImage from '@app/components/Common/CachedImage';
@@ -10,7 +12,6 @@ import DeclineRequestModal from '@app/components/DeclineRequestModal';
 import DownloadBlock from '@app/components/DownloadBlock';
 import RequestModal from '@app/components/RequestModal';
 import RequestSeasonBadges from '@app/components/RequestSeasonBadges';
-import RequestedVolumes from '@app/components/RequestedVolumes';
 import useClickOutside from '@app/hooks/useClickOutside';
 import useDeepLinks from '@app/hooks/useDeepLinks';
 import useSettings from '@app/hooks/useSettings';
@@ -27,11 +28,13 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
   ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
   CheckIcon,
   Cog6ToothIcon,
+  EllipsisVerticalIcon,
   PencilIcon,
   PlayIcon,
   ServerStackIcon,
@@ -49,7 +52,7 @@ import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { NonFunctionProperties } from '@server/interfaces/api/common';
 import type { RequestResultsResponse } from '@server/interfaces/api/requestInterfaces';
 import type { ServiceCommonServer } from '@server/interfaces/api/serviceInterfaces';
-import {} from '@server/lib/bookRequests';
+import { formatVolumeRanges } from '@server/lib/comicVolumes';
 import type { DownloadingItem } from '@server/lib/downloadtracker';
 import type { BookDetails } from '@server/models/Book';
 import type { ComicDetails } from '@server/models/Comic';
@@ -86,9 +89,20 @@ const messages = defineMessages('components.Allseerr.RequestList', {
   byArtist: 'by {artist}',
   requestedAgo: 'Requested {date}',
   modifiedBy: 'Modified {date} by {user}',
-  profile: 'Profile: {name}',
-  rootFolder: 'Folder: {path}',
-  server: 'Server: {name}',
+  byUser: '{date} by {user}',
+  requestedBy: 'Requested by {name}',
+  labelStatus: 'Status',
+  labelSeasons: 'Seasons',
+  labelVolumes: 'Volumes',
+  labelFormat: 'Format',
+  labelProfile: 'Profile',
+  labelFolder: 'Folder',
+  labelServer: 'Server',
+  labelDeclined: 'Declined',
+  labelRequested: 'Requested',
+  labelModified: 'Modified',
+  actions: 'Actions for {title}',
+  keep: 'Keep',
   approve: 'Approve',
   decline: 'Decline',
   editRequest: 'Edit Request',
@@ -185,9 +199,42 @@ const statusPill =
   'inline-flex w-fit items-center rounded-full px-3 py-1.5 text-[13px] font-semibold';
 const iconButton =
   'inline-flex h-9 w-9 flex-none items-center justify-center rounded-full border border-as-line-strong bg-as-raised text-as-ink transition hover:bg-as-line disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4';
-const iconButtonOk = `${iconButton} hover:!bg-[#1d3b33] hover:text-[#a8e6c4]`;
 const iconButtonBad = `${iconButton} hover:!bg-[#3b2427] hover:text-[#f2b0aa]`;
 const cardShell = 'flex flex-col gap-2 rounded-[20px] bg-as-surface p-[18px]';
+const cornerButton =
+  'inline-flex h-8 w-8 flex-none items-center justify-center rounded-full bg-as-raised/80 text-as-ink transition hover:bg-as-line disabled:opacity-50 [&_svg]:h-4 [&_svg]:w-4';
+const cornerButtonOk = `${cornerButton} hover:!bg-[#1d3b33] hover:text-[#a8e6c4]`;
+const cornerButtonBad = `${cornerButton} hover:!bg-[#3b2427] hover:text-[#f2b0aa]`;
+const menuEntry =
+  'flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-semibold';
+
+/** The list layout's columns: art, title, status, requested, details, actions */
+export const REQUEST_LIST_GRID =
+  'md:grid-cols-[2.5rem_minmax(0,1fr)_9.5rem_9rem_minmax(8rem,13rem)_7rem]';
+
+/**
+ * The card's backdrop: the title's art blurred and darkened behind the
+ * details, like the download cards
+ */
+const CardArt = ({
+  backdrop,
+}: {
+  backdrop?: { type: 'music' | 'book' | 'tmdb'; src: string };
+}) => (
+  <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+    {backdrop && (
+      <CachedImage
+        type={backdrop.type}
+        src={backdrop.src}
+        alt=""
+        className="scale-110 blur-2xl"
+        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        fill
+      />
+    )}
+    <div className="absolute inset-0 bg-gradient-to-r from-as-surface via-as-surface/85 to-as-surface/70" />
+  </div>
+);
 
 /** Round icon action with a tooltip. */
 const IconAction = ({
@@ -213,37 +260,6 @@ const IconAction = ({
     >
       {children}
     </button>
-  </Tooltip>
-);
-
-/** Round icon link with a tooltip. */
-const IconLink = ({
-  label,
-  href,
-  external,
-  children,
-}: {
-  label: string;
-  href: string;
-  external?: boolean;
-  children: ReactNode;
-}) => (
-  <Tooltip content={label}>
-    {external ? (
-      <a
-        href={href}
-        target="_blank"
-        rel="noreferrer"
-        className={iconButton}
-        aria-label={label}
-      >
-        {children}
-      </a>
-    ) : (
-      <Link href={href} className={iconButton} aria-label={label}>
-        {children}
-      </Link>
-    )}
   </Tooltip>
 );
 
@@ -546,29 +562,35 @@ const typeMessage = (request: NonFunctionProperties<MediaRequest>) =>
               audiobookrecording: messages.typeAudiobookRecording,
             }[getBookRequestFormat(request)];
 
-/** First line of the card: "{Type} · {short date}". */
+/** The line under the title: "{Type} · {short date}", then the detail. */
 const TypeLine = ({
   request,
+  extra,
 }: {
   request: NonFunctionProperties<MediaRequest>;
+  // The artist, the authors or the year
+  extra?: string;
 }) => {
   const intl = useIntl();
   const created = new Date(request.createdAt);
+  const typeDate = intl.formatMessage(messages.typeDate, {
+    type: intl.formatMessage(typeMessage(request)),
+    date: intl.formatDate(created, {
+      month: 'short',
+      day: 'numeric',
+      year:
+        created.getFullYear() === new Date().getFullYear()
+          ? undefined
+          : 'numeric',
+    }),
+  });
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-as-ink-muted">
+    <div className="flex min-w-0 items-center gap-1.5 text-xs text-as-ink-muted">
       <FormatIcon format={getRequestFormat(request)} size="small" />
-      {intl.formatMessage(messages.typeDate, {
-        type: intl.formatMessage(typeMessage(request)),
-        date: intl.formatDate(created, {
-          month: 'short',
-          day: 'numeric',
-          year:
-            created.getFullYear() === new Date().getFullYear()
-              ? undefined
-              : 'numeric',
-        }),
-      })}
+      <span className="truncate">
+        {[typeDate, extra].filter(Boolean).join(' · ')}
+      </span>
     </div>
   );
 };
@@ -672,16 +694,20 @@ interface RequestCardProps {
   revalidateList: () => void;
   // Show the requester's avatar and name in the footer
   showRequester: boolean;
+  // A card with the art and details, or one compact row
+  layout?: DownloadsLayout;
 }
 
 /**
- * One request in the Ambient request grid. Same data and actions as the
- * classic RequestItem.
+ * One request in the Ambient request grid, laid out like the download
+ * cards: the art and the details in a tile, the title under it, and the
+ * actions in the corner. Same data and actions as the classic RequestItem.
  */
 const RequestCard = ({
   request,
   revalidateList,
   showRequester,
+  layout = 'cards',
 }: RequestCardProps) => {
   const { ref, inView } = useInView({ triggerOnce: true });
   const { addToast } = useToasts();
@@ -694,6 +720,11 @@ const RequestCard = ({
   const [updatingType, setUpdatingType] = useState<
     'approve' | 'decline' | null
   >(null);
+  // A delete, remove or cancel asks once before it runs
+  const [confirm, setConfirm] = useState<{
+    label: string;
+    run: () => void;
+  } | null>(null);
 
   const isManager = hasPermission(Permission.MANAGE_REQUESTS);
   const url =
@@ -806,7 +837,11 @@ const RequestCard = ({
     return (
       <div
         ref={ref}
-        className="h-[220px] animate-pulse rounded-[20px] bg-as-surface"
+        className={
+          layout === 'list'
+            ? 'h-[72px] animate-pulse'
+            : 'h-[232px] animate-pulse rounded-[18px] bg-as-surface'
+        }
       />
     );
   }
@@ -877,20 +912,6 @@ const RequestCard = ({
     requestData.serverId !== null && requestData.serverId !== undefined
       ? servers?.find((server) => server.id === requestData.serverId)?.name
       : undefined;
-  const overrides = isManager
-    ? [
-        request.profileName &&
-          intl.formatMessage(messages.profile, { name: request.profileName }),
-        requestData.rootFolder &&
-          intl.formatMessage(messages.rootFolder, {
-            path: requestData.rootFolder,
-          }),
-        serverName && intl.formatMessage(messages.server, { name: serverName }),
-      ].filter((line): line is string => !!line)
-    : request.profileName
-      ? [intl.formatMessage(messages.profile, { name: request.profileName })]
-      : [];
-
   const posterSquare = isMusic(title);
   const poster = isMusic(title) ? (
     title.posterPath ? (
@@ -923,6 +944,21 @@ const RequestCard = ({
       fill
     />
   );
+  // Albums, books and comics have no backdrop art, so their cover stands in
+  const backdrop =
+    isMusic(title) || isBook(title) || isComic(title)
+      ? title.posterPath
+        ? {
+            type: isMusic(title) ? ('music' as const) : ('book' as const),
+            src: title.posterPath,
+          }
+        : undefined
+      : title.backdropPath
+        ? {
+            type: 'tmdb' as const,
+            src: `https://image.tmdb.org/t/p/w780${title.backdropPath}`,
+          }
+        : undefined;
 
   const year = getTitleYear(title);
   const detail = isMusic(title)
@@ -932,14 +968,7 @@ const RequestCard = ({
     : isComic(title)
       ? title.authors
       : isBook(title)
-        ? [
-            intl.formatMessage(
-              globalMessages[getBookRequestFormat(requestData)]
-            ),
-            title.authors.map((author) => author.name).join(', '),
-          ]
-            .filter(Boolean)
-            .join(' · ')
+        ? title.authors.map((author) => author.name).join(', ')
         : isMovie(title)
           ? year
           : undefined;
@@ -953,7 +982,322 @@ const RequestCard = ({
         (requestData.type === 'tv' ||
           hasPermission(Permission.REQUEST_ADVANCED))));
 
-  return (
+  // The rows of the tile, after the status
+  const details: {
+    key: string;
+    label: string;
+    value: ReactNode;
+    title?: string;
+  }[] = [];
+  if (requestData.type === 'tv' && requestData.seasons.length > 0) {
+    details.push({
+      key: 'seasons',
+      label: intl.formatMessage(messages.labelSeasons),
+      value: (
+        <RequestSeasonBadges
+          request={requestData}
+          variant="text"
+          className=""
+        />
+      ),
+    });
+  }
+  if (requestData.type === 'comic' && requestData.comicVolumes?.length) {
+    details.push({
+      key: 'volumes',
+      label: intl.formatMessage(messages.labelVolumes),
+      value: formatVolumeRanges(requestData.comicVolumes),
+    });
+  }
+  if (requestData.type === 'book') {
+    details.push({
+      key: 'format',
+      label: intl.formatMessage(messages.labelFormat),
+      value: intl.formatMessage(
+        globalMessages[getBookRequestFormat(requestData)]
+      ),
+    });
+  }
+  if (request.profileName) {
+    details.push({
+      key: 'profile',
+      label: intl.formatMessage(messages.labelProfile),
+      value: request.profileName,
+    });
+  }
+  if (isManager && requestData.rootFolder) {
+    details.push({
+      key: 'folder',
+      label: intl.formatMessage(messages.labelFolder),
+      value: requestData.rootFolder,
+      title: requestData.rootFolder,
+    });
+  }
+  if (isManager && serverName) {
+    details.push({
+      key: 'server',
+      label: intl.formatMessage(messages.labelServer),
+      value: serverName,
+    });
+  }
+  if (
+    requestData.status === MediaRequestStatus.DECLINED &&
+    requestData.declineReason
+  ) {
+    details.push({
+      key: 'declined',
+      label: intl.formatMessage(messages.labelDeclined),
+      value: requestData.declineReason,
+      title: requestData.declineReason,
+    });
+  }
+
+  const requestedAgo = (
+    <FormattedRelativeTime
+      value={secondsAgo(requestData.createdAt)}
+      updateIntervalInSeconds={1}
+      numeric="auto"
+    />
+  );
+  const modified = requestData.modifiedBy
+    ? intl.formatMessage(messages.byUser, {
+        date: (
+          <FormattedRelativeTime
+            value={secondsAgo(requestData.updatedAt)}
+            updateIntervalInSeconds={1}
+            numeric="auto"
+          />
+        ),
+        user: (
+          <Link
+            href={`/users/${requestData.modifiedBy.id}`}
+            className="font-semibold text-as-ink-soft hover:text-as-ink hover:underline"
+          >
+            {requestData.modifiedBy.displayName}
+          </Link>
+        ),
+      })
+    : undefined;
+  const requesterName = requestData.requestedBy.displayName;
+
+  const askFirst = (label: string, run: () => void) => () =>
+    setConfirm({ label, run });
+
+  // Approve and decline stay in reach; everything else is in the menu
+  const approveDecline = isPending && isManager && (
+    <>
+      <IconAction
+        label={intl.formatMessage(messages.approve)}
+        onClick={() => modifyRequest('approve')}
+        disabled={updatingType !== null}
+        className={cornerButtonOk}
+      >
+        {updatingType === 'approve' ? <Spinner /> : <CheckIcon />}
+      </IconAction>
+      <IconAction
+        label={intl.formatMessage(messages.decline)}
+        onClick={() => setShowDeclineModal(true)}
+        disabled={updatingType !== null}
+        className={cornerButtonBad}
+      >
+        {updatingType === 'decline' ? <Spinner /> : <XMarkIcon />}
+      </IconAction>
+    </>
+  );
+
+  type Entry = {
+    key: string;
+    icon: ReactNode;
+    label: string;
+    danger?: boolean;
+  } & ({ onClick: () => void } | { href: string; external?: boolean });
+  const entries: Entry[] = [];
+  if (canEdit) {
+    entries.push({
+      key: 'edit',
+      icon: <PencilIcon className="h-5 w-5" />,
+      label: intl.formatMessage(messages.editRequest),
+      onClick: () => setShowEditModal(true),
+    });
+  }
+  if (requestData.status === MediaRequestStatus.FAILED && isManager) {
+    entries.push({
+      key: 'retry',
+      icon: (
+        <ArrowPathIcon
+          className={`h-5 w-5 ${isRetrying ? 'animate-spin' : ''}`}
+          style={{ animationDirection: 'reverse' }}
+        />
+      ),
+      label: intl.formatMessage(
+        isRetrying ? globalMessages.retrying : messages.retryRequest
+      ),
+      onClick: () => retryRequest(),
+    });
+  }
+  if (canPlay && playUrl) {
+    entries.push({
+      key: 'play',
+      icon: <PlayIcon className="h-5 w-5" />,
+      label: intl.formatMessage(messages.playOn, { server: mediaServerName }),
+      href: playUrl,
+      external: true,
+    });
+  }
+  if (isManager) {
+    entries.push({
+      key: 'manage',
+      icon: <Cog6ToothIcon className="h-5 w-5" />,
+      label: intl.formatMessage(messages.manageMedia),
+      href: `${mediaPath}?manage=1`,
+    });
+  }
+  if (hasPermission(Permission.ADMIN) && serviceUrl) {
+    entries.push({
+      key: 'arr',
+      icon: <ArrowTopRightOnSquareIcon className="h-5 w-5" />,
+      label: intl.formatMessage(messages.openInArr, {
+        arr: arrName(requestData.type, settings.currentSettings.bookService),
+      }),
+      href: serviceUrl,
+      external: true,
+    });
+  }
+  if (!isPending && isManager) {
+    const label = intl.formatMessage(messages.deleteRequest);
+    entries.push({
+      key: 'delete',
+      icon: <TrashIcon className="h-5 w-5" />,
+      label,
+      danger: true,
+      onClick: askFirst(label, () => deleteRequest()),
+    });
+    if (request.canRemove) {
+      const removeLabel = intl.formatMessage(messages.removeFromArr, {
+        arr: arrName(request.type, settings.currentSettings.bookService),
+      });
+      entries.push({
+        key: 'remove',
+        icon: <ServerStackIcon className="h-5 w-5" />,
+        label: removeLabel,
+        danger: true,
+        onClick: askFirst(removeLabel, () => deleteMediaFile()),
+      });
+    }
+  }
+  if (isPending && !isManager && isOwn) {
+    const label = intl.formatMessage(messages.cancelRequest);
+    entries.push({
+      key: 'cancel',
+      icon: <XMarkIcon className="h-5 w-5" />,
+      label,
+      danger: true,
+      onClick: askFirst(label, () => deleteRequest()),
+    });
+  }
+
+  const actionsMenu = entries.length > 0 && (
+    <Menu as="div" className="relative flex-none">
+      <MenuButton
+        className="flex h-8 w-8 items-center justify-center rounded-full bg-as-raised/80 text-as-ink-soft transition hover:bg-as-line hover:text-as-ink focus:outline-none"
+        aria-label={intl.formatMessage(messages.actions, { title: titleName })}
+      >
+        <EllipsisVerticalIcon className="h-5 w-5" />
+      </MenuButton>
+      <MenuItems
+        anchor="bottom end"
+        className="z-50 w-60 rounded-2xl bg-as-surface p-1.5 shadow-xl shadow-black/40 ring-1 ring-as-line [--anchor-gap:4px] focus:outline-none"
+      >
+        {entries.map((entry) => (
+          <MenuItem key={entry.key}>
+            {({ focus }) => {
+              const className = `${menuEntry} ${focus ? 'bg-as-raised' : ''} ${
+                entry.danger ? 'text-[#f2b0aa]' : 'text-as-ink'
+              }`;
+
+              return 'href' in entry ? (
+                entry.external ? (
+                  <a
+                    href={entry.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={className}
+                  >
+                    {entry.icon}
+                    {entry.label}
+                  </a>
+                ) : (
+                  <Link href={entry.href} className={className}>
+                    {entry.icon}
+                    {entry.label}
+                  </Link>
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={entry.onClick}
+                  className={className}
+                >
+                  {entry.icon}
+                  {entry.label}
+                </button>
+              );
+            }}
+          </MenuItem>
+        ))}
+      </MenuItems>
+    </Menu>
+  );
+  const actionCluster = (approveDecline || actionsMenu) && (
+    <div className="flex items-center gap-1">
+      {approveDecline}
+      {actionsMenu}
+    </div>
+  );
+  const confirmBar = confirm && (
+    <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+      <span className="font-semibold text-as-ink">
+        {intl.formatMessage(globalMessages.areyousure)}
+      </span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            const { run } = confirm;
+            setConfirm(null);
+            run();
+          }}
+          className="h-8 rounded-full bg-[#3b2427] px-3 text-[13px] font-semibold text-[#f2b0aa] transition hover:brightness-110"
+        >
+          {confirm.label}
+        </button>
+        <button
+          type="button"
+          onClick={() => setConfirm(null)}
+          className="h-8 rounded-full bg-as-raised px-3 text-[13px] font-semibold text-as-ink transition hover:bg-as-line"
+        >
+          {intl.formatMessage(messages.keep)}
+        </button>
+      </div>
+    </div>
+  );
+
+  const status = (
+    <RequestStatus
+      requestData={requestData}
+      downloads={downloads}
+      titleName={titleName}
+    />
+  );
+  const titleLink = (
+    <Link
+      href={mediaPath}
+      className="line-clamp-1 text-[15px] font-bold leading-snug text-as-ink hover:underline"
+    >
+      {titleName}
+    </Link>
+  );
+  const modals = (
     <>
       <DeclineRequestModal
         show={showDeclineModal}
@@ -978,186 +1322,147 @@ const RequestCard = ({
           }}
         />
       )}
-      <article className={cardShell}>
-        <div className="flex gap-3">
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <TypeLine request={requestData} />
-            <Link
-              href={mediaPath}
-              className="line-clamp-2 text-[17px] font-bold leading-snug text-as-ink hover:underline"
-            >
-              {titleName}
-            </Link>
-            {detail && (
-              <div className="truncate text-sm text-as-ink-soft">{detail}</div>
-            )}
-          </div>
+    </>
+  );
+
+  if (layout === 'list') {
+    return (
+      <>
+        {modals}
+        <article
+          className={`grid grid-cols-[2.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-4 py-3 md:gap-y-0 ${REQUEST_LIST_GRID}`}
+          data-testid="request-row"
+        >
           <Link
             href={mediaPath}
-            className={`relative flex-none overflow-hidden rounded-[10px] bg-as-tile transition hover:opacity-90 ${
-              posterSquare ? 'h-14 w-14' : 'h-[72px] w-12'
-            }`}
             aria-label={titleName}
+            className={`relative row-span-2 flex-none self-start overflow-hidden rounded-[8px] bg-as-tile md:row-span-1 md:self-center ${
+              posterSquare ? 'h-10 w-10' : 'h-[60px] w-10'
+            }`}
           >
             {poster}
           </Link>
-        </div>
-
-        {requestData.type === 'tv' && requestData.seasons.length > 0 && (
-          <div className="text-sm text-as-ink-soft">
-            <RequestSeasonBadges
-              request={requestData}
-              variant="text"
-              className=""
-            />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            {titleLink}
+            <TypeLine request={requestData} extra={detail} />
           </div>
-        )}
-
-        {requestData.type === 'comic' && !!requestData.comicVolumes?.length && (
-          <div className="text-sm text-as-ink-soft">
-            <RequestedVolumes volumes={requestData.comicVolumes} />
+          <div className="flex items-center gap-1 md:contents">
+            <div className="hidden min-w-0 md:flex">{status}</div>
+            <div className="md:hidden">{actionCluster}</div>
           </div>
-        )}
-
-        {requestData.status === MediaRequestStatus.DECLINED &&
-          requestData.declineReason && (
-            <div className="text-sm text-as-ink-soft">
-              {intl.formatMessage(messages.declinedReason, {
-                reason: requestData.declineReason,
-              })}
+          <div className="col-span-2 flex min-w-0 flex-col gap-1.5 md:col-span-1">
+            <div className="md:hidden">{status}</div>
+            <div className="flex min-w-0 items-center gap-2 text-xs text-as-ink-muted">
+              {showRequester && (
+                <UserAvatar
+                  id={requestData.requestedBy.id}
+                  name={requesterName}
+                  avatar={requestData.requestedBy.avatar}
+                  size={22}
+                />
+              )}
+              <span className="min-w-0 truncate">
+                {showRequester && (
+                  <>
+                    <Link
+                      href={`/users/${requestData.requestedBy.id}`}
+                      className="font-semibold text-as-ink-soft hover:text-as-ink hover:underline"
+                    >
+                      {requesterName}
+                    </Link>{' '}
+                  </>
+                )}
+                {requestedAgo}
+              </span>
             </div>
-          )}
-
-        <RequestStatus
-          requestData={requestData}
-          downloads={downloads}
-          titleName={titleName}
-        />
-
-        {overrides.length > 0 && (
-          <div className="flex flex-col text-xs text-as-ink-faint">
-            {overrides.map((line) => (
-              <span key={line} className="truncate">
-                {line}
+          </div>
+          <div className="hidden min-w-0 flex-col text-xs text-as-ink-muted md:flex">
+            {details.slice(0, 2).map((row) => (
+              <span key={row.key} className="truncate" title={row.title}>
+                <span className="text-as-ink-faint">{row.label}</span>{' '}
+                {row.value}
               </span>
             ))}
           </div>
-        )}
+          <div className="hidden items-center justify-end md:flex">
+            {actionCluster}
+          </div>
+          {confirmBar && <div className="col-span-full">{confirmBar}</div>}
+        </article>
+      </>
+    );
+  }
 
-        <div className="mt-auto flex flex-col gap-3 border-t border-as-line pt-3">
-          <RequestMeta
-            requestData={requestData}
-            showRequester={showRequester}
-          />
-          <div className="flex flex-wrap items-center gap-2 empty:hidden">
-            {isPending && isManager && (
-              <>
-                <IconAction
-                  label={intl.formatMessage(messages.approve)}
-                  onClick={() => modifyRequest('approve')}
-                  disabled={updatingType !== null}
-                  className={iconButtonOk}
-                >
-                  {updatingType === 'approve' ? <Spinner /> : <CheckIcon />}
-                </IconAction>
-                <IconAction
-                  label={intl.formatMessage(messages.decline)}
-                  onClick={() => setShowDeclineModal(true)}
-                  disabled={updatingType !== null}
-                  className={iconButtonBad}
-                >
-                  {updatingType === 'decline' ? <Spinner /> : <XMarkIcon />}
-                </IconAction>
-              </>
-            )}
-            {canEdit && (
-              <IconAction
-                label={intl.formatMessage(messages.editRequest)}
-                onClick={() => setShowEditModal(true)}
-                disabled={updatingType !== null}
-              >
-                <PencilIcon />
-              </IconAction>
-            )}
-            {requestData.status === MediaRequestStatus.FAILED && isManager && (
-              <IconAction
-                label={intl.formatMessage(
-                  isRetrying ? globalMessages.retrying : messages.retryRequest
+  const trailing = approveDecline ? 'pr-28' : actionsMenu ? 'pr-10' : '';
+
+  return (
+    <>
+      {modals}
+      <article className="flex flex-col gap-2" data-testid="request-card">
+        <div className="relative overflow-hidden rounded-[18px] bg-as-surface">
+          <CardArt backdrop={backdrop} />
+          <div className="relative flex gap-4 p-3 sm:p-4">
+            <Link
+              href={mediaPath}
+              aria-label={titleName}
+              className={`relative flex-none overflow-hidden rounded-[10px] bg-as-tile shadow-lg shadow-black/40 transition hover:opacity-90 ${
+                posterSquare
+                  ? 'h-[120px] w-[120px] self-center'
+                  : 'aspect-[2/3] w-[104px] self-center sm:w-[128px]'
+              }`}
+            >
+              {poster}
+            </Link>
+            <div className="flex min-w-0 flex-1 flex-col justify-between gap-3">
+              <dl className={`flex min-w-0 flex-col gap-1 ${trailing}`}>
+                <Detail label={intl.formatMessage(messages.labelStatus)}>
+                  {status}
+                </Detail>
+                {details.map((row) => (
+                  <Detail key={row.key} label={row.label} title={row.title}>
+                    {row.value}
+                  </Detail>
+                ))}
+                <Detail label={intl.formatMessage(messages.labelRequested)}>
+                  {requestedAgo}
+                </Detail>
+                {modified && (
+                  <Detail label={intl.formatMessage(messages.labelModified)}>
+                    {modified}
+                  </Detail>
                 )}
-                onClick={() => retryRequest()}
-                disabled={isRetrying}
-              >
-                <ArrowPathIcon
-                  className={isRetrying ? 'animate-spin' : ''}
-                  style={{ animationDirection: 'reverse' }}
-                />
-              </IconAction>
-            )}
-            {canPlay && playUrl && (
-              <IconLink
-                label={intl.formatMessage(messages.playOn, {
-                  server: mediaServerName,
-                })}
-                href={playUrl}
-                external
-              >
-                <PlayIcon />
-              </IconLink>
-            )}
-            {isManager && (
-              <IconLink
-                label={intl.formatMessage(messages.manageMedia)}
-                href={`${mediaPath}?manage=1`}
-              >
-                <Cog6ToothIcon />
-              </IconLink>
-            )}
-            {hasPermission(Permission.ADMIN) && serviceUrl && (
-              <IconLink
-                label={intl.formatMessage(messages.openInArr, {
-                  arr: arrName(
-                    requestData.type,
-                    settings.currentSettings.bookService
-                  ),
-                })}
-                href={serviceUrl}
-                external
-              >
-                <ArrowTopRightOnSquareIcon />
-              </IconLink>
-            )}
-            {!isPending && isManager && (
-              <>
-                <ConfirmIconAction
-                  label={intl.formatMessage(messages.deleteRequest)}
-                  onConfirm={() => deleteRequest()}
-                >
-                  <TrashIcon />
-                </ConfirmIconAction>
-                {request.canRemove && (
-                  <ConfirmIconAction
-                    label={intl.formatMessage(messages.removeFromArr, {
-                      arr: arrName(
-                        request.type,
-                        settings.currentSettings.bookService
-                      ),
-                    })}
-                    onConfirm={() => deleteMediaFile()}
-                  >
-                    <ServerStackIcon />
-                  </ConfirmIconAction>
-                )}
-              </>
-            )}
-            {isPending && !isManager && isOwn && (
-              <ConfirmIconAction
-                label={intl.formatMessage(messages.cancelRequest)}
-                onConfirm={() => deleteRequest()}
-              >
-                <XMarkIcon />
-              </ConfirmIconAction>
+              </dl>
+              {confirmBar}
+            </div>
+            {actionCluster && (
+              <div className="absolute right-2 top-2">{actionCluster}</div>
             )}
           </div>
+        </div>
+        <div className="flex min-w-0 items-start gap-3 px-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            {titleLink}
+            <TypeLine request={requestData} extra={detail} />
+          </div>
+          {showRequester && (
+            <Link
+              href={`/users/${requestData.requestedBy.id}`}
+              className="group flex flex-none items-center gap-2 pt-0.5 text-xs text-as-ink-soft"
+              title={intl.formatMessage(messages.requestedBy, {
+                name: requesterName,
+              })}
+            >
+              <span className="hidden max-w-[8rem] truncate group-hover:underline sm:inline">
+                {requesterName}
+              </span>
+              <UserAvatar
+                id={requestData.requestedBy.id}
+                name={requesterName}
+                avatar={requestData.requestedBy.avatar}
+                size={28}
+              />
+            </Link>
+          )}
         </div>
       </article>
     </>

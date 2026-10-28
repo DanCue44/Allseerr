@@ -1,4 +1,12 @@
-import RequestCard from '@app/components/Allseerr/RequestList/RequestCard';
+import type { DownloadsLayout } from '@app/components/Allseerr/Downloads/DownloadCard';
+import { DOWNLOADS_LAYOUTS } from '@app/components/Allseerr/Downloads/DownloadCard';
+import {
+  LayoutToggle,
+  ListFrame,
+} from '@app/components/Allseerr/Downloads/DownloadsCommon';
+import RequestCard, {
+  REQUEST_LIST_GRID,
+} from '@app/components/Allseerr/RequestList/RequestCard';
 import RequesterSelect from '@app/components/Allseerr/RequestList/RequesterSelect';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
@@ -42,6 +50,10 @@ const messages = defineMessages('components.Allseerr.RequestList', {
   sortFilter: 'Sort',
   pageSize: 'Results per page',
   removalRequests: 'Removal Requests',
+  columnTitle: 'Title',
+  columnStatus: 'Status',
+  columnRequested: 'Requested',
+  columnDetails: 'Details',
   unableToConnect:
     'Unable to connect to {services}. Some information may be unavailable.',
 });
@@ -109,6 +121,7 @@ const AmbientRequestList = () => {
   const [currentSortDirection, setCurrentSortDirection] =
     useState<SortDirection>('desc');
   const [currentPageSize, setCurrentPageSize] = useState<number>(10);
+  const [layout, setLayout] = useState<DownloadsLayout>('cards');
 
   const page = router.query.page ? Number(router.query.page) : 1;
   const pageIndex = page - 1;
@@ -170,6 +183,9 @@ const AmbientRequestList = () => {
       if (['asc', 'desc'].includes(filterSettings.currentSortDirection)) {
         setCurrentSortDirection(filterSettings.currentSortDirection);
       }
+      if (DOWNLOADS_LAYOUTS.includes(filterSettings.layout)) {
+        setLayout(filterSettings.layout);
+      }
     }
 
     // If filter value is provided in query, use that instead
@@ -188,6 +204,7 @@ const AmbientRequestList = () => {
         currentSort,
         currentSortDirection,
         currentPageSize,
+        layout,
       })
     );
   }, [
@@ -196,6 +213,7 @@ const AmbientRequestList = () => {
     currentSort,
     currentSortDirection,
     currentPageSize,
+    layout,
   ]);
 
   // Back to the first page, keeping the selected requester
@@ -398,6 +416,9 @@ const AmbientRequestList = () => {
               )}
             </button>
           </Tooltip>
+          <div className="ml-auto">
+            <LayoutToggle value={layout} onChange={setLayout} />
+          </div>
         </div>
       </div>
 
@@ -414,16 +435,39 @@ const AmbientRequestList = () => {
         )}
 
       {data.results.length > 0 ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {data.results.map((request) => (
-            <RequestCard
-              key={`request-list-${request.id}`}
-              request={request}
-              revalidateList={() => revalidate()}
-              showRequester={showRequester}
-            />
-          ))}
-        </div>
+        layout === 'list' ? (
+          <ListFrame
+            gridClassName={REQUEST_LIST_GRID}
+            columns={[
+              intl.formatMessage(messages.columnTitle),
+              intl.formatMessage(messages.columnStatus),
+              intl.formatMessage(messages.columnRequested),
+              intl.formatMessage(messages.columnDetails),
+              '',
+            ]}
+          >
+            {data.results.map((request) => (
+              <RequestCard
+                key={`request-list-${request.id}`}
+                request={request}
+                revalidateList={() => revalidate()}
+                showRequester={showRequester}
+                layout="list"
+              />
+            ))}
+          </ListFrame>
+        ) : (
+          <div className="grid grid-cols-1 gap-x-4 gap-y-6 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {data.results.map((request) => (
+              <RequestCard
+                key={`request-list-${request.id}`}
+                request={request}
+                revalidateList={() => revalidate()}
+                showRequester={showRequester}
+              />
+            ))}
+          </div>
+        )
       ) : (
         <div className="flex w-full flex-col items-center justify-center gap-4 rounded-[22px] bg-as-surface py-20">
           <span className="font-display text-lg text-as-ink-muted">
