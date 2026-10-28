@@ -1,5 +1,8 @@
 import CachedImage from '@app/components/Common/CachedImage';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
+import EpisodeWatchedToggle from '@app/components/WatchedButton/EpisodeWatchedToggle';
+import SeasonWatchedButton from '@app/components/WatchedButton/SeasonWatchedButton';
+import useTvWatched from '@app/hooks/useTvWatched';
 import defineMessages from '@app/utils/defineMessages';
 import {
   ArrowDownTrayIcon,
@@ -29,8 +32,17 @@ const messages = defineMessages(
     missing: 'Missing',
     wanted: 'Not aired yet',
     unmonitored: 'Not monitored',
+    watched: 'Watched',
   }
 );
+
+// Tailwind only makes the classes it can read, so every column mix is spelled out
+const COLUMNS = {
+  base: 'grid-cols-[2.5rem_minmax(0,1fr)_auto]',
+  status: 'grid-cols-[2.5rem_minmax(0,1fr)_auto_1.25rem]',
+  marks: 'grid-cols-[2.5rem_minmax(0,1fr)_auto_1.5rem]',
+  both: 'grid-cols-[2.5rem_minmax(0,1fr)_auto_1.25rem_1.5rem]',
+};
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 
@@ -77,17 +89,24 @@ const dayDiff = (airDate: string): number => {
 /**
  * Episodes of a season as a compact list, newest first, with each air date
  * in its own column like Sonarr. Upcoming episodes are dimmed and say when
- * they air; tapping a row shows its summary.
+ * they air; tapping a title shows its summary. People with a media server
+ * account also see an eye per episode to mark it watched.
  */
 const SeasonEpisodes = ({
   seasonNumber,
   tvId,
+  mediaId,
 }: {
   seasonNumber: number;
   tvId: number;
+  /** The title's media id, when the server has it, for marking episodes */
+  mediaId?: number;
 }) => {
   const intl = useIntl();
   const [openEpisode, setOpenEpisode] = useState<number | null>(null);
+  const { watched, canMark } = useTvWatched(tvId);
+  const showMarks = canMark && !!mediaId;
+  const seasonSummary = watched?.seasons[seasonNumber];
   const { data, error } = useSWR<SeasonWithEpisodes>(
     `/api/v1/tv/${tvId}/season/${seasonNumber}`
   );
@@ -103,8 +122,12 @@ const SeasonEpisodes = ({
     ['available', 'downloading', 'missing', 'wanted'] as const
   ).filter((status) => Object.values(statuses).includes(status));
   const columns = hasStatuses
-    ? 'grid-cols-[2.5rem_minmax(0,1fr)_auto_1.25rem]'
-    : 'grid-cols-[2.5rem_minmax(0,1fr)_auto]';
+    ? showMarks
+      ? COLUMNS.both
+      : COLUMNS.status
+    : showMarks
+      ? COLUMNS.marks
+      : COLUMNS.base;
 
   if (!data && !error) {
     return <LoadingSpinner />;
@@ -128,6 +151,18 @@ const SeasonEpisodes = ({
 
   return (
     <div className="py-2">
+      {showMarks && mediaId && (
+        <div className="flex justify-end px-1 pb-2">
+          <SeasonWatchedButton
+            mediaId={mediaId}
+            tvId={tvId}
+            seasonNumber={seasonNumber}
+            watched={
+              (seasonSummary?.watchedEpisodes ?? 0) >= data.episodes.length
+            }
+          />
+        </div>
+      )}
       {legend.length > 1 && (
         <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 pb-3 text-[12px] text-as-ink-muted">
           {legend.map((status) => {
@@ -155,6 +190,11 @@ const SeasonEpisodes = ({
         {hasStatuses && (
           <span className="sr-only">{intl.formatMessage(messages.status)}</span>
         )}
+        {showMarks && (
+          <span className="sr-only">
+            {intl.formatMessage(messages.watched)}
+          </span>
+        )}
       </div>
       <ul className="divide-y divide-as-line">
         {data.episodes
@@ -168,21 +208,27 @@ const SeasonEpisodes = ({
 
             return (
               <li key={`season-${seasonNumber}-episode-${episode.id}`}>
-                <button
-                  type="button"
-                  disabled={!hasDetails}
-                  onClick={() =>
-                    setOpenEpisode(isOpen ? null : episode.episodeNumber)
-                  }
-                  aria-expanded={hasDetails ? isOpen : undefined}
+                <div
                   className={`grid w-full ${columns} items-center gap-x-3 px-1 py-2.5 text-left text-sm transition ${
-                    hasDetails ? 'hover:bg-as-raised/60' : 'cursor-default'
+                    hasDetails ? 'hover:bg-as-raised/60' : ''
                   } ${upcoming ? 'text-as-ink-faint' : 'text-as-ink'}`}
                 >
                   <span className="font-semibold tabular-nums text-as-ink-muted">
                     {episode.episodeNumber}
                   </span>
-                  <span className="truncate font-medium">{episode.name}</span>
+                  <button
+                    type="button"
+                    disabled={!hasDetails}
+                    onClick={() =>
+                      setOpenEpisode(isOpen ? null : episode.episodeNumber)
+                    }
+                    aria-expanded={hasDetails ? isOpen : undefined}
+                    className={`truncate text-left font-medium ${
+                      hasDetails ? '' : 'cursor-default'
+                    }`}
+                  >
+                    {episode.name}
+                  </button>
                   <span className="whitespace-nowrap text-right tabular-nums">
                     {episode.airDate ? (
                       <>
@@ -231,7 +277,21 @@ const SeasonEpisodes = ({
                       }
                     />
                   )}
-                </button>
+                  {showMarks && mediaId && (
+                    <EpisodeWatchedToggle
+                      mediaId={mediaId}
+                      tvId={tvId}
+                      seasonNumber={seasonNumber}
+                      episodeNumber={episode.episodeNumber}
+                      state={
+                        watched?.episodes[
+                          `${seasonNumber}-${episode.episodeNumber}`
+                        ]
+                      }
+                      className="justify-self-end"
+                    />
+                  )}
+                </div>
                 {isOpen && (
                   <div className="flex flex-col gap-3 px-1 pb-4 pt-1 sm:flex-row">
                     {episode.stillPath && (

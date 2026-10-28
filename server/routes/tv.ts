@@ -4,12 +4,17 @@ import TheMovieDb from '@server/api/themoviedb';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import type { TmdbKeyword } from '@server/api/themoviedb/interfaces';
 import { MediaType } from '@server/constants/media';
+import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import WatchedEpisode from '@server/entity/WatchedEpisode';
 import WatchedItem from '@server/entity/WatchedItem';
 import { Watchlist } from '@server/entity/Watchlist';
+import type { TvWatchedResponse } from '@server/interfaces/api/mediaInterfaces';
 import { getSeasonEpisodeAvailability } from '@server/lib/episodeAvailability';
+import { episodeState } from '@server/lib/watchedState';
 import logger from '@server/logger';
+import { isAuthenticated } from '@server/middleware/auth';
 import { mapTvResult } from '@server/models/Search';
 import { mapSeasonWithEpisodes, mapTvDetails } from '@server/models/Tv';
 import { Router } from 'express';
@@ -104,6 +109,43 @@ tvRoutes.get('/:id/season/:seasonNumber', async (req, res, next) => {
     });
   }
 });
+
+/**
+ * What the signed-in person has watched of a series, as their media server
+ * account reports it: each episode played or started, summed up per season
+ */
+tvRoutes.get<{ id: string }, TvWatchedResponse>(
+  '/:id/watched',
+  isAuthenticated(),
+  async (req, res) => {
+    const response: TvWatchedResponse = { seasons: {}, episodes: {} };
+
+    if (!req.user || req.user.userType === UserType.LOCAL) {
+      return res.status(200).json(response);
+    }
+
+    const rows = await getRepository(WatchedEpisode).find({
+      where: { user: { id: req.user.id }, tmdbId: Number(req.params.id) },
+    });
+
+    for (const row of rows) {
+      const state = episodeState(row);
+      response.episodes[`${row.seasonNumber}-${row.episodeNumber}`] = state;
+
+      const season = (response.seasons[row.seasonNumber] ??= {
+        watchedEpisodes: 0,
+        inProgressEpisodes: 0,
+      });
+      if (state.watched) {
+        season.watchedEpisodes += 1;
+      } else if (state.inProgress) {
+        season.inProgressEpisodes += 1;
+      }
+    }
+
+    return res.status(200).json(response);
+  }
+);
 
 tvRoutes.get('/:id/season/:seasonNumber/availability', async (req, res) => {
   const episodes = await getSeasonEpisodeAvailability(

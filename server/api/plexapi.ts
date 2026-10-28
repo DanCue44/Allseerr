@@ -105,7 +105,13 @@ interface PlexMetadataResponse {
 /** A library item with the view fields the token's own account sees */
 export interface PlexViewItem extends PlexViewFields {
   ratingKey: string;
-  type: 'movie' | 'show';
+  type: 'movie' | 'show' | 'episode';
+  title?: string;
+  /** For an episode: its show, and the season and episode numbers */
+  grandparentRatingKey?: string;
+  grandparentTitle?: string;
+  parentIndex?: number;
+  index?: number;
 }
 
 interface PlexViewResponse {
@@ -114,6 +120,12 @@ interface PlexViewResponse {
     Metadata?: PlexViewItem[];
   };
 }
+
+// Only the counts are wanted from a view state listing, not the files,
+// people and art
+const VIEW_STATE_SLIM =
+  '&excludeElements=Media,Genre,Director,Writer,Producer,Country,Role,Collection,Field,Guid,Image,Label,Rating,UltraBlurColors' +
+  '&excludeFields=summary,tagline';
 
 class PlexAPI extends ExternalAPI {
   constructor({
@@ -307,18 +319,17 @@ class PlexAPI extends ExternalAPI {
    */
   public async getViewState(
     sectionId: string,
-    type: 'movie' | 'show',
+    type: 'movie' | 'show' | 'episode',
     {
       offset = 0,
       size = 500,
       since,
     }: { offset?: number; size?: number; since?: number } = {}
   ): Promise<{ totalSize: number; items: PlexViewItem[] }> {
+    const typeCode = type === 'show' ? 2 : type === 'episode' ? 4 : 1;
     const response = await this.get<PlexViewResponse>(
-      `/library/sections/${sectionId}/all?type=${type === 'show' ? 2 : 1}` +
-        // Only the counts are wanted, not the files, people and art
-        '&excludeElements=Media,Genre,Director,Writer,Producer,Country,Role,Collection,Field,Guid,Image,Label,Rating,UltraBlurColors' +
-        '&excludeFields=summary,tagline' +
+      `/library/sections/${sectionId}/all?type=${typeCode}` +
+        VIEW_STATE_SLIM +
         (since ? `&lastViewedAt>>=${since}` : ''),
       {
         headers: {
@@ -332,6 +343,27 @@ class PlexAPI extends ExternalAPI {
       totalSize: response.MediaContainer.totalSize ?? 0,
       items: response.MediaContainer.Metadata ?? [],
     };
+  }
+
+  /** Every episode of a show with the token's own view fields */
+  public async getAllLeaves(showRatingKey: string): Promise<PlexViewItem[]> {
+    const response = await this.get<PlexViewResponse>(
+      `/library/metadata/${showRatingKey}/allLeaves?${VIEW_STATE_SLIM.slice(1)}`
+    );
+
+    return response.MediaContainer.Metadata ?? [];
+  }
+
+  /**
+   * Plex's own Continue Watching for the token's account: movies left part
+   * way and the next episode of each show in progress
+   */
+  public async getOnDeck(): Promise<PlexViewItem[]> {
+    const response = await this.get<PlexViewResponse>(
+      `/library/onDeck?${VIEW_STATE_SLIM.slice(1)}`
+    );
+
+    return response.MediaContainer.Metadata ?? [];
   }
 
   /**

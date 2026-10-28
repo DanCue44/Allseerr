@@ -15,6 +15,7 @@ import PlayButton from '@app/components/Common/PlayButton';
 import StatusBadgeMini from '@app/components/Common/StatusBadgeMini';
 import Tag from '@app/components/Common/Tag';
 import Tooltip from '@app/components/Common/Tooltip';
+import WatchedBadge from '@app/components/Common/WatchedBadge';
 import ExternalLinkBlock from '@app/components/ExternalLinkBlock';
 import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
@@ -33,6 +34,7 @@ import useDeepLinks from '@app/hooks/useDeepLinks';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
+import useTvWatched, { seasonWatchedState } from '@app/hooks/useTvWatched';
 import { Permission, UserType, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
@@ -153,6 +155,10 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
       15000
     ),
   });
+  // Per-season ticks for people with a media server account
+  const { watched: tvWatched } = useTvWatched(
+    data?.mediaInfo ? data.id : undefined
+  );
 
   const { data: ratingData } = useSWR<RTRating>(
     `/api/v1/tv/${router.query.tvId}/ratings`
@@ -901,6 +907,12 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                                 episodeCount: season.episodeCount,
                               })}
                             </Badge>
+                            <WatchedBadge
+                              state={seasonWatchedState(
+                                tvWatched?.seasons[season.seasonNumber],
+                                season.episodeCount
+                              )}
+                            />
                           </div>
                           {((!mSeason &&
                             request?.status === MediaRequestStatus.APPROVED) ||
@@ -1112,6 +1124,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
                             <Season
                               tvId={data.id}
                               seasonNumber={season.seasonNumber}
+                              mediaId={data.mediaInfo?.id}
                             />
                           </DisclosurePanel>
                         </Transition>

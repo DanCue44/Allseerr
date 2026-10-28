@@ -4,15 +4,20 @@ import TheMovieDb, {
 } from '@server/api/themoviedb';
 import type { TmdbKeyword } from '@server/api/themoviedb/interfaces';
 import { MediaType } from '@server/constants/media';
+import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import { User } from '@server/entity/User';
 import { Watchlist } from '@server/entity/Watchlist';
 import type {
+  ContinueWatchingItem,
+  ContinueWatchingResponse,
   GenreSliderItem,
   WatchlistResponse,
 } from '@server/interfaces/api/discoverInterfaces';
 import { getSettings } from '@server/lib/settings';
+import { progressPercent } from '@server/lib/watchedState';
+import watchedSync from '@server/lib/watchedsync';
 import {
   getPlexUserWatchlist,
   withFollowImages,
@@ -1001,6 +1006,75 @@ discoverRoutes.get<Record<string, unknown>, WatchlistResponse>(
         itemsPerPage,
       })
     );
+  }
+);
+
+/**
+ * The person's Continue Watching row: movies left part way and the next
+ * episode of each series in progress, as the media server keeps them for
+ * their own account, with the titles and posters from TMDB
+ */
+discoverRoutes.get<Record<string, unknown>, ContinueWatchingResponse>(
+  '/continue-watching',
+  async (req, res) => {
+    if (!req.user || req.user.userType === UserType.LOCAL) {
+      return res.json({ results: [] });
+    }
+
+    const entries = await watchedSync.continueWatching(req.user);
+    const tmdb = new TheMovieDb();
+    const results: ContinueWatchingItem[] = [];
+
+    for (const entry of entries) {
+      const shared = {
+        tmdbId: entry.tmdbId,
+        progress: progressPercent(entry.viewOffset, entry.duration),
+        viewOffset: entry.viewOffset,
+        duration: entry.duration,
+        lastViewedAt: entry.lastViewedAt
+          ? entry.lastViewedAt.toISOString()
+          : null,
+      };
+
+      try {
+        if (entry.mediaType === MediaType.MOVIE) {
+          const movie = await tmdb.getMovie({
+            movieId: entry.tmdbId,
+            language: req.locale,
+          });
+          results.push({
+            mediaType: 'movie',
+            title: movie.title,
+            posterPath: movie.poster_path,
+            year: movie.release_date?.slice(0, 4) || null,
+            ...shared,
+          });
+        } else {
+          const show = await tmdb.getTvShow({
+            tvId: entry.tmdbId,
+            language: req.locale,
+          });
+          results.push({
+            mediaType: 'tv',
+            title: show.name,
+            posterPath: show.poster_path,
+            year: show.first_air_date?.slice(0, 4) || null,
+            seasonNumber: entry.seasonNumber,
+            episodeNumber: entry.episodeNumber,
+            episodeTitle: entry.episodeTitle,
+            ...shared,
+          });
+        }
+      } catch (e) {
+        logger.debug('Could not describe a Continue Watching title', {
+          label: 'API',
+          tmdbId: entry.tmdbId,
+          errorMessage: e.message,
+        });
+      }
+    }
+
+    return res.json({ results });
   }
 );
 

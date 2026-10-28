@@ -17,7 +17,7 @@ const WatchedBadge = ({
   state,
   shrink = false,
 }: {
-  state?: UserWatchedState;
+  state?: Pick<UserWatchedState, 'watched' | 'inProgress'>;
   shrink?: boolean;
 }) => {
   const intl = useIntl();

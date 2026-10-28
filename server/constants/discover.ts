@@ -34,9 +34,17 @@ export enum DiscoverSliderType {
   POPULAR_MANGA,
   NEW_MANGA,
   POPULAR_COMICS,
+  // What the signed-in person is part way through on the media server
+  CONTINUE_WATCHING = 32,
 }
 
 export const defaultSliders: Partial<DiscoverSlider>[] = [
+  {
+    type: DiscoverSliderType.CONTINUE_WATCHING,
+    enabled: true,
+    isBuiltIn: true,
+    order: 0,
+  },
   {
     type: DiscoverSliderType.RECENTLY_ADDED,
     enabled: true,

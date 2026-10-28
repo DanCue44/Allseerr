@@ -46,6 +46,7 @@ describe('getSliderMediaKind', () => {
       [DiscoverSliderType.POPULAR_MANGA]: 'comic',
       [DiscoverSliderType.NEW_MANGA]: 'comic',
       [DiscoverSliderType.POPULAR_COMICS]: 'comic',
+      [DiscoverSliderType.CONTINUE_WATCHING]: 'mixed',
     };
 
     for (const [type, kind] of Object.entries(expected)) {

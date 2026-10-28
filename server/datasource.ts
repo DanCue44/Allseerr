@@ -24,6 +24,7 @@ import { UserAccessProfile } from '@server/entity/UserAccessProfile';
 import { UserAppAccount } from '@server/entity/UserAppAccount';
 import { UserPushSubscription } from '@server/entity/UserPushSubscription';
 import { UserSettings } from '@server/entity/UserSettings';
+import WatchedEpisode from '@server/entity/WatchedEpisode';
 import WatchedItem from '@server/entity/WatchedItem';
 import { Watchlist } from '@server/entity/Watchlist';
 import { IssueCommentSubscriber } from '@server/subscriber/IssueCommentSubscriber';
@@ -65,6 +66,7 @@ const entities = [
   UserAppAccount,
   UserPushSubscription,
   UserSettings,
+  WatchedEpisode,
   WatchedItem,
   Watchlist,
 ];

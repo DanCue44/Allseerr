@@ -1,5 +1,6 @@
 import type Media from '@server/entity/Media';
 import type { User } from '@server/entity/User';
+import type { UserEpisodeState } from '@server/lib/watchedState';
 import type { PaginatedResponse } from './common';
 
 export interface MediaResultsResponse extends PaginatedResponse {
@@ -57,4 +58,14 @@ export interface MediaFileInfo {
 export interface MediaFilesResponse {
   files?: MediaFileInfo[];
   files4k?: MediaFileInfo[];
+}
+
+/** What the signed-in user has watched of a series, per season and episode */
+export interface TvWatchedResponse {
+  seasons: Record<
+    number,
+    { watchedEpisodes: number; inProgressEpisodes: number }
+  >;
+  /** Keyed "<season>-<episode>" */
+  episodes: Record<string, UserEpisodeState>;
 }

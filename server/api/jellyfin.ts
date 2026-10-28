@@ -120,6 +120,12 @@ export interface JellyfinMediaSource {
 export interface JellyfinUserItem extends JellyfinUserFields {
   Id: string;
   Type: string;
+  Name?: string;
+  /** For an episode: its series, and the season and episode numbers */
+  SeriesId?: string;
+  SeriesName?: string;
+  ParentIndexNumber?: number;
+  IndexNumber?: number;
 }
 
 export interface JellyfinLibraryItemExtended extends JellyfinLibraryItem {
@@ -609,6 +615,49 @@ class JellyfinAPI extends ExternalAPI {
     return this.get<JellyfinUserItem>(
       `/Users/${this.userId ?? 'Me'}/Items/${itemId}?Fields=RecursiveItemCount`
     );
+  }
+
+  /**
+   * The episodes under a library or series with the user's play data, all
+   * of them or only the played or resumable ones
+   */
+  public async getUserEpisodes(
+    parentId: string,
+    filter?: 'IsPlayed' | 'IsResumable'
+  ): Promise<JellyfinUserItem[]> {
+    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
+      `/Users/${this.userId ?? 'Me'}/Items?ParentId=${parentId}&Recursive=true&IncludeItemTypes=Episode&Fields=RunTimeTicks&EnableImages=false${
+        filter ? `&Filters=${filter}` : ''
+      }`
+    );
+
+    return response.Items ?? [];
+  }
+
+  public async getUserSeasons(seriesId: string): Promise<JellyfinUserItem[]> {
+    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
+      `/Shows/${seriesId}/Seasons?userId=${this.userId ?? ''}&EnableImages=false`
+    );
+
+    return response.Items ?? [];
+  }
+
+  /** Movies and episodes the user left part way */
+  public async getResumeItems(): Promise<JellyfinUserItem[]> {
+    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
+      `/Users/${this.userId ?? 'Me'}/Items/Resume?MediaTypes=Video&Fields=RunTimeTicks&EnableImages=false&Limit=30`
+    );
+
+    return response.Items ?? [];
+  }
+
+  /** The next unplayed episode of each series the user is watching */
+  public async getNextUp(): Promise<JellyfinUserItem[]> {
+    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
+      `/Shows/NextUp?userId=${this.userId ?? ''}&Fields=RunTimeTicks&EnableImages=false&Limit=30`
+    );
+
+    return response.Items ?? [];
   }
 
   /** Marks an item played or unplayed for the user (a series marks every episode) */

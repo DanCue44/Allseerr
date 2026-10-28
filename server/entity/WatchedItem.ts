@@ -97,6 +97,10 @@ class WatchedItem implements WatchedCounts {
   @Column({ type: 'int', nullable: true })
   public viewOffset: number | null;
 
+  /** A movie's length in milliseconds, for how far through it is */
+  @Column({ type: 'int', nullable: true })
+  public duration: number | null;
+
   @DbAwareColumn({ type: 'datetime', nullable: true })
   public lastViewedAt: Date | null;
 
@@ -118,6 +122,7 @@ class WatchedItem implements WatchedCounts {
     this.viewedLeafCount = counts.viewedLeafCount;
     this.leafCount = counts.leafCount;
     this.viewOffset = counts.viewOffset;
+    this.duration = counts.duration;
     this.lastViewedAt = counts.lastViewedAt;
   }
 }

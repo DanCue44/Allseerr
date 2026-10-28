@@ -3616,6 +3616,84 @@ components:
           type: number
         leafCount:
           type: number
+        viewOffset:
+          type: number
+          nullable: true
+          description: How far into a movie, in milliseconds, when left part way
+        duration:
+          type: number
+          nullable: true
+          description: The movie's length in milliseconds, when the server said
+        lastViewedAt:
+          type: string
+          nullable: true
+    UserEpisodeState:
+      type: object
+      description: What the signed-in user has seen of one episode on the media server
+      properties:
+        watched:
+          type: boolean
+        inProgress:
+          type: boolean
+        viewOffset:
+          type: number
+          nullable: true
+        duration:
+          type: number
+          nullable: true
+        lastViewedAt:
+          type: string
+          nullable: true
+    TvWatchedResponse:
+      type: object
+      properties:
+        seasons:
+          type: object
+          description: Per season number, how many episodes the user has watched or started
+          additionalProperties:
+            type: object
+            properties:
+              watchedEpisodes:
+                type: number
+              inProgressEpisodes:
+                type: number
+        episodes:
+          type: object
+          description: Keyed "<season>-<episode>"
+          additionalProperties:
+            $ref: '#/components/schemas/UserEpisodeState'
+    ContinueWatchingItem:
+      type: object
+      properties:
+        mediaType:
+          type: string
+          enum: [movie, tv]
+        tmdbId:
+          type: number
+        title:
+          type: string
+        posterPath:
+          type: string
+          nullable: true
+        year:
+          type: string
+          nullable: true
+        seasonNumber:
+          type: number
+        episodeNumber:
+          type: number
+        episodeTitle:
+          type: string
+        progress:
+          type: number
+          nullable: true
+          description: How far through, 0 to 100, when left part way
+        viewOffset:
+          type: number
+          nullable: true
+        duration:
+          type: number
+          nullable: true
         lastViewedAt:
           type: string
           nullable: true
@@ -12149,6 +12227,24 @@ paths:
                     name:
                       type: string
                       example: Genre Name
+  /discover/continue-watching:
+    get:
+      summary: Get the user's Continue Watching row
+      description: Movies left part way and the next episode of each series in progress, straight from the media server for the signed-in user's own account, with titles and posters from TMDB. Empty for local users.
+      tags:
+        - search
+      responses:
+        '200':
+          description: Titles to pick up next, most recent first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContinueWatchingItem'
   /discover/watchlist:
     get:
       summary: Get the Plex watchlist.
@@ -13978,6 +14074,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Season'
+  /tv/{tvId}/watched:
+    get:
+      summary: Get what the user has watched of a series
+      description: The signed-in user's watched and in-progress episodes of the series, as the media server reports them for their own account, summed up per season. Empty for local users.
+      tags:
+        - tv
+      parameters:
+        - in: path
+          name: tvId
+          required: true
+          schema:
+            type: number
+            example: 76479
+      responses:
+        '200':
+          description: Watched episodes keyed by season and episode
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvWatchedResponse'
   /tv/{tvId}/season/{seasonNumber}/availability:
     get:
       summary: Get the availability of each episode of a season
@@ -14970,11 +15086,17 @@ paths:
               properties:
                 watched:
                   type: boolean
+                seasonNumber:
+                  type: number
+                  description: Mark one season of a series instead of the whole series
+                episodeNumber:
+                  type: number
+                  description: With seasonNumber, mark one episode
               required:
                 - watched
       responses:
         '200':
-          description: The user's watched state
+          description: The user's watched state for the whole title
           content:
             application/json:
               schema:

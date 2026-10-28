@@ -62,3 +62,24 @@ export interface BookSubjectSuggestion {
 export interface BookSubjectSearchResponse {
   results: BookSubjectSuggestion[];
 }
+
+/** A movie left part way, or the next episode of a series in progress */
+export interface ContinueWatchingItem {
+  mediaType: 'movie' | 'tv';
+  tmdbId: number;
+  title: string;
+  posterPath?: string | null;
+  year?: string | null;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  episodeTitle?: string;
+  /** How far through, 0 to 100, when left part way */
+  progress: number | null;
+  viewOffset: number | null;
+  duration: number | null;
+  lastViewedAt: string | null;
+}
+
+export interface ContinueWatchingResponse {
+  results: ContinueWatchingItem[];
+}
