@@ -103,9 +103,9 @@ const WatchedButton = ({
         {isUpdating ? (
           <Spinner />
         ) : watched ? (
-          <FilledEyeIcon className="text-sky-400" />
+          <FilledEyeIcon className="text-green-400" />
         ) : (
-          <EyeIcon className={inProgress ? 'text-sky-400' : undefined} />
+          <EyeIcon className={inProgress ? 'text-orange-400' : undefined} />
         )}
       </Button>
     </Tooltip>
