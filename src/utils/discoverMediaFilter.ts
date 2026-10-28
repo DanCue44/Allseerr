@@ -67,8 +67,7 @@ const FILTERABLE_MIXED: DiscoverSliderType[] = [
   DiscoverSliderType.PLEX_WATCHLIST,
 ];
 
-// TMDB trending and Continue Watching can be narrowed to movies or series,
-// but have no music or books
+// TMDB trending can be narrowed to movies or series, but has no music or books
 const TRENDING_FILTERS: DiscoverMediaFilter[] = ['movie', 'tv'];
 
 /**
@@ -90,10 +89,7 @@ export const isSliderInDiscoverFilter = (
     return kind === filter;
   }
 
-  if (
-    type === DiscoverSliderType.TRENDING ||
-    type === DiscoverSliderType.CONTINUE_WATCHING
-  ) {
+  if (type === DiscoverSliderType.TRENDING) {
     return TRENDING_FILTERS.includes(filter);
   }
 

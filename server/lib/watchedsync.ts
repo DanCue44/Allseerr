@@ -43,12 +43,6 @@ const FULL_EVERY_MS = 24 * 60 * 60 * 1000;
 const OVERLAP_MS = 10 * 60 * 1000;
 /** How long a person's server token is kept before plex.tv is asked again */
 const SERVER_TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
-/** How long the map of server ids to titles is kept between page loads */
-const KEYS_TTL_MS = 5 * 60 * 1000;
-/** How long a person's Continue Watching row is kept between page loads */
-const ON_DECK_TTL_MS = 60 * 1000;
-/** The most titles a Continue Watching row carries */
-const ON_DECK_LIMIT = 20;
 
 interface TitleRef {
   mediaType: MediaType;
@@ -76,18 +70,6 @@ interface ServerRead {
 export interface WatchedTarget {
   seasonNumber?: number;
   episodeNumber?: number;
-}
-
-/** A movie left part way, or the next episode of a series being watched */
-export interface ContinueWatchingEntry {
-  mediaType: MediaType;
-  tmdbId: number;
-  seasonNumber?: number;
-  episodeNumber?: number;
-  episodeTitle?: string;
-  viewOffset: number | null;
-  duration: number | null;
-  lastViewedAt: Date | null;
 }
 
 const titleKey = (ref: TitleRef): string => `${ref.mediaType}:${ref.tmdbId}`;
@@ -139,11 +121,6 @@ class WatchedSync {
     number,
     { account: string; token: string | null; at: number }
   >();
-  private keysCache?: { at: number; keys: Map<string, TitleRef> };
-  private onDeckCache = new Map<
-    number,
-    { at: number; entries: ContinueWatchingEntry[] }
-  >();
 
   public status(): { running: boolean } {
     return { running: this.running };
@@ -172,7 +149,7 @@ class WatchedSync {
       const since = fullRun
         ? undefined
         : Math.floor((this.lastRunAt - OVERLAP_MS) / 1000);
-      const keys = await this.mediaKeys(true);
+      const keys = await this.mediaKeys();
       const users = await this.usersWithAccounts(mediaServer);
       let synced = 0;
       let noAccess = 0;
@@ -374,190 +351,11 @@ class WatchedSync {
       throw new WatchedError(400, 'No media server is set up');
     }
 
-    this.onDeckCache.delete(user.id);
-
     if (isSeries) {
       await this.saveEpisodes(user, tmdbId, episodes);
     }
 
     return this.saveTitle(user, { mediaType: media.mediaType, tmdbId }, counts);
-  }
-
-  /**
-   * What the person should pick up next, straight from the media server:
-   * Plex's On Deck, or Jellyfin's resumable items and Next Up. Kept a
-   * minute per person. Empty for anyone the server will not answer for.
-   */
-  public async continueWatching(user: User): Promise<ContinueWatchingEntry[]> {
-    const kept = this.onDeckCache.get(user.id);
-    if (kept && Date.now() - kept.at < ON_DECK_TTL_MS) {
-      return kept.entries;
-    }
-
-    const mediaServer = getSettings().main.mediaServerType;
-    const account = await this.accountOf(user.id);
-    let entries: ContinueWatchingEntry[] = [];
-
-    try {
-      if (mediaServer === MediaServerType.PLEX) {
-        if (account?.plexToken && !account.plexTokenInvalidAt) {
-          entries = await this.plexOnDeck(account);
-        }
-      } else if (
-        mediaServer === MediaServerType.JELLYFIN ||
-        mediaServer === MediaServerType.EMBY
-      ) {
-        if (account?.jellyfinAuthToken && account.jellyfinUserId) {
-          entries = await this.jellyfinNextUp(account);
-        }
-      }
-    } catch (e) {
-      if (!(e instanceof NoAccessError)) {
-        logger.debug('Could not read what a user is watching', {
-          label: LABEL,
-          user: user.displayName,
-          errorMessage: e.message,
-        });
-      }
-    }
-
-    this.onDeckCache.set(user.id, { at: Date.now(), entries });
-
-    return entries;
-  }
-
-  private async plexOnDeck(account: User): Promise<ContinueWatchingEntry[]> {
-    const keys = await this.mediaKeys();
-    const read = async (plex: PlexAPI) => plex.getOnDeck();
-    let items: PlexViewItem[];
-
-    try {
-      items = await read(
-        new PlexAPI({ plexToken: await this.plexServerToken(account) })
-      );
-    } catch (e) {
-      if (e instanceof NoAccessError || statusOf(e) !== 401) {
-        throw e;
-      }
-      items = await read(
-        new PlexAPI({ plexToken: await this.plexServerToken(account, true) })
-      );
-    }
-
-    const entries: ContinueWatchingEntry[] = [];
-
-    for (const item of items) {
-      const entry = this.plexEntry(keys, item);
-      if (entry && !entries.some((e) => e.tmdbId === entry.tmdbId)) {
-        entries.push(entry);
-      }
-      if (entries.length >= ON_DECK_LIMIT) {
-        break;
-      }
-    }
-
-    return entries;
-  }
-
-  private plexEntry(
-    keys: Map<string, TitleRef>,
-    item: PlexViewItem
-  ): ContinueWatchingEntry | undefined {
-    const counts = plexEpisodeCounts(item);
-
-    if (item.type === 'episode') {
-      const ref = item.grandparentRatingKey
-        ? keys.get(item.grandparentRatingKey)
-        : undefined;
-      if (
-        !ref ||
-        ref.mediaType !== MediaType.TV ||
-        item.parentIndex == null ||
-        item.index == null
-      ) {
-        return undefined;
-      }
-
-      return {
-        mediaType: MediaType.TV,
-        tmdbId: ref.tmdbId,
-        seasonNumber: item.parentIndex,
-        episodeNumber: item.index,
-        episodeTitle: item.title,
-        ...counts,
-      };
-    }
-
-    const ref = keys.get(item.ratingKey);
-    if (!ref || ref.mediaType !== MediaType.MOVIE) {
-      return undefined;
-    }
-
-    return { mediaType: MediaType.MOVIE, tmdbId: ref.tmdbId, ...counts };
-  }
-
-  private async jellyfinNextUp(
-    account: User
-  ): Promise<ContinueWatchingEntry[]> {
-    const keys = await this.mediaKeys();
-    const jellyfin = new JellyfinAPI(
-      getHostname(),
-      account.jellyfinAuthToken,
-      account.jellyfinDeviceId
-    );
-    jellyfin.setUserId(account.jellyfinUserId ?? '');
-
-    let items: JellyfinUserItem[];
-    try {
-      items = [
-        ...(await jellyfin.getResumeItems()),
-        ...(await jellyfin.getNextUp()),
-      ];
-    } catch (e) {
-      if (statusOf(e) === 401) {
-        throw new NoAccessError('The server answered 401');
-      }
-      throw e;
-    }
-
-    const entries: ContinueWatchingEntry[] = [];
-
-    for (const item of items) {
-      const counts = jellyfinEpisodeCounts(item);
-      let entry: ContinueWatchingEntry | undefined;
-
-      if (item.Type === 'Episode') {
-        const ref = item.SeriesId ? keys.get(item.SeriesId) : undefined;
-        if (
-          ref?.mediaType === MediaType.TV &&
-          item.ParentIndexNumber != null &&
-          item.IndexNumber != null
-        ) {
-          entry = {
-            mediaType: MediaType.TV,
-            tmdbId: ref.tmdbId,
-            seasonNumber: item.ParentIndexNumber,
-            episodeNumber: item.IndexNumber,
-            episodeTitle: item.Name,
-            ...counts,
-          };
-        }
-      } else {
-        const ref = keys.get(item.Id);
-        if (ref?.mediaType === MediaType.MOVIE) {
-          entry = { mediaType: MediaType.MOVIE, tmdbId: ref.tmdbId, ...counts };
-        }
-      }
-
-      if (entry && !entries.some((e) => e.tmdbId === entry?.tmdbId)) {
-        entries.push(entry);
-      }
-      if (entries.length >= ON_DECK_LIMIT) {
-        break;
-      }
-    }
-
-    return entries;
   }
 
   /** The Plex item to mark for a series: the show, a season or an episode */
@@ -735,19 +533,8 @@ class WatchedSync {
     return token;
   }
 
-  /**
-   * Every media server item id Allseerr knows, mapped to its title. Kept a
-   * few minutes for the pages; a sync run always reads it fresh.
-   */
-  private async mediaKeys(fresh = false): Promise<Map<string, TitleRef>> {
-    if (
-      !fresh &&
-      this.keysCache &&
-      Date.now() - this.keysCache.at < KEYS_TTL_MS
-    ) {
-      return this.keysCache.keys;
-    }
-
+  /** Every media server item id Allseerr knows, mapped to its title */
+  private async mediaKeys(): Promise<Map<string, TitleRef>> {
     const rows = await getRepository(Media)
       .createQueryBuilder('media')
       .select([
@@ -783,8 +570,6 @@ class WatchedSync {
         }
       }
     }
-
-    this.keysCache = { at: Date.now(), keys };
 
     return keys;
   }

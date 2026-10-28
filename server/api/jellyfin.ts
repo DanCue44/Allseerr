@@ -642,24 +642,6 @@ class JellyfinAPI extends ExternalAPI {
     return response.Items ?? [];
   }
 
-  /** Movies and episodes the user left part way */
-  public async getResumeItems(): Promise<JellyfinUserItem[]> {
-    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
-      `/Users/${this.userId ?? 'Me'}/Items/Resume?MediaTypes=Video&Fields=RunTimeTicks&EnableImages=false&Limit=30`
-    );
-
-    return response.Items ?? [];
-  }
-
-  /** The next unplayed episode of each series the user is watching */
-  public async getNextUp(): Promise<JellyfinUserItem[]> {
-    const response = await this.get<{ Items?: JellyfinUserItem[] }>(
-      `/Shows/NextUp?userId=${this.userId ?? ''}&Fields=RunTimeTicks&EnableImages=false&Limit=30`
-    );
-
-    return response.Items ?? [];
-  }
-
   /** Marks an item played or unplayed for the user (a series marks every episode) */
   public async setPlayed(itemId: string, played: boolean): Promise<void> {
     const url = `/Users/${this.userId ?? 'Me'}/PlayedItems/${itemId}`;

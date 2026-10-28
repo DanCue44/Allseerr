@@ -25,13 +25,9 @@ export const seasonWatchedState = (
   return { watched, inProgress: !watched };
 };
 
-/** Refreshes a series page, its ticks and the home row after a mark */
+/** Refreshes a series page and its ticks after a mark */
 export const refreshTvWatched = async (tvId: number): Promise<void> => {
-  await Promise.all([
-    mutate(tvWatchedKey(tvId)),
-    mutate(`/api/v1/tv/${tvId}`),
-    mutate('/api/v1/discover/continue-watching'),
-  ]);
+  await Promise.all([mutate(tvWatchedKey(tvId)), mutate(`/api/v1/tv/${tvId}`)]);
 };
 
 /**

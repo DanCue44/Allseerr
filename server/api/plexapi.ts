@@ -355,18 +355,6 @@ class PlexAPI extends ExternalAPI {
   }
 
   /**
-   * Plex's own Continue Watching for the token's account: movies left part
-   * way and the next episode of each show in progress
-   */
-  public async getOnDeck(): Promise<PlexViewItem[]> {
-    const response = await this.get<PlexViewResponse>(
-      `/library/onDeck?${VIEW_STATE_SLIM.slice(1)}`
-    );
-
-    return response.MediaContainer.Metadata ?? [];
-  }
-
-  /**
    * Marks an item (a movie, show, season or episode) watched or unwatched
    * for the token's own account. Marking a show marks every episode.
    */

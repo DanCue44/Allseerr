@@ -3662,41 +3662,6 @@ components:
           description: Keyed "<season>-<episode>"
           additionalProperties:
             $ref: '#/components/schemas/UserEpisodeState'
-    ContinueWatchingItem:
-      type: object
-      properties:
-        mediaType:
-          type: string
-          enum: [movie, tv]
-        tmdbId:
-          type: number
-        title:
-          type: string
-        posterPath:
-          type: string
-          nullable: true
-        year:
-          type: string
-          nullable: true
-        seasonNumber:
-          type: number
-        episodeNumber:
-          type: number
-        episodeTitle:
-          type: string
-        progress:
-          type: number
-          nullable: true
-          description: How far through, 0 to 100, when left part way
-        viewOffset:
-          type: number
-          nullable: true
-        duration:
-          type: number
-          nullable: true
-        lastViewedAt:
-          type: string
-          nullable: true
     MediaInfo:
       type: object
       properties:
@@ -12227,24 +12192,6 @@ paths:
                     name:
                       type: string
                       example: Genre Name
-  /discover/continue-watching:
-    get:
-      summary: Get the user's Continue Watching row
-      description: Movies left part way and the next episode of each series in progress, straight from the media server for the signed-in user's own account, with titles and posters from TMDB. Empty for local users.
-      tags:
-        - search
-      responses:
-        '200':
-          description: Titles to pick up next, most recent first
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  results:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/ContinueWatchingItem'
   /discover/watchlist:
     get:
       summary: Get the Plex watchlist.

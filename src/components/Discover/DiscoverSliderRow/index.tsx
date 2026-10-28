@@ -1,5 +1,4 @@
 import ComingUpSlider from '@app/components/Discover/ComingUpSlider';
-import ContinueWatchingSlider from '@app/components/Discover/ContinueWatchingSlider';
 import MovieGenreSlider from '@app/components/Discover/MovieGenreSlider';
 import NetworkSlider from '@app/components/Discover/NetworkSlider';
 import PlexWatchlistSlider from '@app/components/Discover/PlexWatchlistSlider';
@@ -59,15 +58,6 @@ const DiscoverSliderRow = ({
   let sliderComponent: React.ReactNode = null;
 
   switch (slider.type) {
-    case DiscoverSliderType.CONTINUE_WATCHING:
-      sliderComponent = (
-        <ContinueWatchingSlider
-          mediaType={
-            narrowTo === 'movie' || narrowTo === 'tv' ? narrowTo : undefined
-          }
-        />
-      );
-      break;
     case DiscoverSliderType.RECENTLY_ADDED:
       sliderComponent = <RecentlyAddedSlider mediaType={narrowTo} />;
       break;

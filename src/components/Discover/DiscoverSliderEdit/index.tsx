@@ -142,8 +142,6 @@ const DiscoverSliderEdit = ({
 
   const getSliderTitle = (slider: Partial<DiscoverSlider>): string => {
     switch (slider.type) {
-      case DiscoverSliderType.CONTINUE_WATCHING:
-        return intl.formatMessage(sliderTitles.continuewatching);
       case DiscoverSliderType.RECENTLY_ADDED:
         return intl.formatMessage(sliderTitles.recentlyAdded);
       case DiscoverSliderType.RECENT_REQUESTS:
