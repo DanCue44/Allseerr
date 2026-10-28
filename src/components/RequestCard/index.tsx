@@ -121,9 +121,15 @@ const getMediaPath = (request: NonFunctionProperties<MediaRequest>): string =>
         ? `/comic/${request.media.comicId}`
         : `/${request.type}/${request.media.tmdbId}`;
 
+// Every card is as tall as a portrait poster with the padding, so a row of
+// mixed movies, albums and comics lines up
+const cardHeight = 'min-h-[9.5rem] sm:min-h-[12.5rem]';
+
 const RequestCardPlaceholder = () => {
   return (
-    <div className="relative w-72 animate-pulse rounded-xl bg-gray-700 p-4 sm:w-96">
+    <div
+      className={`relative w-72 animate-pulse rounded-xl bg-gray-700 p-4 sm:w-96 ${cardHeight}`}
+    >
       <div className="w-20 sm:w-28">
         <div className="w-full" style={{ paddingBottom: '150%' }} />
       </div>
@@ -415,6 +421,25 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
       : []
   );
 
+  const backdrop:
+    | { type: 'music' | 'book' | 'tmdb'; src: string; blur?: boolean }
+    | undefined = isMusic(title)
+    ? title.artistBackdrop
+      ? { type: 'music', src: title.artistBackdrop }
+      : title.posterPath
+        ? { type: 'music', src: title.posterPath, blur: true }
+        : undefined
+    : isBook(title) || isComic(title)
+      ? title.posterPath
+        ? { type: 'book', src: title.posterPath, blur: true }
+        : undefined
+      : title.backdropPath
+        ? {
+            type: 'tmdb',
+            src: `https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/${title.backdropPath}`,
+          }
+        : undefined;
+
   return (
     <>
       <DeclineRequestModal
@@ -441,25 +466,17 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
         />
       )}
       <div
-        className="relative flex w-72 overflow-hidden rounded-xl bg-gray-800 bg-cover bg-center p-4 text-gray-400 shadow ring-1 ring-gray-700 sm:w-96"
+        className={`relative flex w-72 overflow-hidden rounded-xl bg-gray-800 bg-cover bg-center p-4 text-gray-400 shadow ring-1 ring-gray-700 sm:w-96 ${cardHeight}`}
         data-testid="request-card"
       >
-        {(isMusic(title)
-          ? title.artistBackdrop
-          : isBook(title) || isComic(title)
-            ? undefined
-            : title.backdropPath) && (
+        {backdrop && (
           <div className="absolute inset-0 z-0">
             <CachedImage
-              type={isMusic(title) ? 'music' : 'tmdb'}
+              type={backdrop.type}
               alt=""
-              src={
-                isMusic(title)
-                  ? (title.artistBackdrop ?? '')
-                  : isBook(title) || isComic(title)
-                    ? ''
-                    : `https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/${title.backdropPath}`
-              }
+              src={backdrop.src}
+              // Books and comics have no backdrop art, so their cover stands in
+              className={backdrop.blur ? 'scale-110 blur-2xl' : undefined}
               style={{ width: '100%', height: '100%', objectFit: 'cover' }}
               fill
             />
@@ -762,8 +779,8 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
         </div>
         <Link
           href={getMediaPath(requestData)}
-          className={`w-20 flex-shrink-0 scale-100 transform-gpu cursor-pointer self-start overflow-hidden rounded-md shadow-sm transition duration-300 hover:scale-105 hover:shadow-md sm:w-28 ${
-            isMusic(title) ? 'aspect-square bg-gray-700' : ''
+          className={`relative w-20 flex-shrink-0 scale-100 transform-gpu cursor-pointer self-start overflow-hidden rounded-md bg-gray-700 shadow-sm transition duration-300 hover:scale-105 hover:shadow-md sm:w-28 ${
+            isMusic(title) ? 'aspect-square' : 'aspect-[2/3]'
           }`}
         >
           {isMusic(title) ? (
@@ -772,10 +789,8 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
                 type="music"
                 src={title.posterPath}
                 alt=""
-                sizes="100vw"
-                style={{ width: '100%', height: 'auto' }}
-                width={500}
-                height={500}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                fill
               />
             )
           ) : isBook(title) || isComic(title) ? (
@@ -783,10 +798,8 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
               type="book"
               src={title.posterPath ?? '/images/allseerr_poster_not_found.png'}
               alt=""
-              sizes="100vw"
-              style={{ width: '100%', height: 'auto', objectFit: 'cover' }}
-              width={600}
-              height={900}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              fill
             />
           ) : (
             <CachedImage
@@ -797,10 +810,8 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
                   : '/images/allseerr_poster_not_found.png'
               }
               alt=""
-              sizes="100vw"
-              style={{ width: '100%', height: 'auto' }}
-              width={600}
-              height={900}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              fill
             />
           )}
         </Link>
