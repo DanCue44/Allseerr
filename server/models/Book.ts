@@ -13,6 +13,7 @@ import type {
 } from '@server/api/openlibrary/interfaces';
 import { MediaStatus } from '@server/constants/media';
 import type Media from '@server/entity/Media';
+import { getOwnedCoverPath } from '@server/lib/audiobookshelfCover';
 import { cleanBookSubjects } from '@server/lib/bookSubjects';
 import type { AudiobookshelfSettings } from '@server/lib/settings';
 import type { AuthorResult, BookResult } from '@server/models/Search';
@@ -108,7 +109,7 @@ export const mapBookResult = (doc: OlSearchDoc, media?: Media): BookResult => ({
   authorName: doc.author_name?.join(', ') || undefined,
   firstPublishYear: doc.first_publish_year,
   editionCount: doc.edition_count,
-  posterPath: getCoverUrl(doc.cover_i, 'M'),
+  posterPath: getOwnedCoverPath(media) ?? getCoverUrl(doc.cover_i, 'M'),
   mediaInfo: media,
 });
 
@@ -124,7 +125,7 @@ export const mapSubjectWorkResult = (
     work.authors?.map((author) => author.name).join(', ') || undefined,
   firstPublishYear: work.first_publish_year,
   editionCount: work.edition_count,
-  posterPath: getCoverUrl(work.cover_id, 'M'),
+  posterPath: getOwnedCoverPath(media) ?? getCoverUrl(work.cover_id, 'M'),
   mediaInfo: media,
 });
 
@@ -211,10 +212,14 @@ export const mapBookDetails = (
         name: summary?.author_name?.[index] ?? '',
       })),
     firstPublishYear: summary?.first_publish_year,
-    posterPath: getCoverUrl(
-      work.covers?.find((cover) => cover > 0) ?? summary?.cover_i,
-      'L'
-    ),
+    // The cover of the copy in the library, so the book is easy to spot in
+    // the apps that read it
+    posterPath:
+      getOwnedCoverPath(media) ??
+      getCoverUrl(
+        work.covers?.find((cover) => cover > 0) ?? summary?.cover_i,
+        'L'
+      ),
     subjects: cleanBookSubjects(work.subjects, MAX_SUBJECTS),
     subjectPlaces: (work.subject_places ?? []).slice(0, MAX_SUBJECTS),
     subjectPeople: (work.subject_people ?? []).slice(0, MAX_SUBJECTS),

@@ -1,3 +1,7 @@
+import {
+  AUDIOBOOKSHELF_IMAGE_TYPE,
+  getAudiobookshelfCover,
+} from '@server/lib/audiobookshelfCover';
 import { getImageProxy } from '@server/lib/imageProxies';
 import logger from '@server/logger';
 import { Router } from 'express';
@@ -15,9 +19,10 @@ router.get<{
     return next({ status: 403, message: 'Invalid URL for image proxy.' });
   }
 
-  const proxy = getImageProxy(req.params.type);
+  const isCover = req.params.type === AUDIOBOOKSHELF_IMAGE_TYPE;
+  const proxy = isCover ? undefined : getImageProxy(req.params.type);
 
-  if (!proxy) {
+  if (!isCover && !proxy) {
     logger.error('Unsupported image type', {
       imagePath,
       type: req.params.type,
@@ -26,7 +31,13 @@ router.get<{
   }
 
   try {
-    const imageData = await proxy.getImage(imagePath);
+    const imageData = isCover
+      ? await getAudiobookshelfCover(imagePath)
+      : await proxy?.getImage(imagePath);
+
+    if (!imageData) {
+      return next({ status: 404, message: 'Image not found.' });
+    }
 
     res.writeHead(200, {
       'Content-Type': `image/${imageData.meta.extension}`,

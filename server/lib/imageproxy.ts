@@ -8,7 +8,7 @@ import { promises } from 'fs';
 import mime from 'mime';
 import path, { join } from 'path';
 
-type ImageResponse = {
+export type ImageResponse = {
   meta: {
     revalidateAfter: number;
     curRevalidate: number;

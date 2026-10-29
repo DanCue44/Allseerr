@@ -6,6 +6,7 @@ import type {
   BookSubjectSearchResponse,
   BookSubjectSuggestion,
 } from '@server/interfaces/api/discoverInterfaces';
+import { getOwnedCoverPath } from '@server/lib/audiobookshelfCover';
 import { getUpcomingBooks } from '@server/lib/bookReleases';
 import {
   getBookSubjectLabel,
@@ -81,10 +82,15 @@ const withMediaInfo = async (books: BookResult[]): Promise<BookResult[]> => {
   const media = await Media.getRelatedBooks(books.map((book) => book.id));
   const mediaMap = new Map(media.map((m) => [m.olId, m]));
 
-  return books.map((book) => ({
-    ...book,
-    mediaInfo: mediaMap.get(book.id),
-  }));
+  return books.map((book) => {
+    const mediaInfo = mediaMap.get(book.id);
+
+    return {
+      ...book,
+      posterPath: getOwnedCoverPath(mediaInfo) ?? book.posterPath,
+      mediaInfo,
+    };
+  });
 };
 
 const trendingHandler =
