@@ -90,8 +90,10 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'sonarr-scan': 'Sonarr Scan',
     'lidarr-scan': 'Lidarr Scan',
     'lazylibrarian-scan': 'LazyLibrarian Scan',
-    'chaptarr-scan': 'Chaptarr Scan',
-    talearrScan: 'Talearr Scan',
+    'chaptarr-scan': 'Chaptarr Recent Scan',
+    'chaptarr-full-scan': 'Chaptarr Full Library Scan',
+    talearrScan: 'Talearr Recent Scan',
+    talearrFullScan: 'Talearr Full Library Scan',
     'download-sync': 'Download Sync',
     'download-sync-reset': 'Download Sync Reset',
     'image-cache-cleanup': 'Image Cache Cleanup',
@@ -229,11 +231,14 @@ const SettingsJobs = () => {
     };
   }
 
-  // Talearr is a Chaptarr server to Allseerr, so the one job scans either
+  // Talearr is a Chaptarr server to Allseerr, so the same jobs scan either
+  const isTalearr = settings.currentSettings.bookService === 'talearr';
   const jobMessage = (id: JobId) =>
-    id === 'chaptarr-scan' && settings.currentSettings.bookService === 'talearr'
+    isTalearr && id === 'chaptarr-scan'
       ? messages.talearrScan
-      : (messages[id] ?? messages.unknownJob);
+      : isTalearr && id === 'chaptarr-full-scan'
+        ? messages.talearrFullScan
+        : (messages[id] ?? messages.unknownJob);
 
   if (!data && !error) {
     return <LoadingSpinner />;

@@ -11,7 +11,10 @@ import {
 } from '@server/lib/nobookendsDirectory';
 import { cleanUpOidcPayloads } from '@server/lib/oidc/adapter';
 import refreshToken from '@server/lib/refreshToken';
-import { chaptarrScanner } from '@server/lib/scanners/chaptarr';
+import {
+  chaptarrRecentScanner,
+  chaptarrScanner,
+} from '@server/lib/scanners/chaptarr';
 import {
   jellyfinFullScanner,
   jellyfinRecentScanner,
@@ -274,30 +277,60 @@ export const startJobs = (): void => {
     cancelFn: () => lazyLibrarianScanner.cancel(),
   });
 
-  // Run Chaptarr scan every 15 minutes
+  // Checks the books Allseerr is waiting on every 15 minutes
   scheduledJobs.push({
     id: 'chaptarr-scan',
-    name: 'Chaptarr Scan',
+    name: 'Chaptarr Recent Scan',
     type: 'process',
     interval: 'minutes',
     cronSchedule: jobs['chaptarr-scan'].schedule,
     job: schedule.scheduleJob(jobs['chaptarr-scan'].schedule, () => {
-      // A new run would abort the one still going, so a library that takes
-      // longer than the interval to scan would never finish
-      if (chaptarrScanner.status().running) {
-        logger.info('Skipping scheduled job: Chaptarr Scan is still running', {
+      // A new run would abort the one still going, and both scans write the
+      // same books
+      if (
+        chaptarrRecentScanner.status().running ||
+        chaptarrScanner.status().running
+      ) {
+        logger.info('Skipping scheduled job: a Chaptarr scan is running', {
           label: 'Jobs',
         });
         return;
       }
-      logger.info('Starting scheduled job: Chaptarr Scan', { label: 'Jobs' });
+      logger.info('Starting scheduled job: Chaptarr Recent Scan', {
+        label: 'Jobs',
+      });
+      chaptarrRecentScanner.run();
+    }),
+    running: () => chaptarrRecentScanner.status().running,
+    cancelFn: () => chaptarrRecentScanner.cancel(),
+  });
+
+  // Reads the whole Chaptarr library once a day
+  scheduledJobs.push({
+    id: 'chaptarr-full-scan',
+    name: 'Chaptarr Full Scan',
+    type: 'process',
+    interval: 'hours',
+    cronSchedule: jobs['chaptarr-full-scan'].schedule,
+    job: schedule.scheduleJob(jobs['chaptarr-full-scan'].schedule, () => {
+      // A new run would abort the one still going, so a library that takes
+      // longer than the interval to scan would never finish
+      if (chaptarrScanner.status().running) {
+        logger.info(
+          'Skipping scheduled job: Chaptarr Full Scan is still running',
+          { label: 'Jobs' }
+        );
+        return;
+      }
+      logger.info('Starting scheduled job: Chaptarr Full Scan', {
+        label: 'Jobs',
+      });
       chaptarrScanner.run();
     }),
     running: () => chaptarrScanner.status().running,
     cancelFn: () => chaptarrScanner.cancel(),
   });
 
-  // Checks if media is still available in plex/sonarr/radarr libs
   scheduledJobs.push({
     id: 'availability-sync',
     name: 'Media Availability Sync',

@@ -663,6 +663,7 @@ export type JobId =
   | 'lidarr-scan'
   | 'lazylibrarian-scan'
   | 'chaptarr-scan'
+  | 'chaptarr-full-scan'
   | 'download-sync'
   | 'download-sync-reset'
   | 'jellyfin-recently-added-scan'
@@ -958,6 +959,9 @@ class Settings {
         },
         'chaptarr-scan': {
           schedule: '0 */15 * * * *',
+        },
+        'chaptarr-full-scan': {
+          schedule: '0 15 3 * * *',
         },
         'availability-sync': {
           schedule: '0 0 5 * * *',

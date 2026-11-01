@@ -13,6 +13,7 @@ import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
 import {
+  chaptarrRecentScanner,
   chaptarrScanner,
   getChaptarrBookState,
 } from '@server/lib/scanners/chaptarr';
@@ -384,5 +385,87 @@ describe('Chaptarr Scanner', () => {
 
     assert.strictEqual(getAllBooksCalls, 0);
     assert.strictEqual(chaptarrScanner.status().running, false);
+  });
+
+  it('the recent scan reads only the books Allseerr waits on', async () => {
+    const mediaRepository = getRepository(Media);
+    await mediaRepository.save([
+      new Media({
+        olId: PRIDE_ID,
+        mediaType: MediaType.BOOK,
+        status: MediaStatus.PROCESSING,
+        serviceId: 0,
+        externalServiceId: 10,
+        foreignBookId: 'gr:3060926',
+      }),
+      // Available already: only the full scan notices its file is gone
+      new Media({
+        olId: EMMA_ID,
+        mediaType: MediaType.BOOK,
+        status: MediaStatus.AVAILABLE,
+        serviceId: 0,
+        externalServiceId: 20,
+        foreignBookId: 'gr:6969',
+      }),
+    ]);
+    const fetched: number[] = [];
+    const getBook = mock.method(
+      ChaptarrAPI.prototype,
+      'getBook',
+      async (bookId: number) => {
+        fetched.push(bookId);
+        return fakeBook({
+          id: bookId,
+          monitored: true,
+          statistics: { bookFileCount: 1 },
+        });
+      }
+    );
+
+    try {
+      await runWithMockTimers(() => chaptarrRecentScanner.run());
+    } finally {
+      getBook.mock.restore();
+    }
+
+    assert.deepStrictEqual(fetched, [10]);
+    assert.strictEqual(getAllBooksCalls, 0);
+    const pride = await mediaRepository.findOneOrFail({
+      where: { olId: PRIDE_ID },
+    });
+    assert.strictEqual(pride.status, MediaStatus.AVAILABLE);
+    const emma = await mediaRepository.findOneOrFail({
+      where: { olId: EMMA_ID },
+    });
+    assert.strictEqual(emma.status, MediaStatus.AVAILABLE);
+  });
+
+  it('the recent scan fails instead of losing books it could not read', async () => {
+    const mediaRepository = getRepository(Media);
+    await mediaRepository.save(
+      new Media({
+        olId: PRIDE_ID,
+        mediaType: MediaType.BOOK,
+        status: MediaStatus.PROCESSING,
+        serviceId: 0,
+        externalServiceId: 10,
+        foreignBookId: 'gr:3060926',
+      })
+    );
+    const getBook = mock.method(ChaptarrAPI.prototype, 'getBook', async () => {
+      throw new Error('Chaptarr is down');
+    });
+
+    try {
+      await runWithMockTimers(() => chaptarrRecentScanner.run());
+    } finally {
+      getBook.mock.restore();
+    }
+
+    const pride = await mediaRepository.findOneOrFail({
+      where: { olId: PRIDE_ID },
+    });
+    assert.strictEqual(pride.status, MediaStatus.PROCESSING);
+    assert.strictEqual(chaptarrRecentScanner.status().running, false);
   });
 });

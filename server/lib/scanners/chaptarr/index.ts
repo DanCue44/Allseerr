@@ -7,9 +7,14 @@ import ChaptarrAPI, {
   getBookFileCount,
   isMonitoredFor,
 } from '@server/api/servarr/chaptarr';
-import { MediaStatus, MediaType } from '@server/constants/media';
+import {
+  MediaRequestStatus,
+  MediaStatus,
+  MediaType,
+} from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import MediaRequest from '@server/entity/MediaRequest';
 import type { AudiobookshelfBackfillBook } from '@server/lib/audiobookshelfItem';
 import { backfillAudiobookshelfItemIds } from '@server/lib/audiobookshelfItem';
 import {
@@ -32,6 +37,7 @@ import {
 } from '@server/lib/talearrRecordings';
 import { requestErrorLogFields } from '@server/utils/requestError';
 import { uniqWith } from 'lodash';
+import { In, IsNull, Not } from 'typeorm';
 
 type SyncStatus = StatusBase & {
   currentServer: ChaptarrSettings;
@@ -113,20 +119,27 @@ export const applyChaptarrBook = (
   return changed;
 };
 
+// Books fetched from Chaptarr at once by the recent scan
+const RECENT_FETCH_BATCH = 10;
+
 class ChaptarrScanner
   extends BaseScanner<ChaptarrBook>
   implements RunnableScanner<SyncStatus>
 {
   private servers: ChaptarrSettings[];
   private currentServer: ChaptarrSettings;
+  // The recent scan only looks at the books Allseerr is waiting on, so it
+  // stays quick on a large library. The full scan reads the whole library.
+  private isRecentOnly: boolean;
 
-  constructor() {
+  constructor(isRecentOnly = false) {
     // Most books are idle catalog books that are skipped without a lookup
-    super('Chaptarr Scan', {
+    super(isRecentOnly ? 'Chaptarr Recent Scan' : 'Chaptarr Full Scan', {
       bundleSize: 500,
-      jobId: 'chaptarr-scan',
+      jobId: isRecentOnly ? 'chaptarr-scan' : 'chaptarr-full-scan',
       service: 'chaptarr',
     });
+    this.isRecentOnly = isRecentOnly;
   }
 
   public status(): SyncStatus {
@@ -172,14 +185,6 @@ class ChaptarrScanner
           url: ChaptarrAPI.buildUrl(server, '/api/v1'),
         });
 
-        this.items = await chaptarr.getAllBooks();
-        await this.loop((book) => this.processChaptarrBook(server, book), {
-          sessionId,
-        });
-
-        // Resets formats whose files are gone, for books linked to any
-        // entry of this server
-        this.checkSession(sessionId);
         const serverIds = settings.chaptarr
           .filter(
             (other) =>
@@ -188,15 +193,33 @@ class ChaptarrScanner
               other.baseUrl === server.baseUrl
           )
           .map((other) => other.id);
+
+        this.items = this.isRecentOnly
+          ? await this.getAwaitedBooks(chaptarr, serverIds)
+          : await chaptarr.getAllBooks();
+        await this.loop((book) => this.processChaptarrBook(server, book), {
+          sessionId,
+        });
+
+        this.checkSession(sessionId);
         const isCurrent = () => this.running && this.sessionId === sessionId;
-        await syncChaptarrAvailability(
-          chaptarr,
-          serverIds,
-          this.items,
-          isCurrent
-        );
+
+        if (!this.isRecentOnly) {
+          // Resets formats whose files are gone, for books linked to any
+          // entry of this server
+          await syncChaptarrAvailability(
+            chaptarr,
+            serverIds,
+            this.items,
+            isCurrent
+          );
+        }
+
         await this.syncRecordings(serverIds);
-        await this.backfillAudiobookshelfItems(serverIds, isCurrent);
+
+        if (!this.isRecentOnly) {
+          await this.backfillAudiobookshelfItems(serverIds, isCurrent);
+        }
 
         if (server.isDefault) {
           await this.linkUnlinkedBooks(chaptarr, server);
@@ -211,6 +234,68 @@ class ChaptarrScanner
     } finally {
       this.endRun(sessionId);
     }
+  }
+
+  /**
+   * The books of a server that Allseerr is waiting on: requested formats
+   * still processing, and the recordings asked for by recording requests.
+   * Any other book only changes on the full scan.
+   */
+  private async getAwaitedBooks(
+    chaptarr: ChaptarrAPI,
+    serverIds: number[]
+  ): Promise<ChaptarrBook[]> {
+    if (!serverIds.length) {
+      return [];
+    }
+
+    const processing = MediaStatus.PROCESSING;
+    const waiting = await getRepository(Media)
+      .createQueryBuilder('media')
+      .where('media.mediaType = :type', { type: MediaType.BOOK })
+      .andWhere('media.serviceId IN (:...serverIds)', { serverIds })
+      .andWhere(
+        '((media.status = :processing AND media.externalServiceId IS NOT NULL) OR ' +
+          '(media.statusAudio = :processing AND ' +
+          'media.externalServiceIdAudio IS NOT NULL))',
+        { processing }
+      )
+      .getMany();
+    const recordings = await getRepository(MediaRequest).find({
+      where: {
+        status: MediaRequestStatus.APPROVED,
+        recording: Not(IsNull()),
+        recordingBookId: Not(IsNull()),
+        serverId: In(serverIds),
+      },
+    });
+
+    const bookIds = new Set<number>();
+    for (const media of waiting) {
+      if (media.status === processing && media.externalServiceId) {
+        bookIds.add(media.externalServiceId);
+      }
+      if (media.statusAudio === processing && media.externalServiceIdAudio) {
+        bookIds.add(media.externalServiceIdAudio);
+      }
+    }
+    for (const request of recordings) {
+      bookIds.add(request.recordingBookId as number);
+    }
+
+    // A failed lookup fails the scan rather than reading as a deleted book
+    const ids = [...bookIds];
+    const books: ChaptarrBook[] = [];
+    for (let i = 0; i < ids.length; i += RECENT_FETCH_BATCH) {
+      const batch = await Promise.all(
+        ids
+          .slice(i, i + RECENT_FETCH_BATCH)
+          .map((bookId) => chaptarr.getBook(bookId))
+      );
+      books.push(...batch.filter((book): book is ChaptarrBook => !!book));
+    }
+
+    return books;
   }
 
   /**
@@ -532,3 +617,4 @@ class ChaptarrScanner
 }
 
 export const chaptarrScanner = new ChaptarrScanner();
+export const chaptarrRecentScanner = new ChaptarrScanner(true);
