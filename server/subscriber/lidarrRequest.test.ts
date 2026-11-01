@@ -238,7 +238,8 @@ describe('POST /request (music)', () => {
     assert.strictEqual(options.artist.metadataProfileId, 2);
     assert.strictEqual(options.artist.rootFolderPath, '/music');
     assert.strictEqual(options.artist.monitorNewItems, 'none');
-    assert.strictEqual(options.artist.addOptions.monitor, 'none');
+    // "none" would leave the new artist unmonitored after Lidarr's refresh
+    assert.strictEqual(options.artist.addOptions.monitor, 'unknown');
     // A new artist would otherwise leave the requested album unmonitored
     assert.deepStrictEqual(options.artist.addOptions.albumsToMonitor, [
       ALBUM_MBID,

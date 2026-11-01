@@ -1364,7 +1364,10 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
           monitorNewItems: 'none',
           tags,
           addOptions: {
-            monitor: 'none',
+            // "unknown" monitors only albumsToMonitor. "none" would also
+            // unmonitor the new artist once Lidarr refreshes it, and Lidarr
+            // leaves an unmonitored artist's albums out of Wanted/Missing
+            monitor: 'unknown',
             albumsToMonitor: [media.mbId],
             searchForMissingAlbums: false,
           },
