@@ -5,6 +5,9 @@ import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import type { PlayButtonLink } from '@app/components/Common/PlayButton';
 import PlayButton from '@app/components/Common/PlayButton';
+import PosterLightbox, {
+  fullSizeCover,
+} from '@app/components/Common/PosterLightbox';
 import Tag from '@app/components/Common/Tag';
 import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
@@ -244,16 +247,22 @@ const MusicDetails = ({ album }: MusicDetailsProps) => {
       <div className="media-header">
         <div className="media-poster aspect-square bg-gray-800">
           {data.posterPath ? (
-            <CachedImage
+            <PosterLightbox
               type="music"
               src={data.posterPath}
-              alt=""
-              sizes="100vw"
-              style={{ width: '100%', height: 'auto' }}
-              width={500}
-              height={500}
-              priority
-            />
+              fullSrc={fullSizeCover(data.posterPath)}
+            >
+              <CachedImage
+                type="music"
+                src={data.posterPath}
+                alt=""
+                sizes="100vw"
+                style={{ width: '100%', height: 'auto' }}
+                width={500}
+                height={500}
+                priority
+              />
+            </PosterLightbox>
           ) : (
             <div className="flex h-full w-full items-center justify-center text-gray-600">
               <MusicalNoteIcon className="h-1/2 w-1/2" />

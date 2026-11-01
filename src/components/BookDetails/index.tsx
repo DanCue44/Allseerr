@@ -7,6 +7,7 @@ import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import type { PlayButtonLink } from '@app/components/Common/PlayButton';
 import PlayButton from '@app/components/Common/PlayButton';
+import PosterLightbox from '@app/components/Common/PosterLightbox';
 import Tag from '@app/components/Common/Tag';
 import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
@@ -301,16 +302,18 @@ const BookDetails = ({ book }: BookDetailsProps) => {
       <div className="media-header">
         <div className="media-poster bg-gray-800">
           {data.posterPath ? (
-            <CachedImage
-              type="book"
-              src={data.posterPath}
-              alt=""
-              sizes="100vw"
-              style={{ width: '100%', height: 'auto' }}
-              width={600}
-              height={900}
-              priority
-            />
+            <PosterLightbox type="book" src={data.posterPath}>
+              <CachedImage
+                type="book"
+                src={data.posterPath}
+                alt=""
+                sizes="100vw"
+                style={{ width: '100%', height: 'auto' }}
+                width={600}
+                height={900}
+                priority
+              />
+            </PosterLightbox>
           ) : (
             <div className="flex aspect-[2/3] h-full w-full items-center justify-center text-gray-600">
               <BookOpenIcon className="h-1/2 w-1/2" />

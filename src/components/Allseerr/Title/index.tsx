@@ -1,5 +1,8 @@
 import { softChip } from '@app/components/Allseerr/Title/styles';
 import CachedImage from '@app/components/Common/CachedImage';
+import PosterLightbox, {
+  fullSizeCover,
+} from '@app/components/Common/PosterLightbox';
 import Tooltip from '@app/components/Common/Tooltip';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -61,6 +64,11 @@ export const TitleHero = ({
     : isTmdb
       ? '/images/allseerr_poster_not_found.png'
       : undefined;
+  const posterFullSrc = posterPath
+    ? isTmdb
+      ? `https://image.tmdb.org/t/p/original${posterPath}`
+      : fullSizeCover(posterPath)
+    : undefined;
 
   return (
     <>
@@ -97,14 +105,22 @@ export const TitleHero = ({
             className={`relative -mt-14 flex-none overflow-hidden border-[3px] border-as-surface bg-as-tile lg:-mt-[100px] lg:border-4 ${posterShapeClasses[posterShape]}`}
           >
             {posterSrc ? (
-              <CachedImage
+              <PosterLightbox
                 type={imageType}
                 src={posterSrc}
+                fullSrc={posterFullSrc}
                 alt={posterAlt}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                fill
-                priority
-              />
+                disabled={!posterPath}
+              >
+                <CachedImage
+                  type={imageType}
+                  src={posterSrc}
+                  alt={posterAlt}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  fill
+                  priority
+                />
+              </PosterLightbox>
             ) : (
               <div className="flex h-full w-full items-center justify-center text-as-ink-faint [&_svg]:h-1/2 [&_svg]:w-1/2">
                 {posterFallback}

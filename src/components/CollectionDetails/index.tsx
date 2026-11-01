@@ -4,6 +4,7 @@ import ButtonWithDropdown from '@app/components/Common/ButtonWithDropdown';
 import CachedImage from '@app/components/Common/CachedImage';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
+import PosterLightbox from '@app/components/Common/PosterLightbox';
 import Tooltip from '@app/components/Common/Tooltip';
 import RequestModal from '@app/components/RequestModal';
 import Slider from '@app/components/Slider';
@@ -325,20 +326,27 @@ const CollectionDetails = ({ collection }: CollectionDetailsProps) => {
 
       <div className="media-header">
         <div className="media-poster">
-          <CachedImage
+          <PosterLightbox
             type="tmdb"
-            src={
-              data.posterPath
-                ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${data.posterPath}`
-                : '/images/allseerr_poster_not_found.png'
-            }
-            alt=""
-            sizes="100vw"
-            style={{ width: '100%', height: 'auto' }}
-            width={600}
-            height={900}
-            priority
-          />
+            src={`https://image.tmdb.org/t/p/w600_and_h900_bestv2${data.posterPath}`}
+            fullSrc={`https://image.tmdb.org/t/p/original${data.posterPath}`}
+            disabled={!data.posterPath}
+          >
+            <CachedImage
+              type="tmdb"
+              src={
+                data.posterPath
+                  ? `https://image.tmdb.org/t/p/w600_and_h900_bestv2${data.posterPath}`
+                  : '/images/allseerr_poster_not_found.png'
+              }
+              alt=""
+              sizes="100vw"
+              style={{ width: '100%', height: 'auto' }}
+              width={600}
+              height={900}
+              priority
+            />
+          </PosterLightbox>
         </div>
         <div className="media-title">
           <div className="media-status">
