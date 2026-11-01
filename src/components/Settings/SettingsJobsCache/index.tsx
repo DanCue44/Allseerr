@@ -91,6 +91,7 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'lidarr-scan': 'Lidarr Scan',
     'lazylibrarian-scan': 'LazyLibrarian Scan',
     'chaptarr-scan': 'Chaptarr Scan',
+    talearrScan: 'Talearr Scan',
     'download-sync': 'Download Sync',
     'download-sync-reset': 'Download Sync Reset',
     'image-cache-cleanup': 'Image Cache Cleanup',
@@ -228,6 +229,12 @@ const SettingsJobs = () => {
     };
   }
 
+  // Talearr is a Chaptarr server to Allseerr, so the one job scans either
+  const jobMessage = (id: JobId) =>
+    id === 'chaptarr-scan' && settings.currentSettings.bookService === 'talearr'
+      ? messages.talearrScan
+      : (messages[id] ?? messages.unknownJob);
+
   if (!data && !error) {
     return <LoadingSpinner />;
   }
@@ -236,7 +243,7 @@ const SettingsJobs = () => {
     await axios.post(`/api/v1/settings/jobs/${job.id}/run`);
     addToast(
       intl.formatMessage(messages.jobstarted, {
-        jobname: intl.formatMessage(messages[job.id] ?? messages.unknownJob),
+        jobname: intl.formatMessage(jobMessage(job.id)),
       }),
       {
         appearance: 'success',
@@ -250,7 +257,7 @@ const SettingsJobs = () => {
     await axios.post(`/api/v1/settings/jobs/${job.id}/cancel`);
     addToast(
       intl.formatMessage(messages.jobcancelled, {
-        jobname: intl.formatMessage(messages[job.id] ?? messages.unknownJob),
+        jobname: intl.formatMessage(jobMessage(job.id)),
       }),
       {
         appearance: 'error',
@@ -508,11 +515,7 @@ const SettingsJobs = () => {
               <tr key={`job-list-${job.id}`}>
                 <Table.TD>
                   <div className="flex items-center text-sm leading-5 text-white">
-                    <span>
-                      {intl.formatMessage(
-                        messages[job.id] ?? messages.unknownJob
-                      )}
-                    </span>
+                    <span>{intl.formatMessage(jobMessage(job.id))}</span>
                     {job.running && <Spinner className="ml-2 h-5 w-5" />}
                   </div>
                 </Table.TD>

@@ -96,9 +96,9 @@ const messages = defineMessages('components.NotificationTypeSelector', {
     'Get notified when a library scan fails 3 times in a row, and when it works again.',
   downloadneedsattention: 'Download Needs Attention',
   downloadneedsattentionDescription:
-    'Send notifications when a book download is stuck in Chaptarr for more than 10 minutes, such as when it cannot be imported.',
+    'Send notifications when a book download is stuck in Talearr or Chaptarr for more than 10 minutes, such as when it cannot be imported.',
   userdownloadneedsattentionDescription:
-    'Get notified when a book download is stuck in Chaptarr for more than 10 minutes, such as when it cannot be imported.',
+    'Get notified when a book download is stuck in Talearr or Chaptarr for more than 10 minutes, such as when it cannot be imported.',
   accessrequested: 'Reading App Access Requests',
   accessrequestedDescription:
     'Send notifications when someone asks for access to Audiobookshelf, Kavita or Komga from their Reading apps settings.',
