@@ -55,7 +55,22 @@ Everything from Seerr: Jellyfin, Emby and Plex sign in and library sync, Radarr 
 
 ## Screenshots
 
-Screenshots coming soon.
+![For You, the home page](docs/screenshots/for-you.jpg)
+
+| | |
+| --- | --- |
+| ![Movie page](docs/screenshots/movie.jpg) | ![Album page](docs/screenshots/album.jpg) |
+| Movies and series | Albums from Lidarr |
+| ![Book page](docs/screenshots/book.jpg) | ![Book request with a format choice](docs/screenshots/request.jpg) |
+| Books and audiobooks | Request an ebook, an audiobook or both |
+| ![Music space](docs/screenshots/music.jpg) | ![Books space](docs/screenshots/books.jpg) |
+| A space for music | A space for books, comics and manga |
+
+<p>
+  <img src="docs/screenshots/phone-for-you.jpg" alt="For You on a phone" width="260">
+  &nbsp;
+  <img src="docs/screenshots/phone-movie.jpg" alt="A movie page on a phone" width="260">
+</p>
 
 ## Install
 
