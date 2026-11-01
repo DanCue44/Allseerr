@@ -254,6 +254,17 @@ export const startJobs = (): void => {
     interval: 'minutes',
     cronSchedule: jobs['lazylibrarian-scan'].schedule,
     job: schedule.scheduleJob(jobs['lazylibrarian-scan'].schedule, () => {
+      // A new run would abort the one still going, so a library that takes
+      // longer than the interval to scan would never finish
+      if (lazyLibrarianScanner.status().running) {
+        logger.info(
+          'Skipping scheduled job: LazyLibrarian Scan is still running',
+          {
+            label: 'Jobs',
+          }
+        );
+        return;
+      }
       logger.info('Starting scheduled job: LazyLibrarian Scan', {
         label: 'Jobs',
       });
@@ -271,6 +282,14 @@ export const startJobs = (): void => {
     interval: 'minutes',
     cronSchedule: jobs['chaptarr-scan'].schedule,
     job: schedule.scheduleJob(jobs['chaptarr-scan'].schedule, () => {
+      // A new run would abort the one still going, so a library that takes
+      // longer than the interval to scan would never finish
+      if (chaptarrScanner.status().running) {
+        logger.info('Skipping scheduled job: Chaptarr Scan is still running', {
+          label: 'Jobs',
+        });
+        return;
+      }
       logger.info('Starting scheduled job: Chaptarr Scan', { label: 'Jobs' });
       chaptarrScanner.run();
     }),
