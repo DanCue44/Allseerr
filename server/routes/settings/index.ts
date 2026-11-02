@@ -1017,7 +1017,11 @@ const serializeJob = (job: (typeof scheduledJobs)[number]) => {
 };
 
 settingsRoutes.get('/jobs', (_req, res) => {
-  return res.status(200).json(scheduledJobs.map(serializeJob));
+  return res
+    .status(200)
+    .json(
+      scheduledJobs.filter((job) => job.inUse?.() ?? true).map(serializeJob)
+    );
 });
 
 // Scans that keep failing, one per service, for the admin banner

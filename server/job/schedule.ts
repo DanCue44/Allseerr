@@ -1,3 +1,4 @@
+import { usesChaptarr } from '@server/constants/bookService';
 import { MediaServerType } from '@server/constants/server';
 import blocklistedTagsProcessor from '@server/job/blocklistedTagsProcessor';
 import followedReleases from '@server/job/followedReleases';
@@ -25,7 +26,7 @@ import { plexFullScanner, plexRecentScanner } from '@server/lib/scanners/plex';
 import { radarrScanner } from '@server/lib/scanners/radarr';
 import { sonarrScanner } from '@server/lib/scanners/sonarr';
 import type { JobId } from '@server/lib/settings';
-import { getSettings } from '@server/lib/settings';
+import { getSettings, resolveBookService } from '@server/lib/settings';
 import { isSyncRunning, syncEveryone } from '@server/lib/userAccess';
 import watchedSync from '@server/lib/watchedsync';
 import watchlistSync from '@server/lib/watchlistsync';
@@ -41,7 +42,22 @@ interface ScheduledJob {
   cronSchedule: string;
   running?: () => boolean;
   cancelFn?: () => void;
+  // Whether the service the job works with is set up. Jobs for services that
+  // are not (a LazyLibrarian scan with Chaptarr as the book service, say) do
+  // nothing, so the Jobs page leaves them out. Checked each time the list is
+  // read, so a service set up later shows its jobs without a restart.
+  inUse?: () => boolean;
 }
+
+const hasArr = () => {
+  const settings = getSettings();
+  return (
+    settings.radarr.length > 0 ||
+    settings.sonarr.length > 0 ||
+    settings.lidarr.length > 0 ||
+    usesChaptarr(resolveBookService(settings))
+  );
+};
 
 export const scheduledJobs: ScheduledJob[] = [];
 
@@ -217,6 +233,7 @@ export const startJobs = (): void => {
     }),
     running: () => radarrScanner.status().running,
     cancelFn: () => radarrScanner.cancel(),
+    inUse: () => getSettings().radarr.length > 0,
   });
 
   // Run full sonarr scan every 24 hours
@@ -232,6 +249,7 @@ export const startJobs = (): void => {
     }),
     running: () => sonarrScanner.status().running,
     cancelFn: () => sonarrScanner.cancel(),
+    inUse: () => getSettings().sonarr.length > 0,
   });
 
   // Run full lidarr scan every 24 hours
@@ -247,6 +265,7 @@ export const startJobs = (): void => {
     }),
     running: () => lidarrScanner.status().running,
     cancelFn: () => lidarrScanner.cancel(),
+    inUse: () => getSettings().lidarr.length > 0,
   });
 
   // Run LazyLibrarian scan every 30 minutes
@@ -275,6 +294,7 @@ export const startJobs = (): void => {
     }),
     running: () => lazyLibrarianScanner.status().running,
     cancelFn: () => lazyLibrarianScanner.cancel(),
+    inUse: () => resolveBookService(getSettings()) === 'lazylibrarian',
   });
 
   // Checks the books Allseerr is waiting on every 15 minutes
@@ -303,6 +323,7 @@ export const startJobs = (): void => {
     }),
     running: () => chaptarrRecentScanner.status().running,
     cancelFn: () => chaptarrRecentScanner.cancel(),
+    inUse: () => usesChaptarr(resolveBookService(getSettings())),
   });
 
   // Reads the whole Chaptarr library once a day
@@ -329,6 +350,7 @@ export const startJobs = (): void => {
     }),
     running: () => chaptarrScanner.status().running,
     cancelFn: () => chaptarrScanner.cancel(),
+    inUse: () => usesChaptarr(resolveBookService(getSettings())),
   });
 
   scheduledJobs.push({
@@ -360,6 +382,7 @@ export const startJobs = (): void => {
       });
       downloadTracker.updateDownloads();
     }),
+    inUse: hasArr,
   });
 
   // Reset download sync everyday at 01:00 am
@@ -375,6 +398,7 @@ export const startJobs = (): void => {
       });
       downloadTracker.resetDownloadTracker();
     }),
+    inUse: hasArr,
   });
 
   // Run image cache cleanup every 24 hours
@@ -500,6 +524,7 @@ export const startJobs = (): void => {
       });
     }),
     running: () => isDirectoryJobRunning(),
+    inUse: () => !!getSettings().userAccess.nobookendsDirectory,
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });

@@ -29,6 +29,60 @@ import type { MessageDescriptor } from 'react-intl';
 import { FormattedRelativeTime, useIntl } from 'react-intl';
 import useSWR from 'swr';
 
+// One line under each job saying what it does, for admins working out which
+// jobs matter to them
+const jobDescriptions: { [jobId: string]: MessageDescriptor } = defineMessages(
+  'components.Settings.SettingsJobsCache.descriptions',
+  {
+    'plex-recently-added-scan':
+      'Checks what was added to Plex lately, so requests turn Available quickly.',
+    'plex-full-scan':
+      'Reads every Plex library to find what is available and what is gone.',
+    'plex-watchlist-sync':
+      'Turns titles on Plex watchlists into requests for users who allow it.',
+    'plex-watched-sync':
+      'Reads what each user has watched in Plex for the watched badges.',
+    'plex-refresh-token':
+      'Keeps the Plex sign-in of every user fresh so Plex keeps answering.',
+    'jellyfin-recently-added-scan':
+      'Checks what was added to the media server lately, so requests turn Available quickly.',
+    'jellyfin-full-scan':
+      'Reads every library on the media server to find what is available and what is gone.',
+    'jellyfin-watched-sync':
+      'Reads what each user has watched on the media server for the watched badges.',
+    'availability-sync':
+      'Checks that Available movies, series and albums still exist in the arrs and the media server, and marks deleted ones as no longer available.',
+    'radarr-scan':
+      'Reads every movie in Radarr to update what is available and being downloaded.',
+    'sonarr-scan':
+      'Reads every series in Sonarr to update what is available and being downloaded.',
+    'lidarr-scan':
+      'Reads every album in Lidarr to update what is available and being downloaded.',
+    'lazylibrarian-scan':
+      'Reads every book in LazyLibrarian to update what is available.',
+    'chaptarr-scan':
+      'Checks only the books Allseerr is waiting on (requested and not downloaded yet), so they turn Available within minutes.',
+    'chaptarr-full-scan':
+      'Reads the whole {service} library: books added there directly, and files that were removed.',
+    'download-sync':
+      'Reads the download queues of the arrs for the progress shown in Allseerr. Changes nothing in them.',
+    'download-sync-reset':
+      'Clears what Download Sync remembers about each server once a day, so it starts fresh.',
+    'image-cache-cleanup':
+      'Removes cached images nothing has asked for in a while.',
+    'process-blocklisted-tags':
+      'Blocklists movies and series that carry the keywords chosen to block, so they cannot be requested.',
+    'recently-added-newsletter':
+      'Emails users what was added since the last newsletter.',
+    'followed-releases':
+      'Looks for new releases from followed artists and authors.',
+    'user-access-sync':
+      "Keeps the accounts Allseerr manages in other apps in line with each person's access.",
+    'nobookends-directory':
+      'Keeps this server listed in the NoBookEnds directory for Sign in with Plex.',
+  }
+);
+
 const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
   'components.Settings.SettingsJobsCache',
   {
@@ -523,6 +577,13 @@ const SettingsJobs = () => {
                     <span>{intl.formatMessage(jobMessage(job.id))}</span>
                     {job.running && <Spinner className="ml-2 h-5 w-5" />}
                   </div>
+                  {jobDescriptions[job.id] && (
+                    <div className="mt-0.5 max-w-md text-xs leading-4 text-gray-400">
+                      {intl.formatMessage(jobDescriptions[job.id], {
+                        service: isTalearr ? 'Talearr' : 'Chaptarr',
+                      })}
+                    </div>
+                  )}
                 </Table.TD>
                 <Table.TD>
                   <Badge
