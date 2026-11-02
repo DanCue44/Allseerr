@@ -1,5 +1,6 @@
 import type { TalearrIdentity } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI from '@server/api/servarr/chaptarr';
+import { startChaptarrFullScan } from '@server/lib/scanners/chaptarr';
 import type { ChaptarrSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import { hasBookGrabPolicy } from '@server/lib/talearrAudiobookVersions';
@@ -30,6 +31,11 @@ chaptarrRoutes.post('/', async (req, res) => {
 
   settings.chaptarr = [...settings.chaptarr, newChaptarr];
   await settings.save();
+
+  // Brings the library in now instead of at the nightly scan
+  if (newChaptarr.syncEnabled) {
+    startChaptarrFullScan('a server was added');
+  }
 
   return res.status(201).json(newChaptarr);
 });
@@ -124,11 +130,16 @@ chaptarrRoutes.put<{ id: string }>('/:id', async (req, res) => {
     });
   }
 
+  const wasSyncing = settings.chaptarr[chaptarrIndex].syncEnabled;
   settings.chaptarr[chaptarrIndex] = {
     ...req.body,
     id: Number(req.params.id),
   } as ChaptarrSettings;
   await settings.save();
+
+  if (settings.chaptarr[chaptarrIndex].syncEnabled && !wasSyncing) {
+    startChaptarrFullScan('sync was turned on');
+  }
 
   return res.status(200).json(settings.chaptarr[chaptarrIndex]);
 });

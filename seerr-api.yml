@@ -4119,6 +4119,21 @@ components:
         running:
           type: boolean
           example: false
+        progress:
+          type: object
+          nullable: true
+          description: What a running job is doing, for jobs that report it.
+          properties:
+            step:
+              type: string
+              description: library while the library is read, openlibrary while books are matched
+              example: openlibrary
+            done:
+              type: number
+              example: 1240
+            total:
+              type: number
+              example: 6000
         lastSuccess:
           type: string
           nullable: true

@@ -193,10 +193,154 @@ describe('ChaptarrAPI library', () => {
     assert.deepStrictEqual(
       calls.map((call) => call.params),
       [
-        { offset: 0, pageSize: 500, includeUnmonitored: true },
-        { offset: 500, pageSize: 500, includeUnmonitored: true },
+        { pageSize: 500, includeUnmonitored: true, sortKey: 'id', offset: 0 },
+        {
+          pageSize: 500,
+          includeUnmonitored: true,
+          sortKey: 'id',
+          offset: 500,
+        },
       ]
     );
+  });
+
+  /**
+   * A Chaptarr whose library pages are answered by the handler, which may
+   * throw like axios does
+   */
+  const libraryApi = (
+    respond: (params: Record<string, unknown>) => unknown
+  ) => {
+    const chaptarr = new ChaptarrAPI({
+      url: 'http://localhost:8789/api/v1',
+      apiKey: 'test-key',
+    });
+    const asked: Record<string, unknown>[] = [];
+    (
+      chaptarr as unknown as {
+        axios: { get: (url: string, config?: unknown) => Promise<unknown> };
+      }
+    ).axios.get = async (url, config) => {
+      if (url === '/system/status') {
+        return { data: { appName: 'Chaptarr', version: '1.0' } };
+      }
+
+      const params = (config as { params: Record<string, unknown> }).params;
+      asked.push(params);
+      return { data: respond(params) };
+    };
+
+    return { chaptarr, asked };
+  };
+
+  const timeout = () =>
+    Object.assign(new Error('timeout of 60000ms exceeded'), {
+      code: 'ECONNABORTED',
+    });
+
+  it('reads only the monitored and the downloaded books for a scan', async () => {
+    const { chaptarr, asked } = libraryApi((params) => ({
+      records: params.monitored
+        ? [{ id: 1 }, { id: 2 }]
+        : [{ id: 2 }, { id: 3 }],
+      totalCount: 2,
+    }));
+
+    const books = await chaptarr.getActiveBooks();
+
+    assert.deepStrictEqual(
+      books.map((book) => book.id),
+      [1, 2, 3]
+    );
+    assert.deepStrictEqual(
+      asked.map(({ monitored, downloaded }) => ({ monitored, downloaded })),
+      [
+        { monitored: true, downloaded: undefined },
+        { monitored: undefined, downloaded: true },
+      ]
+    );
+  });
+
+  it('asks again for a page that failed or took too long', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    const failures = new Map<number, number>([
+      [500, 2],
+      [1000, 1],
+    ]);
+    const { chaptarr, asked } = libraryApi((params) => {
+      const offset = params.offset as number;
+      const left = failures.get(offset) ?? 0;
+
+      if (left > 0) {
+        failures.set(offset, left - 1);
+        throw offset === 500
+          ? timeout()
+          : Object.assign(new Error('Request failed with status code 503'), {
+              response: { status: 503 },
+            });
+      }
+
+      return {
+        records: Array.from(
+          { length: offset < 1000 ? 500 : 100 },
+          (_, index) => ({ id: offset + index + 1 })
+        ),
+        totalCount: 1100,
+      };
+    });
+
+    try {
+      const books = await chaptarr.getAllBooks();
+
+      assert.strictEqual(books.length, 1100);
+      assert.strictEqual(asked.length, 6);
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+    }
+  });
+
+  it('says which page Chaptarr did not answer', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    const { chaptarr } = libraryApi((params) => {
+      if (params.offset === 1000) {
+        throw timeout();
+      }
+
+      return {
+        records: Array.from({ length: 500 }, (_, index) => ({
+          id: (params.offset as number) + index + 1,
+        })),
+        totalCount: 60_000,
+      };
+    });
+
+    try {
+      await assert.rejects(
+        chaptarr.getAllBooks(),
+        new Error(
+          'Chaptarr did not answer page 3 of 120 of the library in 60 s, ' +
+            'tried 4 times'
+        )
+      );
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+    }
+  });
+
+  it('does not ask again for a page Chaptarr turned down', async () => {
+    const { chaptarr, asked } = libraryApi(() => {
+      throw Object.assign(new Error('Request failed with status code 401'), {
+        response: { status: 401 },
+      });
+    });
+
+    await assert.rejects(
+      chaptarr.getActiveBooks(),
+      /failed to send page 1 of the library/
+    );
+    assert.strictEqual(asked.length, 1);
   });
 
   it('only scopes lookups to a format on Chaptarr', async () => {

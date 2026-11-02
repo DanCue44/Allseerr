@@ -47,6 +47,14 @@ interface ScheduledJob {
   // nothing, so the Jobs page leaves them out. Checked each time the list is
   // read, so a service set up later shows its jobs without a restart.
   inUse?: () => boolean;
+  // What a running job is doing, for the Jobs page
+  progress?: () => JobProgress | undefined;
+}
+
+export interface JobProgress {
+  step: string;
+  done?: number;
+  total?: number;
 }
 
 const hasArr = () => {
@@ -306,10 +314,13 @@ export const startJobs = (): void => {
     cronSchedule: jobs['chaptarr-scan'].schedule,
     job: schedule.scheduleJob(jobs['chaptarr-scan'].schedule, () => {
       // A new run would abort the one still going, and both scans write the
-      // same books
+      // same books. A full scan that has moved on to matching books with
+      // OpenLibrary, which can take an hour on a large library, only adds
+      // books Allseerr did not have, so the books waited on are still checked.
+      const fullScan = chaptarrScanner.status();
       if (
         chaptarrRecentScanner.status().running ||
-        chaptarrScanner.status().running
+        (fullScan.running && fullScan.step !== 'openlibrary')
       ) {
         logger.info('Skipping scheduled job: a Chaptarr scan is running', {
           label: 'Jobs',
@@ -351,6 +362,17 @@ export const startJobs = (): void => {
     running: () => chaptarrScanner.status().running,
     cancelFn: () => chaptarrScanner.cancel(),
     inUse: () => usesChaptarr(resolveBookService(getSettings())),
+    progress: () => {
+      const status = chaptarrScanner.status();
+
+      if (!status.running || !status.step) {
+        return undefined;
+      }
+
+      return status.step === 'openlibrary'
+        ? { step: 'openlibrary', ...status.matching }
+        : { step: 'library', done: status.progress, total: status.total };
+    },
   });
 
   scheduledJobs.push({

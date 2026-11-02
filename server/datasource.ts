@@ -1,5 +1,6 @@
 import { AccessInvite } from '@server/entity/AccessInvite';
 import { Blocklist } from '@server/entity/Blocklist';
+import ChaptarrBookMatch from '@server/entity/ChaptarrBookMatch';
 import DiscoverSlider from '@server/entity/DiscoverSlider';
 import Favorite from '@server/entity/Favorite';
 import Issue from '@server/entity/Issue';
@@ -42,6 +43,7 @@ const DB_SSL_PREFIX = 'DB_SSL_';
 const entities = [
   AccessInvite,
   Blocklist,
+  ChaptarrBookMatch,
   DiscoverSlider,
   Favorite,
   Issue,

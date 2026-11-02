@@ -92,6 +92,8 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
       'Allseerr performs certain maintenance tasks as regularly-scheduled jobs, but they can also be manually triggered below. Manually running a job will not alter its schedule.',
     jobname: 'Job Name',
     jobtype: 'Type',
+    progressLibrary: 'Reading the library: {done} of {total}',
+    progressOpenLibrary: 'Matching books with OpenLibrary: {done} of {total}',
     nextexecution: 'Next Execution',
     runnow: 'Run Now',
     canceljob: 'Cancel Job',
@@ -186,6 +188,8 @@ interface Job {
   cronSchedule: string;
   nextExecutionTime: string;
   running: boolean;
+  // What a running job is doing, when it says
+  progress?: { step: string; done?: number; total?: number } | null;
 }
 
 type JobModalState = {
@@ -577,6 +581,19 @@ const SettingsJobs = () => {
                     <span>{intl.formatMessage(jobMessage(job.id))}</span>
                     {job.running && <Spinner className="ml-2 h-5 w-5" />}
                   </div>
+                  {job.running && job.progress?.total ? (
+                    <div className="mt-0.5 text-xs leading-4 text-gray-300">
+                      {intl.formatMessage(
+                        job.progress.step === 'openlibrary'
+                          ? messages.progressOpenLibrary
+                          : messages.progressLibrary,
+                        {
+                          done: intl.formatNumber(job.progress.done ?? 0),
+                          total: intl.formatNumber(job.progress.total),
+                        }
+                      )}
+                    </div>
+                  ) : null}
                   {jobDescriptions[job.id] && (
                     <div className="mt-0.5 max-w-md text-xs leading-4 text-gray-400">
                       {intl.formatMessage(jobDescriptions[job.id], {

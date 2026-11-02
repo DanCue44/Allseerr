@@ -1,5 +1,8 @@
 import OpenLibrary from '@server/api/openlibrary';
-import type { OlWork } from '@server/api/openlibrary/interfaces';
+import type {
+  OlSearchResponse,
+  OlWork,
+} from '@server/api/openlibrary/interfaces';
 import type { ChaptarrBook } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI from '@server/api/servarr/chaptarr';
 import {
@@ -49,6 +52,13 @@ mock.method(ChaptarrAPI.prototype, 'getAllBooks', async () => {
   }
   return books;
 });
+// The full scan reads only the monitored and downloaded books
+mock.method(ChaptarrAPI.prototype, 'getActiveBooks', async () => {
+  if (libraryError) {
+    throw libraryError;
+  }
+  return books;
+});
 mock.method(ChaptarrAPI.prototype, 'getBook', async (bookId: number) => {
   getBookCalls.push(bookId);
   if (bookError) {
@@ -57,6 +67,13 @@ mock.method(ChaptarrAPI.prototype, 'getBook', async (bookId: number) => {
   return bookById[bookId];
 });
 mock.method(MediaRequest, 'sendNotification', async () => undefined);
+// Library books without an OpenLibrary work id are looked up, these
+// tests have nothing to find
+mock.method(
+  OpenLibrary.prototype,
+  'searchBooks',
+  async (): Promise<OlSearchResponse> => ({ numFound: 0, start: 0, docs: [] })
+);
 mock.method(
   OpenLibrary.prototype,
   'getWork',

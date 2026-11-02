@@ -1,4 +1,5 @@
-import { WORK_ID_REGEX } from '@server/api/openlibrary';
+import OpenLibrary, { WORK_ID_REGEX } from '@server/api/openlibrary';
+import type { OlSearchDoc } from '@server/api/openlibrary/interfaces';
 import type {
   ChaptarrBook,
   ChaptarrMediaType,
@@ -13,6 +14,7 @@ import {
   MediaType,
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
+import ChaptarrBookMatch from '@server/entity/ChaptarrBookMatch';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
 import type { AudiobookshelfBackfillBook } from '@server/lib/audiobookshelfItem';
@@ -28,6 +30,12 @@ import type {
 } from '@server/lib/scanners/baseScanner';
 import BaseScanner from '@server/lib/scanners/baseScanner';
 import { syncChaptarrAvailability } from '@server/lib/scanners/chaptarr/availability';
+import type {
+  MatchMemory,
+  MatchProgress,
+  UnmatchedBook,
+} from '@server/lib/scanners/chaptarr/openLibraryMatch';
+import { matchBooks } from '@server/lib/scanners/chaptarr/openLibraryMatch';
 import { applyLazyLibrarianState } from '@server/lib/scanners/lazylibrarian';
 import type { ChaptarrSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
@@ -35,13 +43,19 @@ import {
   checkAbridgedRecordingsAwaitingScan,
   syncRecordingRequests,
 } from '@server/lib/talearrRecordings';
+import logger from '@server/logger';
 import { requestErrorLogFields } from '@server/utils/requestError';
 import { uniqWith } from 'lodash';
 import { In, IsNull, Not } from 'typeorm';
 
+// The step of a full scan, for the Jobs page
+export type ChaptarrScanStep = 'library' | 'openlibrary';
+
 type SyncStatus = StatusBase & {
   currentServer: ChaptarrSettings;
   servers: ChaptarrSettings[];
+  step?: ChaptarrScanStep;
+  matching?: MatchProgress;
 };
 
 export type ChaptarrBookState = 'available' | 'processing' | 'skip';
@@ -121,6 +135,31 @@ export const applyChaptarrBook = (
 
 // Books fetched from Chaptarr at once by the recent scan
 const RECENT_FETCH_BATCH = 10;
+// Match memories read from the database at once
+const MEMORY_CHUNK = 500;
+// An OpenLibrary search that takes longer counts as failed
+const SEARCH_TIMEOUT_MS = 30_000;
+// Retries of a search OpenLibrary throttled or failed, and the first wait
+const SEARCH_RETRIES = 3;
+const SEARCH_BACKOFF_MS = 5_000;
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryable = (e: unknown): boolean => {
+  const status = (e as { response?: { status?: number } })?.response?.status;
+
+  return status === 429 || (status !== undefined && status >= 500);
+};
+
+// How long OpenLibrary asked to wait, when it said
+const getRetryAfterMs = (e: unknown): number | undefined => {
+  const header = (
+    e as { response?: { headers?: Record<string, string | undefined> } }
+  )?.response?.headers?.['retry-after'];
+  const seconds = header ? Number(header) : NaN;
+
+  return Number.isFinite(seconds) ? seconds * 1000 : undefined;
+};
 
 class ChaptarrScanner
   extends BaseScanner<ChaptarrBook>
@@ -131,6 +170,11 @@ class ChaptarrScanner
   // The recent scan only looks at the books Allseerr is waiting on, so it
   // stays quick on a large library. The full scan reads the whole library.
   private isRecentOnly: boolean;
+  // Library books the full scan found no book for and that have no
+  // OpenLibrary id, by Chaptarr work id, matched once the library is read
+  private unmatched = new Map<string, ChaptarrBook[]>();
+  private step?: ChaptarrScanStep;
+  private matching?: MatchProgress;
 
   constructor(isRecentOnly = false) {
     // Most books are idle catalog books that are skipped without a lookup
@@ -149,12 +193,16 @@ class ChaptarrScanner
       total: this.items.length,
       currentServer: this.currentServer,
       servers: this.servers,
+      step: this.running ? this.step : undefined,
+      matching: this.running ? this.matching : undefined,
     };
   }
 
   public async run(): Promise<void> {
     const settings = getSettings();
     const sessionId = this.startRun();
+    this.step = 'library';
+    this.matching = undefined;
 
     try {
       this.servers = uniqWith(
@@ -194,15 +242,32 @@ class ChaptarrScanner
           )
           .map((other) => other.id);
 
+        this.step = 'library';
+        this.unmatched = new Map();
+        const readStarted = Date.now();
         this.items = this.isRecentOnly
           ? await this.getAwaitedBooks(chaptarr, serverIds)
-          : await chaptarr.getAllBooks();
+          : await chaptarr.getActiveBooks();
+
+        if (!this.isRecentOnly) {
+          this.log(
+            `Read ${this.items.length} monitored or downloaded books from ` +
+              `${server.name} in ${Math.round((Date.now() - readStarted) / 1000)} s`,
+            'info'
+          );
+        }
         await this.loop((book) => this.processChaptarrBook(server, book), {
           sessionId,
         });
 
         this.checkSession(sessionId);
         const isCurrent = () => this.running && this.sessionId === sessionId;
+
+        if (!this.isRecentOnly) {
+          await this.matchOpenLibrary(chaptarr, server, isCurrent);
+          this.checkSession(sessionId);
+          this.step = 'library';
+        }
 
         if (!this.isRecentOnly) {
           // Resets formats whose files are gone, for books linked to any
@@ -215,7 +280,7 @@ class ChaptarrScanner
           );
         }
 
-        await this.syncRecordings(serverIds);
+        await this.syncRecordings(chaptarr, serverIds);
 
         if (!this.isRecentOnly) {
           await this.backfillAudiobookshelfItems(serverIds, isCurrent);
@@ -317,13 +382,60 @@ class ChaptarrScanner
   }
 
   /**
+   * The scanned books plus the recordings asked for that the library
+   * listing left out (an unmonitored recording without files, say), read
+   * by their ids, so a recording is only failed when Talearr no longer has
+   * it. A recording that cannot be read stops the check for this scan.
+   */
+  private async withRecordingBooks(
+    chaptarr: ChaptarrAPI,
+    serverIds: number[]
+  ): Promise<ChaptarrBook[]> {
+    if (this.isRecentOnly || !serverIds.length) {
+      return this.items;
+    }
+
+    const listed = new Set(this.items.map((book) => book.id));
+    const requests = await getRepository(MediaRequest).find({
+      where: {
+        status: MediaRequestStatus.APPROVED,
+        recording: Not(IsNull()),
+        recordingBookId: Not(IsNull()),
+        serverId: In(serverIds),
+      },
+    });
+    const missing = [
+      ...new Set(
+        requests
+          .map((request) => request.recordingBookId as number)
+          .filter((bookId) => !listed.has(bookId))
+      ),
+    ];
+    const books = [...this.items];
+
+    for (const bookId of missing) {
+      const book = await chaptarr.getBook(bookId);
+
+      if (book) {
+        books.push(book);
+      }
+    }
+
+    return books;
+  }
+
+  /**
    * Completes the requests for other recordings of audiobooks whose
    * recordings Talearr has files for now, and asks for the abridged
    * recordings that waited for Talearr to resolve their books
    */
-  private async syncRecordings(serverIds: number[]): Promise<void> {
+  private async syncRecordings(
+    chaptarr: ChaptarrAPI,
+    serverIds: number[]
+  ): Promise<void> {
     try {
-      const completed = await syncRecordingRequests(serverIds, this.items);
+      const books = await this.withRecordingBooks(chaptarr, serverIds);
+      const completed = await syncRecordingRequests(serverIds, books);
 
       if (completed) {
         this.log(`Completed ${completed} recording requests`, 'info');
@@ -477,9 +589,178 @@ class ChaptarrScanner
     }
   }
 
+  /**
+   * Finds the OpenLibrary works of the library books Chaptarr has no
+   * OpenLibrary id for, so books added in Chaptarr directly show in
+   * Allseerr. Runs until every book was tried, as fast as OpenLibrary
+   * allows; what it finds is kept, so a stopped scan carries on next time.
+   */
+  private async matchOpenLibrary(
+    chaptarr: ChaptarrAPI,
+    server: ChaptarrSettings,
+    shouldContinue: () => boolean
+  ): Promise<void> {
+    const copies = this.unmatched;
+    this.unmatched = new Map();
+    const books: UnmatchedBook[] = [...copies.entries()].map(
+      ([foreignBookId, work]) => {
+        const edition = work
+          .map((copy) => copy.foreignEditionId?.match(/^gr:(\d+)/)?.[1])
+          .find(Boolean);
+
+        return {
+          foreignBookId,
+          titles: [...new Set(work.map((copy) => copy.title))],
+          authorId: work.find((copy) => copy.authorId)?.authorId,
+          author: work.find((copy) => copy.author?.authorName)?.author
+            ?.authorName,
+          bookIds: work
+            .map((copy) => copy.id)
+            .filter((id): id is number => !!id),
+          goodreadsId: edition,
+        };
+      }
+    );
+
+    if (!books.length) {
+      return;
+    }
+
+    this.step = 'openlibrary';
+    const openLibrary = new OpenLibrary();
+    const repository = getRepository(ChaptarrBookMatch);
+    const authors = new Map<number, Promise<string | undefined>>();
+    const started = Date.now();
+
+    const search = async (query: string): Promise<OlSearchDoc[]> => {
+      for (let attempt = 0; ; attempt++) {
+        try {
+          let timer: NodeJS.Timeout | undefined;
+          const response = await Promise.race([
+            openLibrary.searchBooks({ query, limit: 10 }),
+            new Promise<never>((_, reject) => {
+              timer = setTimeout(
+                () => reject(new Error('OpenLibrary did not answer in time')),
+                SEARCH_TIMEOUT_MS
+              );
+            }),
+          ]).finally(() => clearTimeout(timer));
+
+          return response.docs ?? [];
+        } catch (e) {
+          if (attempt >= SEARCH_RETRIES || !isRetryable(e?.cause ?? e)) {
+            throw e;
+          }
+
+          await wait(
+            getRetryAfterMs(e?.cause ?? e) ?? SEARCH_BACKOFF_MS * 2 ** attempt
+          );
+        }
+      }
+    };
+
+    const result = await matchBooks(books, {
+      memories: async (ids) => {
+        const found = new Map<string, MatchMemory>();
+
+        for (let i = 0; i < ids.length; i += MEMORY_CHUNK) {
+          const rows = await repository.find({
+            where: { foreignBookId: In(ids.slice(i, i + MEMORY_CHUNK)) },
+          });
+          rows.forEach((row) => found.set(row.foreignBookId, row));
+        }
+
+        return found;
+      },
+      remember: async (memory) => {
+        await repository.upsert(new ChaptarrBookMatch(memory), [
+          'foreignBookId',
+        ]);
+      },
+      authorName: (book) => {
+        if (!book.authorId) {
+          return Promise.resolve(undefined);
+        }
+
+        if (!authors.has(book.authorId)) {
+          authors.set(
+            book.authorId,
+            chaptarr
+              .getAuthor(book.authorId)
+              .then((author) => author.authorName)
+              .catch(() => undefined)
+          );
+        }
+
+        return authors.get(book.authorId) as Promise<string | undefined>;
+      },
+      isbns: async (book) => {
+        const isbns: string[] = [];
+
+        for (const bookId of book.bookIds) {
+          const editions = await chaptarr.getEditions(bookId).catch(() => []);
+          // The edition Chaptarr follows first
+          editions.sort(
+            (a, b) => Number(!!b.monitored) - Number(!!a.monitored)
+          );
+          isbns.push(
+            ...editions
+              .map((edition) => edition.isbn13 ?? edition.isbn)
+              .filter((isbn): isbn is string => !!isbn)
+          );
+        }
+
+        return isbns;
+      },
+      search,
+      existing: async (olIds) => {
+        const known = await getRepository(Media).find({
+          select: { id: true, olId: true },
+          where: { olId: In(olIds), mediaType: MediaType.BOOK },
+        });
+
+        return olIds.find((olId) => known.some((m) => m.olId === olId));
+      },
+      apply: async (book, olId) => {
+        for (const copy of copies.get(book.foreignBookId) ?? []) {
+          await this.processChaptarrBook(server, copy, olId);
+        }
+      },
+      shouldContinue,
+      onProgress: (progress) => {
+        this.matching = progress;
+      },
+      onUnmatched: (book) => {
+        this.log(
+          `Could not match a book to OpenLibrary: ${book.titles[0]}` +
+            (book.author ? ` by ${book.author}` : ''),
+          'info',
+          { foreignBookId: book.foreignBookId }
+        );
+      },
+    });
+
+    const minutes = (Date.now() - started) / 60_000;
+    const looked = result.matched + result.notFound;
+    this.log(
+      `OpenLibrary matching: ${result.matched} matched, ${result.notFound} not found, ` +
+        `${result.known} matched before, ${result.remaining} left for the next scan, ` +
+        `${result.waiting} waiting to be tried again`,
+      'info',
+      {
+        lookups: looked,
+        errors: result.errors,
+        minutes: Math.round(minutes * 10) / 10,
+        booksPerMinute: minutes > 0 ? Math.round(looked / minutes) : looked,
+      }
+    );
+  }
+
   private async processChaptarrBook(
     server: ChaptarrSettings,
-    book: ChaptarrBook
+    book: ChaptarrBook,
+    // The work an OpenLibrary lookup found for a book without an id
+    matchedOlId?: string
   ): Promise<void> {
     try {
       // Readarr books have no format, they count as ebooks unless an
@@ -530,7 +811,7 @@ class ChaptarrScanner
         // A book that was still being imported when it was requested is
         // found by its work id, a book added in Chaptarr by the OpenLibrary
         // work id of its metadata
-        const olId = getOpenLibraryId(book);
+        const olId = matchedOlId ?? getOpenLibraryId(book);
         const media =
           (await mediaRepository.findOne({
             where: {
@@ -546,11 +827,14 @@ class ChaptarrScanner
 
         if (!media) {
           if (!olId) {
-            this.log(
-              'No OpenLibrary work ID found for this book. Skipping item.',
-              'debug',
-              { title: book.title, foreignBookId: book.foreignBookId }
-            );
+            // Looked up on OpenLibrary by title and author once the whole
+            // library is read
+            if (!this.isRecentOnly) {
+              this.unmatched.set(book.foreignBookId, [
+                ...(this.unmatched.get(book.foreignBookId) ?? []),
+                book,
+              ]);
+            }
             return;
           }
 
@@ -618,3 +902,19 @@ class ChaptarrScanner
 
 export const chaptarrScanner = new ChaptarrScanner();
 export const chaptarrRecentScanner = new ChaptarrScanner(true);
+
+/**
+ * Starts a full scan now unless one is running, such as when a server is
+ * added or its sync turned on, so its library shows without waiting for
+ * the nightly scan
+ */
+export const startChaptarrFullScan = (reason: string): boolean => {
+  if (chaptarrScanner.status().running) {
+    return false;
+  }
+
+  logger.info(`Starting Chaptarr Full Scan: ${reason}`, { label: 'Jobs' });
+  chaptarrScanner.run().catch(() => undefined);
+
+  return true;
+};

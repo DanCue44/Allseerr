@@ -1151,7 +1151,8 @@ class BaseScanner<T> {
     });
     const message = reason ?? details.message;
 
-    this.log(logMessage, 'error', {
+    // The reason goes in the line itself, Settings > Logs shows only that
+    this.log(message ? `${logMessage}: ${message}` : logMessage, 'error', {
       errorMessage: message,
       ...(details.code ? { code: details.code } : {}),
       ...(details.status !== undefined ? { status: details.status } : {}),

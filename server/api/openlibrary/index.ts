@@ -122,7 +122,8 @@ class OpenLibrary extends ExternalAPI {
       );
     } catch (error) {
       throw new Error(
-        `[OpenLibrary] Failed to search books: ${getErrorMessage(error)}`
+        `[OpenLibrary] Failed to search books: ${getErrorMessage(error)}`,
+        { cause: error }
       );
     }
   }

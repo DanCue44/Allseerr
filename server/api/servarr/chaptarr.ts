@@ -580,6 +580,8 @@ export const chaptarrRetryDelays = {
   // Before adding again a book Chaptarr refused while it was still setting
   // up the author from an earlier request
   authorBusyMs: 30_000,
+  // Before each new try of a page of the library that failed
+  libraryPageMs: [2_000, 10_000, 30_000],
 };
 
 const isTimeout = (e: { code?: string }): boolean =>
@@ -611,6 +613,13 @@ const LIBRARY_PAGE_SIZE = 500;
 const QUEUE_PAGE_SIZE = 200;
 // A library larger than this is not read further
 const MAX_LIBRARY_BOOKS = 100_000;
+// A page of a large library can take Chaptarr a while to build, and it is
+// slower still while Chaptarr refreshes books at the same time. A page that
+// fails is asked for again (chaptarrRetryDelays) before the read gives up.
+const LIBRARY_PAGE_TIMEOUT_MS = 60_000;
+
+// Says which page of the library could not be read, as it is
+class ChaptarrLibraryError extends Error {}
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1134,36 +1143,139 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       const { isChaptarr } = await this.getCapabilities();
 
       if (!isChaptarr) {
-        const response = await this.axios.get<ChaptarrBook[]>('/book');
+        const response = await this.axios.get<ChaptarrBook[]>('/book', {
+          timeout: LIBRARY_PAGE_TIMEOUT_MS,
+        });
         return response.data;
       }
 
-      const books: ChaptarrBook[] = [];
-
-      while (books.length < MAX_LIBRARY_BOOKS) {
-        const response = await this.axios.get<PagedBooks>('/book/paged', {
-          params: {
-            offset: books.length,
-            pageSize: LIBRARY_PAGE_SIZE,
-            includeUnmonitored: true,
-          },
-        });
-        const records = response.data.records ?? [];
-        books.push(...records);
-
-        if (
-          records.length === 0 ||
-          books.length >= (response.data.totalCount ?? 0)
-        ) {
-          break;
-        }
+      return await this.readLibrary({});
+    } catch (e) {
+      if (e instanceof ChaptarrLibraryError) {
+        throw e;
       }
 
-      return books;
-    } catch (e) {
       throw new Error(`[Chaptarr] Failed to retrieve books: ${e.message}`, {
         cause: e,
       });
+    }
+  }
+
+  /**
+   * The books that are monitored or have files, all a library scan needs.
+   * Most of a large library is the catalogs of its authors, which Chaptarr
+   * leaves out here, so far fewer pages are read. Servers that cannot
+   * filter the library list all of it.
+   */
+  public async getActiveBooks(): Promise<ChaptarrBook[]> {
+    try {
+      const { isChaptarr } = await this.getCapabilities();
+
+      if (!isChaptarr) {
+        return await this.getAllBooks();
+      }
+
+      const books = new Map<number, ChaptarrBook>();
+
+      const filters: Record<string, boolean>[] = [
+        { monitored: true },
+        { downloaded: true },
+      ];
+
+      for (const filter of filters) {
+        for (const book of await this.readLibrary(filter)) {
+          if (book.id) {
+            books.set(book.id, book);
+          }
+        }
+      }
+
+      return [...books.values()];
+    } catch (e) {
+      if (e instanceof ChaptarrLibraryError) {
+        throw e;
+      }
+
+      throw new Error(`[Chaptarr] Failed to retrieve books: ${e.message}`, {
+        cause: e,
+      });
+    }
+  }
+
+  /**
+   * Reads the library a page at a time, in the order books were added so
+   * a book added meanwhile does not shift the pages still to read
+   */
+  private async readLibrary(
+    filter: Record<string, boolean>
+  ): Promise<ChaptarrBook[]> {
+    const books: ChaptarrBook[] = [];
+    let pages: number | undefined;
+
+    for (let page = 1; books.length < MAX_LIBRARY_BOOKS; page++) {
+      const data = await this.getLibraryPage(
+        { offset: books.length, ...filter },
+        page,
+        pages
+      );
+      const records = data.records ?? [];
+      books.push(...records);
+      pages = Math.max(
+        1,
+        Math.ceil((data.totalCount ?? 0) / LIBRARY_PAGE_SIZE)
+      );
+
+      if (records.length === 0 || books.length >= (data.totalCount ?? 0)) {
+        break;
+      }
+    }
+
+    return books;
+  }
+
+  private async getLibraryPage(
+    params: Record<string, unknown>,
+    page: number,
+    pages?: number
+  ): Promise<PagedBooks> {
+    const which = `page ${page}${pages ? ` of ${pages}` : ''}`;
+
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await this.axios.get<PagedBooks>('/book/paged', {
+          params: {
+            pageSize: LIBRARY_PAGE_SIZE,
+            includeUnmonitored: true,
+            sortKey: 'id',
+            ...params,
+          },
+          timeout: LIBRARY_PAGE_TIMEOUT_MS,
+        });
+
+        return response.data;
+      } catch (e) {
+        const status: number | undefined = e.response?.status;
+        // A request Chaptarr turned down fails the same way every time
+        const final =
+          attempt >= chaptarrRetryDelays.libraryPageMs.length ||
+          (status !== undefined && status < 500 && status !== 429);
+
+        if (final) {
+          const tries = attempt + 1;
+          const reason =
+            e.code === 'ECONNABORTED' || /timeout/i.test(e.message ?? '')
+              ? `did not answer ${which} of the library in ` +
+                `${LIBRARY_PAGE_TIMEOUT_MS / 1000} s`
+              : `failed to send ${which} of the library (${e.message})`;
+
+          throw new ChaptarrLibraryError(
+            `Chaptarr ${reason}${tries > 1 ? `, tried ${tries} times` : ''}`,
+            { cause: e }
+          );
+        }
+
+        await sleep(chaptarrRetryDelays.libraryPageMs[attempt]);
+      }
     }
   }
 

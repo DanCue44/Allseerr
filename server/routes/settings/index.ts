@@ -1009,6 +1009,7 @@ const serializeJob = (job: (typeof scheduledJobs)[number]) => {
     cronSchedule: job.cronSchedule,
     nextExecutionTime: job.job.nextInvocation(),
     running: job.running ? job.running() : false,
+    progress: job.progress?.() ?? null,
     lastSuccess: health?.lastSuccess ?? null,
     lastError: health?.lastError ?? null,
     consecutiveFailures: health?.consecutiveFailures ?? 0,

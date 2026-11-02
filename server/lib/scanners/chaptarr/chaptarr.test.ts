@@ -1,6 +1,10 @@
 import AudiobookshelfAPI from '@server/api/audiobookshelf';
 import OpenLibrary from '@server/api/openlibrary';
-import type { OlWork } from '@server/api/openlibrary/interfaces';
+import type {
+  OlSearchDoc,
+  OlSearchResponse,
+  OlWork,
+} from '@server/api/openlibrary/interfaces';
 import type { ChaptarrBook } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI from '@server/api/servarr/chaptarr';
 import {
@@ -9,6 +13,7 @@ import {
   MediaType,
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
+import ChaptarrBookMatch from '@server/entity/ChaptarrBookMatch';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
 import { User } from '@server/entity/User';
@@ -34,6 +39,11 @@ mock.method(ChaptarrAPI.prototype, 'getAllBooks', async () => {
   getAllBooksCalls++;
   return books;
 });
+// The full scan reads only the monitored and downloaded books
+mock.method(ChaptarrAPI.prototype, 'getActiveBooks', async () => {
+  getAllBooksCalls++;
+  return books;
+});
 // The availability check reads books it cannot confirm from the listing,
 // which these tests never need
 mock.method(ChaptarrAPI.prototype, 'getBook', async () => {
@@ -51,6 +61,22 @@ mock.method(
   })
 );
 mock.method(OpenLibrary.prototype, 'getWorkSummary', async () => undefined);
+// Books without an OpenLibrary work id are looked up by title and author.
+// The answers are set per test, every search is counted.
+let searchAnswers: Record<string, OlSearchDoc[]> = {};
+let searches: string[] = [];
+let searchGate: Promise<void> | undefined;
+mock.method(
+  OpenLibrary.prototype,
+  'searchBooks',
+  async ({ query }: { query: string }): Promise<OlSearchResponse> => {
+    searches.push(query);
+    await searchGate;
+    const docs = searchAnswers[query] ?? [];
+    return { numFound: docs.length, start: 0, docs };
+  }
+);
+mock.method(ChaptarrAPI.prototype, 'getEditions', async () => []);
 mock.method(OpenLibrary.prototype, 'getWorkIsbns', async () => []);
 mock.method(
   AudiobookshelfAPI.prototype,
@@ -134,6 +160,9 @@ describe('Chaptarr Scanner', () => {
   beforeEach(() => {
     books = [];
     getAllBooksCalls = 0;
+    searchAnswers = {};
+    searches = [];
+    searchGate = undefined;
     configureChaptarr({});
   });
 
@@ -242,7 +271,7 @@ describe('Chaptarr Scanner', () => {
         openLibraryWorkId: `ol:${EMMA_ID}`,
         statistics: { bookFileCount: 1 },
       }),
-      // Nothing to key a book without an OpenLibrary work id on
+      // No OpenLibrary work id, and OpenLibrary has nothing for its title
       fakeBook({
         id: 41,
         title: 'Persuasion',
@@ -467,5 +496,179 @@ describe('Chaptarr Scanner', () => {
     });
     assert.strictEqual(pride.status, MediaStatus.PROCESSING);
     assert.strictEqual(chaptarrRecentScanner.status().running, false);
+  });
+
+  describe('books without an OpenLibrary work id', () => {
+    const austen = { authorName: 'Jane Austen' } as ChaptarrBook['author'];
+    const emmaQuery = 'title:"Emma" author:"austen"';
+    const emmaDoc: OlSearchDoc = {
+      key: `/works/${EMMA_ID}`,
+      title: 'Emma',
+      author_name: ['Jane Austen'],
+      edition_count: 900,
+    };
+
+    it('finds them on OpenLibrary and merges both formats', async () => {
+      searchAnswers = { [emmaQuery]: [emmaDoc] };
+      books = [
+        fakeBook({
+          id: 50,
+          title: 'Emma',
+          foreignBookId: 'hc:50',
+          author: austen,
+          statistics: { bookFileCount: 1 },
+        }),
+        fakeBook({
+          id: 51,
+          title: 'Emma',
+          foreignBookId: 'hc:50',
+          mediaType: 'audiobook',
+          author: austen,
+          audiobookMonitored: true,
+        }),
+      ];
+
+      await runWithMockTimers(() => chaptarrScanner.run());
+
+      const mediaRepository = getRepository(Media);
+      assert.strictEqual(await mediaRepository.count(), 1);
+      const emma = await mediaRepository.findOneOrFail({
+        where: { olId: EMMA_ID },
+      });
+      assert.strictEqual(emma.status, MediaStatus.AVAILABLE);
+      assert.strictEqual(emma.statusAudio, MediaStatus.PROCESSING);
+      assert.strictEqual(emma.externalServiceId, 50);
+      assert.strictEqual(emma.externalServiceIdAudio, 51);
+      assert.deepStrictEqual(searches, [emmaQuery]);
+    });
+
+    it('links a book requested before instead of adding another', async () => {
+      const mediaRepository = getRepository(Media);
+      await mediaRepository.save(
+        new Media({
+          olId: EMMA_ID,
+          mediaType: MediaType.BOOK,
+          status: MediaStatus.PROCESSING,
+        })
+      );
+      searchAnswers = { [emmaQuery]: [emmaDoc] };
+      books = [
+        fakeBook({
+          id: 52,
+          title: 'Emma',
+          foreignBookId: 'hc:52',
+          author: austen,
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      await runWithMockTimers(() => chaptarrScanner.run());
+
+      assert.strictEqual(await mediaRepository.count(), 1);
+      const emma = await mediaRepository.findOneOrFail({
+        where: { olId: EMMA_ID },
+      });
+      assert.strictEqual(emma.externalServiceId, 52);
+      assert.strictEqual(emma.status, MediaStatus.AVAILABLE);
+    });
+
+    it('does not look books up again on the next scan', async () => {
+      searchAnswers = { [emmaQuery]: [emmaDoc] };
+      books = [
+        fakeBook({
+          id: 53,
+          title: 'Emma',
+          foreignBookId: 'hc:53',
+          author: austen,
+          statistics: { bookFileCount: 1 },
+        }),
+        fakeBook({
+          id: 54,
+          title: 'Not On OpenLibrary',
+          foreignBookId: 'hc:54',
+          author: austen,
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      await runWithMockTimers(() => chaptarrScanner.run());
+      assert.strictEqual(searches.length, 2);
+      const memories = await getRepository(ChaptarrBookMatch).find({
+        order: { foreignBookId: 'ASC' },
+      });
+      assert.deepStrictEqual(
+        memories.map((m) => [m.foreignBookId, m.olId, m.attempts]),
+        [
+          ['hc:53', EMMA_ID, 0],
+          ['hc:54', null, 1],
+        ]
+      );
+
+      searches = [];
+      await runWithMockTimers(() => chaptarrScanner.run());
+
+      assert.deepStrictEqual(searches, []);
+      assert.strictEqual(await getRepository(Media).count(), 1);
+    });
+
+    it('carries on after a stopped scan and keeps other jobs running', async () => {
+      const total = 3000;
+      books = Array.from({ length: total }, (_, i) =>
+        fakeBook({
+          id: 1000 + i,
+          title: `Book ${i}`,
+          foreignBookId: `hc:${1000 + i}`,
+          author: austen,
+          statistics: { bookFileCount: 1 },
+        })
+      );
+      for (let i = 0; i < total; i += 3) {
+        searchAnswers[`title:"Book ${i}" author:"austen"`] = [
+          {
+            key: `/works/OL${9000 + i}W`,
+            title: `Book ${i}`,
+            author_name: ['Jane Austen'],
+          },
+        ];
+      }
+
+      let release: () => void = () => undefined;
+      searchGate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const tick = () => new Promise((resolve) => setImmediate(resolve));
+
+      await runWithMockTimers(async () => {
+        const first = chaptarrScanner.run();
+        while (chaptarrScanner.status().step !== 'openlibrary') {
+          await tick();
+        }
+
+        // Another job runs while the full scan waits on OpenLibrary
+        await chaptarrRecentScanner.run();
+        assert.strictEqual(chaptarrRecentScanner.status().running, false);
+        assert.strictEqual(chaptarrScanner.status().running, true);
+
+        release();
+        while ((chaptarrScanner.status().matching?.done ?? 0) < 900) {
+          await tick();
+        }
+        const progress = chaptarrScanner.status().matching;
+        assert.strictEqual(progress?.total, total);
+        chaptarrScanner.cancel();
+        await first;
+      });
+
+      const stoppedAt = await getRepository(ChaptarrBookMatch).count();
+      assert.ok(stoppedAt >= 900 && stoppedAt < total, String(stoppedAt));
+
+      searches = [];
+      await runWithMockTimers(() => chaptarrScanner.run());
+
+      // Only the books the stopped scan did not get to are looked up
+      assert.strictEqual(searches.length, total - stoppedAt);
+      assert.strictEqual(await getRepository(ChaptarrBookMatch).count(), total);
+      assert.strictEqual(await getRepository(Media).count(), total / 3);
+    });
   });
 });
