@@ -5,8 +5,11 @@ import type {
   ServarrHistoryRecord,
   ServarrRelease,
 } from '@server/api/servarr/base';
+import type { ArrRelease } from '@server/interfaces/api/arrActionInterfaces';
 import {
   compareReleases,
+  explainGrabError,
+  markGrabbedReleases,
   normalizeRelease,
   pickGrabs,
 } from '@server/lib/arrActions';
@@ -347,5 +350,109 @@ describe('pickGrabs', () => {
       'PACK',
       'SINGLE',
     ]);
+  });
+});
+
+describe('markGrabbedReleases', () => {
+  const release = (guid: string, infoHash?: string): ArrRelease => ({
+    guid,
+    indexerId: 1,
+    title: guid,
+    size: 1,
+    ageHours: 1,
+    indexer: 'Indexer',
+    protocol: 'torrent',
+    quality: 'EPUB',
+    qualityWeight: 1,
+    languages: [],
+    approved: true,
+    rejections: [],
+    ...(infoHash && { infoHash }),
+  });
+  const grab = (
+    id: number,
+    downloadId: string,
+    guid: string,
+    date = '2026-10-31T15:45:02Z'
+  ): ServarrHistoryRecord => ({
+    id,
+    eventType: 'grabbed',
+    date,
+    downloadId,
+    data: { guid, downloadClientName: 'qBittorrent (VPN)' },
+  });
+
+  it('marks the grabbed release still in the client and lists it first', () => {
+    const marked = markGrabbedReleases(
+      [release('OTHER-1'), release('MAM-1165528')],
+      [grab(1, 'DFBAEACB', 'MAM-1165528')],
+      [{ downloadId: 'dfbaeacb', trackedDownloadState: 'importBlocked' }]
+    );
+
+    assert.strictEqual(marked[0].guid, 'MAM-1165528');
+    assert.deepStrictEqual(marked[0].grabbed, {
+      date: '2026-10-31T15:45:02Z',
+      state: 'importBlocked',
+      downloadClient: 'qBittorrent (VPN)',
+    });
+    assert.strictEqual(marked[1].grabbed, undefined);
+  });
+
+  it('matches by info hash when the guid differs', () => {
+    const [marked] = markGrabbedReleases(
+      [release('other-guid', 'ABC123')],
+      [grab(1, 'abc123', 'old-guid')],
+      [{ downloadId: 'ABC123', trackedDownloadState: 'downloading' }]
+    );
+
+    assert.strictEqual(marked.grabbed?.state, 'downloading');
+  });
+
+  it('tells an imported grab from one long gone', () => {
+    const marked = markGrabbedReleases(
+      [release('A'), release('B')],
+      [
+        grab(1, 'h-a', 'A'),
+        grab(2, 'h-b', 'B'),
+        {
+          id: 3,
+          eventType: 'bookFileImported',
+          date: '2026-10-31T16:00:00Z',
+          downloadId: 'h-a',
+        },
+      ]
+    );
+
+    assert.strictEqual(
+      marked.find((r) => r.guid === 'A')?.grabbed?.state,
+      'imported'
+    );
+    assert.strictEqual(
+      marked.find((r) => r.guid === 'B')?.grabbed?.state,
+      'earlier'
+    );
+  });
+
+  it('leaves the list alone without grabs', () => {
+    const releases = [release('A')];
+    assert.strictEqual(markGrabbedReleases(releases, []), releases);
+  });
+});
+
+describe('explainGrabError', () => {
+  it('says plainly that the client already has the download', () => {
+    const error = explainGrabError(
+      new Error(
+        '[Chaptarr] Failed to grab the release: Download client rejected release: qBittorrent rejected the torrent file due to a conflict: qBittorrent API request failed (HTTP 409 Conflict). Conflict'
+      )
+    );
+
+    assert.match(error.message, /already in qBittorrent/);
+    assert.match(error.message, /retry its import/);
+  });
+
+  it('keeps other errors as the arr sent them', () => {
+    const error = explainGrabError(new Error('Indexer is down'));
+    assert.strictEqual(error.message, 'Indexer is down');
   });
 });

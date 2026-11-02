@@ -178,6 +178,11 @@ export interface ChaptarrQueueItem {
   errorMessage?: string;
 }
 
+// How long a retried import is waited for before the page is told it is
+// still running
+const RETRY_IMPORT_POLLS = 10;
+const RETRY_IMPORT_POLL_MS = 1500;
+
 interface QueuePage {
   records?: ChaptarrQueueItem[];
 }
@@ -1572,6 +1577,60 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         cause: e,
       });
     }
+  }
+
+  /**
+   * Has Chaptarr try the import of a finished download again, the way its
+   * queue's retry does, and waits briefly for the result. Returns the
+   * command's error when it failed, and whether it finished in time.
+   */
+  public async retryImport(
+    downloadId: string
+  ): Promise<{ finished: boolean; error?: string }> {
+    let commandId: number | undefined;
+
+    try {
+      const response = await this.axios.post<{ id?: number }>('/command', {
+        name: 'RetryFailedImport',
+        downloadId,
+      });
+      commandId = response.data?.id;
+    } catch (e) {
+      throw new Error(`[Chaptarr] Failed to retry the import: ${e.message}`, {
+        cause: e,
+      });
+    }
+
+    if (!commandId) {
+      return { finished: false };
+    }
+
+    for (let attempt = 0; attempt < RETRY_IMPORT_POLLS; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, RETRY_IMPORT_POLL_MS));
+      const { data } = await this.axios.get<{
+        status?: string;
+        exception?: string;
+        message?: string;
+      }>(`/command/${commandId}`);
+      const status = data?.status?.toLowerCase();
+
+      if (status === 'completed') {
+        return { finished: true };
+      }
+
+      if (
+        status === 'failed' ||
+        status === 'aborted' ||
+        status === 'orphaned'
+      ) {
+        return {
+          finished: true,
+          error: data.exception || data.message || 'The import failed.',
+        };
+      }
+    }
+
+    return { finished: false };
   }
 
   public async getBookHistory(

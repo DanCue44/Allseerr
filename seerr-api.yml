@@ -3517,6 +3517,20 @@ components:
           type: string
         infoUrl:
           type: string
+        infoHash:
+          type: string
+          description: Torrents only
+        grabbed:
+          type: object
+          description: This release was grabbed for the item before
+          properties:
+            date:
+              type: string
+            state:
+              type: string
+              enum: [imported, downloading, importBlocked, earlier]
+            downloadClient:
+              type: string
     MediaFileInfo:
       type: object
       properties:
@@ -15710,6 +15724,9 @@ paths:
                               type: string
                         canSearch:
                           type: boolean
+                        canRetryImport:
+                          type: boolean
+                          description: The book service can try the stuck import of this download again
                   totals:
                     type: object
                     properties:
@@ -15963,6 +15980,44 @@ paths:
           description: The arr does not say what the download is of
         '502':
           description: The arr returned an error
+  /downloads/{downloadId}/retry-import:
+    post:
+      summary: Retry the stuck import of a download
+      description: |
+        Has Chaptarr or Talearr try the import of a finished book download again, such as one whose book changed after the grab, and waits briefly for the result.
+
+        Requires the `MANAGE_REQUESTS` permission.
+      tags:
+        - downloads
+      parameters:
+        - in: path
+          name: downloadId
+          required: true
+          schema:
+            type: string
+            example: chaptarr:0:123
+      responses:
+        '200':
+          description: The import was retried
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: boolean
+                  pending:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid download id
+        '404':
+          description: The download is no longer in the queue
+        '409':
+          description: The download has no stuck import to retry
+        '502':
+          description: The book service returned an error
   /downloads/{downloadId}/remove:
     post:
       summary: Remove a download from the queue

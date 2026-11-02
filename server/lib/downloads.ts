@@ -20,6 +20,7 @@ import type {
   DownloadRemoveBody,
   DownloadRemoveResponse,
   DownloadRequester,
+  DownloadRetryImportResponse,
   DownloadServerError,
   DownloadService,
   DownloadStatus,
@@ -130,6 +131,8 @@ export interface DownloadRef {
   tvdbId?: number;
   foreignAlbumId?: string;
   foreignBookId?: string;
+  // The download client's id of the download, a torrent's info hash
+  downloadId?: string;
 }
 
 export interface MappedDownload {
@@ -498,8 +501,17 @@ const mapRecord = (
       quality: record.quality?.quality?.name || undefined,
       outputPath: record.outputPath || undefined,
       canSearch: false,
+      ...(group.service === 'chaptarr' &&
+        !!record.downloadId &&
+        /importblocked|importfailed/i.test(
+          record.trackedDownloadState ?? ''
+        ) && { canRetryImport: true }),
     },
-    ref: { queueIds: [record.id], ...ref },
+    ref: {
+      queueIds: [record.id],
+      ...ref,
+      ...(record.downloadId && { downloadId: record.downloadId }),
+    },
   };
 };
 
@@ -1039,6 +1051,62 @@ const searchFor = async (
     title: item.title,
     userId: user.id,
   });
+};
+
+/**
+ * Has the book service try a stuck import again, such as one whose book
+ * changed after the grab, and says whether the download is in now or why
+ * it is still stuck
+ */
+export const retryImportDownload = async (
+  id: string,
+  user: User
+): Promise<DownloadRetryImportResponse> => {
+  const { group, download } = await findDownload(id);
+  const downloadId = download.ref.downloadId;
+
+  if (!download.item.canRetryImport || !downloadId) {
+    throw new ArrActionError(
+      409,
+      `${download.item.serverName} has no stuck import to retry for this download.`
+    );
+  }
+
+  const api = createApi(group) as ChaptarrAPI;
+  const result = await api.retryImport(downloadId);
+
+  logger.info('Retried the import of a download', {
+    label: LOG_LABEL,
+    server: download.item.serverName,
+    title: download.item.title,
+    userId: user.id,
+    finished: result.finished,
+    error: result.error,
+  });
+
+  clearDownloadsCache();
+
+  if (!result.finished) {
+    return { imported: false, pending: true };
+  }
+
+  // Still in the queue means the import is stuck again, with its reason
+  const after = (await loadServerDownloads(group)).find(
+    ({ ref }) => ref.downloadId === downloadId
+  );
+
+  if (!after) {
+    return { imported: true };
+  }
+
+  return {
+    imported: false,
+    message:
+      result.error ||
+      after.item.errorMessage ||
+      after.item.statusMessages[0] ||
+      undefined,
+  };
 };
 
 export const searchDownload = async (id: string, user: User): Promise<void> => {

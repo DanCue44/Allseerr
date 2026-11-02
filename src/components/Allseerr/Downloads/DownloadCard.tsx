@@ -13,6 +13,7 @@ import defineMessages from '@app/utils/defineMessages';
 import { formatBytes } from '@app/utils/numberHelpers';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
+  ArrowPathIcon,
   ArrowTopRightOnSquareIcon,
   EllipsisVerticalIcon,
   ExclamationTriangleIcon,
@@ -23,7 +24,6 @@ import {
 } from '@heroicons/react/24/outline';
 import {
   ArrowDownTrayIcon,
-  ArrowPathIcon,
   CheckCircleIcon,
   ClockIcon,
   PauseIcon,
@@ -63,6 +63,7 @@ export const messages = defineMessages('components.Allseerr.Downloads', {
   seeders: '{count, plural, one {# seeder} other {# seeders}}',
   actions: 'Actions for {title}',
   searchAgain: 'Search Again',
+  retryImport: 'Retry Import',
   pickRelease: 'Pick a Release',
   removeFromQueue: 'Remove from Queue',
   openTitle: 'Open Title Page',
@@ -316,6 +317,7 @@ interface DownloadCardProps {
   item: DownloadItem;
   layout?: DownloadsLayout;
   onSearch: (item: DownloadItem) => void;
+  onRetryImport?: (item: DownloadItem) => void;
   onPickRelease: (item: DownloadItem) => void;
   onRemove: (item: DownloadItem) => void;
 }
@@ -324,6 +326,7 @@ const DownloadCard = ({
   item,
   layout = 'cards',
   onSearch,
+  onRetryImport,
   onPickRelease,
   onRemove,
 }: DownloadCardProps) => {
@@ -480,6 +483,15 @@ const DownloadCard = ({
         anchor="bottom end"
         className="z-50 w-56 rounded-2xl bg-as-surface p-1.5 shadow-xl shadow-black/40 ring-1 ring-as-line [--anchor-gap:4px] focus:outline-none"
       >
+        {/* A finished download whose import is stuck needs the import
+            tried again, not a new download */}
+        {item.canRetryImport &&
+          onRetryImport &&
+          menuItem(
+            <ArrowPathIcon className="h-5 w-5" />,
+            intl.formatMessage(messages.retryImport),
+            () => onRetryImport(item)
+          )}
         {item.canSearch &&
           menuItem(
             <MagnifyingGlassIcon className="h-5 w-5" />,

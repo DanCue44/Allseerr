@@ -301,3 +301,34 @@ describe('createFileStore', () => {
     assert.deepEqual(store.load(), {});
   });
 });
+
+describe('getStatusMessages without bare codes', () => {
+  it('drops a code when the reason is also in words', () => {
+    assert.deepStrictEqual(
+      getStatusMessages({
+        statusMessages: [
+          {
+            title: 'Not Quite Dead Yet - Holly Jackson.epub',
+            messages: ['IMPORT_EXCEPTION'],
+          },
+          {
+            title: 'Not Quite Dead Yet - Holly Jackson.epub',
+            messages: [
+              'ModelNotFoundException: Edition with ID 46124 does not exist',
+            ],
+          },
+        ],
+      } as TrackedQueueItem),
+      ['Edition with ID 46124 does not exist']
+    );
+  });
+
+  it('keeps a code that is all there is', () => {
+    assert.deepStrictEqual(
+      getStatusMessages({
+        statusMessages: [{ title: 'x', messages: ['IMPORT_EXCEPTION'] }],
+      } as TrackedQueueItem),
+      ['IMPORT_EXCEPTION']
+    );
+  });
+});

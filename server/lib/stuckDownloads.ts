@@ -64,8 +64,19 @@ export const getStatusMessages = (item: TrackedQueueItem): string[] => {
     messages.push(errorMessage);
   }
 
-  return messages;
+  // Bare codes such as IMPORT_EXCEPTION say nothing when the arr also sent
+  // the reason in words
+  const readable = messages
+    .filter((message) => !STATUS_CODE.test(message))
+    // "ModelNotFoundException: Edition with ID 1 does not exist" reads as
+    // the sentence alone
+    .map((message) => message.replace(EXCEPTION_PREFIX, ''));
+
+  return readable.length > 0 ? readable : messages;
 };
+
+const STATUS_CODE = /^[A-Z][A-Z0-9_]+$/;
+const EXCEPTION_PREFIX = /^[A-Za-z.]*Exception:\s*/;
 
 /**
  * Why a download is stuck (its state, or its status when the arr says why),

@@ -1,6 +1,7 @@
 import type {
   DownloadRemoveBody,
   DownloadRemoveResponse,
+  DownloadRetryImportResponse,
   DownloadsResponse,
   SeedingResponse,
 } from '@server/interfaces/api/downloadInterfaces';
@@ -8,6 +9,7 @@ import { ArrActionError } from '@server/lib/arrActions';
 import {
   getDownloads,
   removeDownload,
+  retryImportDownload,
   searchDownload,
 } from '@server/lib/downloads';
 import { Permission } from '@server/lib/permissions';
@@ -110,6 +112,23 @@ downloadRoutes.post<{ downloadId: string }, DownloadRemoveResponse>(
         .json({ removed: false, blocklisted: false, searched: true });
     } catch (e) {
       return handleError(e, req.params.downloadId, next, 'searching again');
+    }
+  }
+);
+
+downloadRoutes.post<{ downloadId: string }, DownloadRetryImportResponse>(
+  '/:downloadId/retry-import',
+  async (req, res, next) => {
+    if (!req.user) {
+      return next({ status: 500, message: 'User missing from request.' });
+    }
+
+    try {
+      return res
+        .status(200)
+        .json(await retryImportDownload(req.params.downloadId, req.user));
+    } catch (e) {
+      return handleError(e, req.params.downloadId, next, 'retrying the import');
     }
   }
 );

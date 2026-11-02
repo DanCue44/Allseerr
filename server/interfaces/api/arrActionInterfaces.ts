@@ -75,6 +75,27 @@ export interface ArrRelease {
   customFormatScore?: number;
   releaseGroup?: string;
   infoUrl?: string;
+  // Torrents only, used to recognize a release that was grabbed before
+  infoHash?: string;
+  // This release was grabbed for the item before
+  grabbed?: ArrReleaseGrab;
+}
+
+/**
+ * What became of an earlier grab of a release: its file is the one in the
+ * library, it is still in the download client (downloading or waiting to
+ * import), its import is stuck, or it was grabbed and is gone since
+ */
+export type ArrReleaseGrabState =
+  | 'imported'
+  | 'downloading'
+  | 'importBlocked'
+  | 'earlier';
+
+export interface ArrReleaseGrab {
+  date: string;
+  state: ArrReleaseGrabState;
+  downloadClient?: string;
 }
 
 export interface ArrReleasesResponse {

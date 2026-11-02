@@ -41,6 +41,7 @@ import type {
   DownloadItem,
   DownloadRemoveBody,
   DownloadRemoveResponse,
+  DownloadRetryImportResponse,
   DownloadsResponse,
 } from '@server/interfaces/api/downloadInterfaces';
 import axios from 'axios';
@@ -78,6 +79,11 @@ const messages = defineMessages('components.Allseerr.Downloads', {
   loadError: 'Unable to load the downloads.',
   searchStarted: '{server} is searching for {title}.',
   searchError: 'Could not start the search: {message}',
+  retryImported: 'Imported {title}.',
+  retryImportPending:
+    '{server} is still importing {title}. Check back in a minute.',
+  retryImportStuck: 'The import of {title} is still stuck: {message}',
+  retryImportError: 'Could not retry the import: {message}',
   removed: 'Removed {title} from the queue.',
   removedSearched: 'Removed {title} from the queue and started a new search.',
   removedSearchFailed:
@@ -205,6 +211,43 @@ const Downloads = () => {
     } catch (e) {
       addToast(
         intl.formatMessage(messages.searchError, { message: errorMessage(e) }),
+        { appearance: 'error', autoDismiss: true }
+      );
+    }
+  };
+
+  const retryImport = async (item: DownloadItem) => {
+    try {
+      const { data: result } = await axios.post<DownloadRetryImportResponse>(
+        `/api/v1/downloads/${encodeURIComponent(item.id)}/retry-import`
+      );
+      addToast(
+        result.imported
+          ? intl.formatMessage(messages.retryImported, { title: item.title })
+          : result.pending
+            ? intl.formatMessage(messages.retryImportPending, {
+                server: item.serverName,
+                title: item.title,
+              })
+            : intl.formatMessage(messages.retryImportStuck, {
+                title: item.title,
+                message: result.message ?? '',
+              }),
+        {
+          appearance: result.imported
+            ? 'success'
+            : result.pending
+              ? 'info'
+              : 'warning',
+          autoDismiss: true,
+        }
+      );
+      mutate();
+    } catch (e) {
+      addToast(
+        intl.formatMessage(messages.retryImportError, {
+          message: errorMessage(e),
+        }),
         { appearance: 'error', autoDismiss: true }
       );
     }
@@ -540,6 +583,7 @@ const Downloads = () => {
                   item={item}
                   layout="list"
                   onSearch={searchAgain}
+                  onRetryImport={retryImport}
                   onPickRelease={setPicking}
                   onRemove={setRemoving}
                 />
@@ -552,6 +596,7 @@ const Downloads = () => {
                   key={item.id}
                   item={item}
                   onSearch={searchAgain}
+                  onRetryImport={retryImport}
                   onPickRelease={setPicking}
                   onRemove={setRemoving}
                 />

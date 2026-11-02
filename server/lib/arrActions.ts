@@ -36,6 +36,7 @@ import type {
   ArrEpisode,
   ArrItemResponse,
   ArrRelease,
+  ArrReleaseGrabState,
   ArrReplaceBody,
   ArrReplaceResponse,
   ArrServiceName,
@@ -85,6 +86,10 @@ export interface ArrItem {
   deleteFiles(fileIds: number[]): Promise<void>;
   // The grabs that brought in the current files
   getGrabs(): Promise<ServarrHistoryRecord[]>;
+  // Every history record of the item, to recognize releases grabbed before
+  getHistory?(): Promise<ServarrHistoryRecord[]>;
+  // The arr's queue, to tell a grab still downloading from one long gone
+  getQueue?(): Promise<GrabQueueRecord[]>;
   markFailed(historyId: number): Promise<void>;
 }
 
@@ -169,7 +174,85 @@ export const normalizeRelease = (
     }),
     ...(raw.releaseGroup && { releaseGroup: raw.releaseGroup }),
     ...(raw.infoUrl && { infoUrl: raw.infoUrl }),
+    ...(typeof raw.infoHash === 'string' &&
+      raw.infoHash && { infoHash: raw.infoHash }),
   };
+};
+
+/**
+ * A download in an arr's queue, only the fields that place an earlier grab
+ */
+export interface GrabQueueRecord {
+  downloadId?: string;
+  trackedDownloadState?: string;
+  downloadClient?: string;
+}
+
+const sameId = (a?: string | null, b?: string | null) =>
+  !!a && !!b && a.toLowerCase() === b.toLowerCase();
+
+/**
+ * Marks the releases that were grabbed for the item before, by the guid the
+ * grab recorded or the torrent's info hash, and moves them to the top: an
+ * admin re-grabbing the download that is already in the client gets a
+ * conflict from the client, and one that is waiting to import needs its
+ * import retried, not a new download.
+ */
+export const markGrabbedReleases = (
+  releases: ArrRelease[],
+  history: ServarrHistoryRecord[],
+  queue: GrabQueueRecord[] = []
+): ArrRelease[] => {
+  const grabs = history.filter(isGrab).sort(byNewest);
+
+  if (grabs.length === 0) {
+    return releases;
+  }
+
+  const marked = releases.map((release) => {
+    const grab = grabs.find(
+      (record) =>
+        (!!record.data?.guid && record.data.guid === release.guid) ||
+        sameId(release.infoHash, record.downloadId) ||
+        sameId(release.infoHash, record.data?.torrentInfoHash)
+    );
+
+    if (!grab) {
+      return release;
+    }
+
+    const queued = queue.find((record) =>
+      sameId(record.downloadId, grab.downloadId)
+    );
+    const imported = history.some(
+      (record) => isImport(record) && sameId(record.downloadId, grab.downloadId)
+    );
+    const state: ArrReleaseGrabState = queued
+      ? /importblocked|importfailed|failedpending/i.test(
+          queued.trackedDownloadState ?? ''
+        )
+        ? 'importBlocked'
+        : 'downloading'
+      : imported
+        ? 'imported'
+        : 'earlier';
+    const downloadClient =
+      queued?.downloadClient || grab.data?.downloadClientName || undefined;
+
+    return {
+      ...release,
+      grabbed: {
+        date: grab.date,
+        state,
+        ...(downloadClient && { downloadClient }),
+      },
+    };
+  });
+
+  return [
+    ...marked.filter((release) => release.grabbed),
+    ...marked.filter((release) => !release.grabbed),
+  ];
 };
 
 /**
@@ -318,6 +401,8 @@ const resolveRadarr = async (media: Media, is4k: boolean): Promise<ArrItem> => {
       }
     },
     getGrabs: async () => pickGrabs(await radarr.getMovieHistory(movieId)),
+    getHistory: () => radarr.getMovieHistory(movieId),
+    getQueue: () => radarr.getQueueRecords<GrabQueueRecord>(),
     markFailed: (historyId) => radarr.markHistoryFailed(historyId),
   };
 };
@@ -536,6 +621,8 @@ const resolveLidarr = async (media: Media): Promise<ArrItem> => {
       (await lidarr.getTrackFilesByAlbumId(id)).map((file) => file.id),
     deleteFiles: (fileIds) => lidarr.deleteTrackFiles(fileIds),
     getGrabs: async () => pickGrabs(await lidarr.getAlbumHistory(artistId, id)),
+    getHistory: () => lidarr.getAlbumHistory(artistId, id),
+    getQueue: () => lidarr.getQueueRecords<GrabQueueRecord>(),
     markFailed: (historyId) => lidarr.markHistoryFailed(historyId),
   };
 };
@@ -691,6 +778,9 @@ const resolveChaptarr = async (
       authorId
         ? pickGrabs(await chaptarr.getBookHistory(authorId, bookId))
         : [],
+    getHistory: async () =>
+      authorId ? chaptarr.getBookHistory(authorId, bookId) : [],
+    getQueue: () => chaptarr.getBookQueue(),
     markFailed: (historyId) => chaptarr.markHistoryFailed(historyId),
   };
 };
@@ -1010,7 +1100,36 @@ export const listReleases = async (
     throw new ArrActionError(400, item.unavailable.interactive);
   }
 
-  return item.getReleases();
+  const [releases, history, queue] = await Promise.all([
+    item.getReleases(),
+    // The list still shows when the history or queue cannot be read
+    (item.getHistory?.() ?? item.getGrabs()).catch(() => []),
+    (item.getQueue?.() ?? Promise.resolve([])).catch(() => []),
+  ]);
+
+  return markGrabbedReleases(releases, history, queue);
+};
+
+const DOWNLOAD_CLIENTS =
+  /qBittorrent|Transmission|Deluge|rTorrent|uTorrent|SABnzbd|NZBGet|Aria2|Flood|Vuze|Download Station/i;
+
+/**
+ * Says in plain words why an arr could not grab a release when its own
+ * message buries it: the download client already has that download
+ * (qBittorrent answers 409 Conflict). Other errors keep the arr's message.
+ */
+export const explainGrabError = (e: unknown): Error => {
+  const message = e instanceof Error ? e.message : String(e);
+  const client = message.match(DOWNLOAD_CLIENTS)?.[0] ?? 'the download client';
+
+  if (/conflict|\b409\b|already (exists|added|in )|duplicate/i.test(message)) {
+    return new ArrActionError(
+      409,
+      `That release is already in ${client}, so it does not need downloading again. If it finished, retry its import from Downloads instead.`
+    );
+  }
+
+  return e instanceof Error ? e : new Error(message);
 };
 
 export const grabRelease = async (
@@ -1031,7 +1150,11 @@ export const grabRelease = async (
     throw new ArrActionError(400, item.unavailable.interactive);
   }
 
-  await item.grab({ guid: release.guid, indexerId: release.indexerId });
+  try {
+    await item.grab({ guid: release.guid, indexerId: release.indexerId });
+  } catch (e) {
+    throw explainGrabError(e);
+  }
   logAction('Grabbed a release', media, item, target, user, {
     release: release.title ?? release.guid,
     indexerId: release.indexerId,

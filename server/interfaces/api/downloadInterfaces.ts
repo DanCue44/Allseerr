@@ -97,6 +97,17 @@ export interface DownloadItem {
   requester?: DownloadRequester;
   // A new search can be started for what the download is of
   canSearch: boolean;
+  // The book service can try the stuck import of this download again
+  canRetryImport?: boolean;
+}
+
+export interface DownloadRetryImportResponse {
+  // The import went through and the download left the queue
+  imported: boolean;
+  // Still importing when the page stopped waiting
+  pending?: boolean;
+  // Why the import is still stuck
+  message?: string;
 }
 
 export interface DownloadServerError {

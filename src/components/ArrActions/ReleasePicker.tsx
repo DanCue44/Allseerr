@@ -65,6 +65,14 @@ const messages = defineMessages('components.ArrActions.ReleasePicker', {
     '{count, plural, one {# reason it was rejected} other {# reasons it was rejected}}',
   approved: 'Approved',
   issueresolved: 'The issue was resolved.',
+  alreadygrabbed: 'Already grabbed',
+  grabbedimported: 'Grabbed {date}. The file you have now came from it.',
+  grabbeddownloading: 'Grabbed {date} and still in {client}.',
+  grabbedimportblocked:
+    'Grabbed {date} and downloaded, but its import is stuck. Retry the import from Downloads instead of grabbing it again.',
+  grabbedearlier: 'Grabbed before, on {date}.',
+  downloadclient: 'the download client',
+  confirmregrab: 'Grab it again?',
 });
 
 interface ReleasePickerProps {
@@ -347,9 +355,54 @@ const ReleasePicker = ({
             {shown.map((release) => {
               const key = `${release.indexerId}-${release.guid}`;
               const isConfirming = confirming === key;
+              const grabbed = release.grabbed;
+              const grabbedNote = grabbed
+                ? intl.formatMessage(
+                    grabbed.state === 'imported'
+                      ? messages.grabbedimported
+                      : grabbed.state === 'downloading'
+                        ? messages.grabbeddownloading
+                        : grabbed.state === 'importBlocked'
+                          ? messages.grabbedimportblocked
+                          : messages.grabbedearlier,
+                    {
+                      date: intl.formatDate(grabbed.date, {
+                        dateStyle: 'medium',
+                      }),
+                      client:
+                        grabbed.downloadClient ??
+                        intl.formatMessage(messages.downloadclient),
+                    }
+                  )
+                : null;
 
               return (
-                <li key={key} className={rowClass}>
+                <li
+                  key={key}
+                  className={`${rowClass} ${
+                    grabbed
+                      ? ambient
+                        ? 'ring-2 ring-as-accent/70'
+                        : 'ring-2 ring-indigo-500'
+                      : ''
+                  }`}
+                >
+                  {grabbed && (
+                    <div
+                      className={`mb-2 flex flex-wrap items-center gap-2 text-xs ${ink}`}
+                    >
+                      <span
+                        className={
+                          ambient
+                            ? 'rounded-full bg-as-accent px-2 py-0.5 text-[11px] font-semibold text-as-ground'
+                            : 'rounded bg-indigo-600 px-1.5 py-0.5 text-[11px] font-semibold text-white'
+                        }
+                      >
+                        {intl.formatMessage(messages.alreadygrabbed)}
+                      </span>
+                      <span>{grabbedNote}</span>
+                    </div>
+                  )}
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
                     <div className="min-w-0 flex-1">
                       <div
@@ -462,7 +515,9 @@ const ReleasePicker = ({
                               {intl.formatMessage(
                                 grabbing === release.guid
                                   ? messages.grabbing
-                                  : messages.confirmgrab
+                                  : grabbed
+                                    ? messages.confirmregrab
+                                    : messages.confirmgrab
                               )}
                             </span>
                           </Button>
@@ -476,7 +531,9 @@ const ReleasePicker = ({
                         </>
                       ) : (
                         <Button
-                          buttonType={release.approved ? 'primary' : 'default'}
+                          buttonType={
+                            release.approved && !grabbed ? 'primary' : 'default'
+                          }
                           buttonSize="sm"
                           className="w-full sm:w-auto"
                           disabled={!!grabbing}
