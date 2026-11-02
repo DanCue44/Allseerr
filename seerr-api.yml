@@ -56,7 +56,7 @@ tags:
 
       For users who may manage requests (`downloads.canManage` in the status), it also uses:
 
-      - `GET /nobookends/attention` for book downloads Chaptarr is stuck on, and `POST /nobookends/attention/{key}/dismiss` to remove one and search again
+      - `GET /nobookends/attention` for book downloads Chaptarr is stuck on, `POST /nobookends/attention/{key}/retry-import` to retry a stuck import, and `POST /nobookends/attention/{key}/dismiss` to remove one and search again
       - `GET /media/{mediaId}/arr?bookFormat=` for what can be done to a format in its arr
       - `POST /media/{mediaId}/arr/search` to search again, `GET /media/{mediaId}/arr/releases` to list releases, `POST /media/{mediaId}/arr/grab` to grab one and `POST /media/{mediaId}/arr/replace` to replace the file
 
@@ -13076,8 +13076,48 @@ paths:
                           description: Display names of the users still waiting for this format
                           items:
                             type: string
+                        canRetryImport:
+                          type: boolean
+                          description: The download finished but its import is stuck, so retrying the import brings the book in without downloading it again
         '403':
           description: Not allowed to manage requests
+  /nobookends/attention/{key}/retry-import:
+    post:
+      summary: Retry the stuck import of a book download
+      description: |
+        Has Chaptarr or Talearr try the import of a finished download again and waits briefly for the result. Nothing is downloaded again.
+
+        Requires the `MANAGE_REQUESTS` permission.
+      tags:
+        - nobookends
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The import was retried
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  imported:
+                    type: boolean
+                  pending:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          description: Invalid download key
+        '404':
+          description: The download is no longer stuck
+        '409':
+          description: The download has no stuck import to retry
+        '502':
+          description: Chaptarr returned an error
   /nobookends/attention/{key}/dismiss:
     post:
       summary: Remove a stuck book download and search again

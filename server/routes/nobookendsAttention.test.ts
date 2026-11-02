@@ -263,6 +263,7 @@ describe('GET /nobookends/attention', () => {
         since: undefined,
         downloadTitle: 'Jane.Example.The.Lantern.Keeper.Unabridged.M4B',
         requesters: ['listener'],
+        canRetryImport: true,
       }
     );
     assert.ok(Date.parse(lantern.since) < Date.parse(birds.since));
@@ -407,6 +408,46 @@ describe('POST /nobookends/attention/{key}/dismiss', () => {
       calls.find((call) => call.url === '/command')?.data,
       { name: 'BookSearch', bookIds: [602] }
     );
+  });
+
+  it('retries a stuck import and says the book came in', async () => {
+    seedStuck();
+    handlers['POST /command'] = () => ({ id: 55 });
+    handlers['GET /command/55'] = () => {
+      // The import went through, so the download left the queue
+      queue = queue.filter(
+        (item) => item.downloadId !== 'SABnzbd_nzo_a1b2c3d4'
+      );
+      return { status: 'completed' };
+    };
+    const { apiKey } = await manager();
+
+    const res = await request(app)
+      .post(
+        `/nobookends/attention/${encodeURIComponent(LANTERN_KEY)}/retry-import`
+      )
+      .set('X-Api-Key', apiKey);
+
+    assert.strictEqual(res.status, 200, res.body.message);
+    assert.deepStrictEqual(res.body, { imported: true });
+    assert.deepStrictEqual(
+      calls.find((call) => call.url === '/command')?.data,
+      { name: 'RetryFailedImport', downloadId: 'SABnzbd_nzo_a1b2c3d4' }
+    );
+    assert.ok(!calls.some((call) => call.method === 'DELETE'));
+  });
+
+  it('refuses to retry a download whose import is not stuck', async () => {
+    seedStuck();
+    const { apiKey } = await manager();
+    const key = 'chaptarr:0:SABnzbd_nzo_e5f6a7b8:warning';
+
+    const res = await request(app)
+      .post(`/nobookends/attention/${encodeURIComponent(key)}/retry-import`)
+      .set('X-Api-Key', apiKey);
+
+    assert.strictEqual(res.status, 409);
+    assert.ok(!calls.some((call) => call.url === '/command'));
   });
 
   it('answers 404 for a download that is no longer stuck', async () => {

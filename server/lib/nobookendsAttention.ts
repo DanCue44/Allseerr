@@ -49,6 +49,9 @@ export interface NoBookEndsAttentionItem {
   // The release in the download client
   downloadTitle: string;
   requesters: string[];
+  // The download finished but its import is stuck: retrying the import
+  // brings the book in without downloading it again
+  canRetryImport: boolean;
 }
 
 interface ChaptarrServerGroup {
@@ -113,6 +116,10 @@ const findStuck = (
     return [{ item, key, reason, since: entry.firstSeen }];
   });
 
+const canRetryImport = (item: ChaptarrQueueItem) =>
+  !!item.downloadId &&
+  /importblocked|importfailed/i.test(item.trackedDownloadState ?? '');
+
 let cache: { at: number; items: NoBookEndsAttentionItem[] } | undefined;
 
 export const clearAttentionCache = (): void => {
@@ -159,6 +166,7 @@ export const getAttentionItems = async (
               since: new Date(since).toISOString(),
               downloadTitle: item.title,
               requesters: details.requesters,
+              canRetryImport: canRetryImport(item),
             };
           })
         );
@@ -183,6 +191,91 @@ export const getAttentionItems = async (
   return items;
 };
 
+export interface NoBookEndsRetryImportResult {
+  // The book came in and the download left the queue
+  imported: boolean;
+  // Still importing when Allseerr stopped waiting
+  pending?: boolean;
+  // Why the import is still stuck
+  message?: string;
+}
+
+/**
+ * The stuck download a key names, from its server's live queue
+ */
+const findAttentionDownload = async (key: string) => {
+  const serverId = Number(key.match(/^chaptarr:(\d+):/)?.[1]);
+  const group = getChaptarrServers().find(({ serverIds }) =>
+    serverIds.includes(serverId)
+  );
+
+  if (!group) {
+    throw new ArrActionError(404, 'This download is not in Chaptarr.');
+  }
+
+  const chaptarr = getChaptarr(group.server);
+  const scope = `chaptarr:${serverId}`;
+  const found = (await chaptarr.getBookQueue()).find((item) => {
+    const reason = getStuckReason(item);
+
+    return !!reason && getStuckKey(scope, item, reason) === key;
+  });
+
+  if (!found) {
+    throw new ArrActionError(404, 'This download is no longer stuck.');
+  }
+
+  return { group, chaptarr, found };
+};
+
+/**
+ * Has Chaptarr or Talearr try a stuck import again, for a download that
+ * finished but could not be imported (such as one whose book changed after
+ * the grab). Nothing is downloaded again.
+ */
+export const retryAttentionImport = async (
+  key: string,
+  user: User
+): Promise<NoBookEndsRetryImportResult> => {
+  const { chaptarr, found } = await findAttentionDownload(key);
+
+  if (!canRetryImport(found) || !found.downloadId) {
+    throw new ArrActionError(
+      409,
+      'This download has no stuck import to retry. Remove it and search again instead.'
+    );
+  }
+
+  const downloadId = found.downloadId;
+  const result = await chaptarr.retryImport(downloadId);
+  clearAttentionCache();
+
+  logger.info('Retried the import of a stuck book download', {
+    label: LOG_LABEL,
+    title: found.title,
+    userId: user.id,
+    finished: result.finished,
+    error: result.error,
+  });
+
+  if (!result.finished) {
+    return { imported: false, pending: true };
+  }
+
+  const after = (await chaptarr.getBookQueue()).find(
+    (item) => item.downloadId === downloadId
+  );
+
+  if (!after) {
+    return { imported: true };
+  }
+
+  return {
+    imported: false,
+    message: result.error || getStatusMessages(after)[0] || undefined,
+  };
+};
+
 export interface NoBookEndsDismissResult {
   removed: boolean;
   blocklisted: boolean;
@@ -201,27 +294,8 @@ export const dismissAttentionItem = async (
   user: User,
   { blocklist = true }: { blocklist?: boolean } = {}
 ): Promise<NoBookEndsDismissResult> => {
-  const serverId = Number(key.match(/^chaptarr:(\d+):/)?.[1]);
-  const group = getChaptarrServers().find(({ serverIds }) =>
-    serverIds.includes(serverId)
-  );
-
-  if (!group) {
-    throw new ArrActionError(404, 'This download is not in Chaptarr.');
-  }
-
-  const { server, serverIds } = group;
-  const chaptarr = getChaptarr(server);
-  const scope = `chaptarr:${serverId}`;
-  const found = (await chaptarr.getBookQueue()).find((item) => {
-    const reason = getStuckReason(item);
-
-    return !!reason && getStuckKey(scope, item, reason) === key;
-  });
-
-  if (!found) {
-    throw new ArrActionError(404, 'This download is no longer stuck.');
-  }
+  const { group, chaptarr, found } = await findAttentionDownload(key);
+  const { serverIds } = group;
 
   await chaptarr.removeQueueItem(found.id, { blocklist });
   clearAttentionCache();

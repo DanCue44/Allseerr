@@ -4,6 +4,7 @@ import { getNoBookEndsStatus } from '@server/lib/nobookends';
 import {
   dismissAttentionItem,
   getAttentionItems,
+  retryAttentionImport,
 } from '@server/lib/nobookendsAttention';
 import { isPendingDirectoryNonce } from '@server/lib/nobookendsDirectory';
 import {
@@ -89,6 +90,36 @@ nobookendsRoutes.get(
         errorMessage: e.message,
       });
       return next({ status: 500, message: 'Unable to list the downloads.' });
+    }
+  }
+);
+
+/**
+ * Has Chaptarr try a stuck import again, for a download that finished
+ */
+nobookendsRoutes.post<{ key: string }>(
+  '/attention/:key/retry-import',
+  isAuthenticated(Permission.MANAGE_REQUESTS),
+  async (req, res, next) => {
+    const { key } = req.params;
+
+    if (!req.user || !ATTENTION_KEY.test(key)) {
+      return next({ status: 400, message: 'Invalid download key.' });
+    }
+
+    try {
+      return res.status(200).json(await retryAttentionImport(key, req.user));
+    } catch (e) {
+      if (e instanceof ArrActionError) {
+        return next({ status: e.status, message: e.message });
+      }
+
+      logger.error('Failed to retry a stuck book import', {
+        label: 'NoBookEnds',
+        key,
+        errorMessage: e.message,
+      });
+      return next({ status: 502, message: e.message });
     }
   }
 );
