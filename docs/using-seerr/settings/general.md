@@ -87,7 +87,7 @@ This setting is **enabled** by default.
 
 ## Allow Users to Request Only the Current Season
 
-Lets users request only the season of a series that is airing, with older seasons deleted as new ones start. **Days Notice Before Deleting Seasons** sets how long admins have to keep older seasons. See [Current Season Requests](/using-seerr/features/current-season-requests).
+Lets users request only the season of a series that is airing, with older seasons deleted as new ones start. **Current Season Cleanup: Days Before Older Seasons Are Deleted** sets how long admins have to keep them. It only affects series requested this way: seasons that were already in your library are never deleted unless an admin approves it, and nothing else in Sonarr is touched. See [Current Season Requests](/using-seerr/features/current-season-requests).
 
 This setting is **disabled** by default.
 

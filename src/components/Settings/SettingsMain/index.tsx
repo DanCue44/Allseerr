@@ -91,10 +91,11 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   partialRequestsEnabled: 'Allow Partial Series Requests',
   allowCurrentSeasonRequests: 'Allow Users to Request Only the Current Season',
   allowCurrentSeasonRequestsTip:
-    'Lets users request only the current season of a series. Admins can always make these requests. When a new season starts, older seasons the request brought in are deleted from disk after the notice period, while seasons that were already here are kept unless an admin approves deleting them',
-  currentSeasonRolloverDelayDays: 'Days Notice Before Deleting Seasons',
+    'Adds Request Current Season for users, to follow a series without downloading every season. Admins can always use it. When the next season starts, the older seasons such a request downloaded are cleaned up (see the setting below)',
+  currentSeasonRolloverDelayDays:
+    'Current Season Cleanup: Days Before Older Seasons Are Deleted',
   currentSeasonRolloverDelayDaysTip:
-    'How long admins have to keep older seasons once a new season of a current season request starts. Set to 0 to delete them right away',
+    'Only affects series requested with Request Current Season. When the next season starts, the older seasons that request downloaded are deleted after this many days, and admins get a notice with a Keep button first. Seasons that were already in your library are never deleted unless an admin approves it, and nothing else in Sonarr is touched. 0 deletes them right away',
   validationCurrentSeasonRolloverDelayDays:
     'You must provide a whole number of days, 0 or more',
   enableSpecialEpisodes: 'Allow Special Episodes Requests',

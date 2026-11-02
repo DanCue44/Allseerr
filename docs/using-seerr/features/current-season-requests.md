@@ -15,7 +15,7 @@ Allseerr also supports two other partial requests in the series request dialog: 
 In **Settings &rarr; General**:
 
 - **Allow Users to Request Only the Current Season**: off by default. Admins can always make current season requests, even when it is off.
-- **Days Notice Before Deleting Seasons**: how long admins have to keep older seasons once a new season starts. The default is 3 days. Set it to 0 to delete them right away.
+- **Current Season Cleanup: Days Before Older Seasons Are Deleted**: how long admins have to keep older seasons once a new season starts. The default is 3 days. Set it to 0 to delete them right away. It only affects series requested with Request Current Season; nothing else in Sonarr is touched.
 
 Users then see **Request Current Season** in the request dialog of a series.
 
