@@ -2,6 +2,7 @@ import OpenLibrary, { WORK_ID_REGEX } from '@server/api/openlibrary';
 import type { OlSearchDoc } from '@server/api/openlibrary/interfaces';
 import type {
   ChaptarrBook,
+  ChaptarrLibraryPageEvent,
   ChaptarrMediaType,
 } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI, {
@@ -247,7 +248,9 @@ class ChaptarrScanner
         const readStarted = Date.now();
         this.items = this.isRecentOnly
           ? await this.getAwaitedBooks(chaptarr, serverIds)
-          : await chaptarr.getActiveBooks();
+          : await chaptarr.getActiveBooks((event) =>
+              this.logLibraryPage(event)
+            );
 
         if (!this.isRecentOnly) {
           this.log(
@@ -306,6 +309,43 @@ class ChaptarrScanner
    * still processing, and the recordings asked for by recording requests.
    * Any other book only changes on the full scan.
    */
+  /**
+   * One line per page of the library read for a full scan, so a slow
+   * Chaptarr shows where the time goes: how long each page took and, for a
+   * try that failed, what Chaptarr was busy with
+   */
+  private logLibraryPage(event: ChaptarrLibraryPageEvent): void {
+    const page = `page ${event.page}${event.pages ? ` of ${event.pages}` : ''}`;
+    const seconds = Math.round(event.ms / 1000);
+
+    if (!event.error) {
+      this.log(
+        `Read ${page} of the ${event.books} books (${event.records} books) ` +
+          `in ${seconds} s` +
+          (event.attempt > 1
+            ? `, try ${event.attempt} of ${event.attempts}`
+            : ''),
+        'info'
+      );
+      return;
+    }
+
+    const busy = event.busyWith?.length
+      ? `Chaptarr was running: ${event.busyWith.join(', ')}`
+      : 'Chaptarr was not running any task it reports';
+    const next =
+      event.retryInMs !== undefined
+        ? `trying again in ${Math.round(event.retryInMs / 1000)} s`
+        : 'no tries left';
+
+    this.log(
+      `Chaptarr did not send ${page} of the ${event.books} books ` +
+        `(try ${event.attempt} of ${event.attempts}, ${event.error}, ` +
+        `after ${seconds} s). ${busy}; ${next}`,
+      'warn'
+    );
+  }
+
   private async getAwaitedBooks(
     chaptarr: ChaptarrAPI,
     serverIds: number[]

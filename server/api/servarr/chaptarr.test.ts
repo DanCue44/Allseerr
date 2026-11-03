@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, it } from 'node:test';
 
-import type { ChaptarrBook } from '@server/api/servarr/chaptarr';
+import type {
+  ChaptarrBook,
+  ChaptarrLibraryPageEvent,
+} from '@server/api/servarr/chaptarr';
 import ChaptarrAPI, {
   chaptarrRetryDelays,
   isAuthorBusyError,
@@ -320,13 +323,126 @@ describe('ChaptarrAPI library', () => {
       await assert.rejects(
         chaptarr.getAllBooks(),
         new Error(
-          'Chaptarr did not answer page 3 of 120 of the library in 60 s, ' +
+          'Chaptarr did not answer page 3 of 120 of the library in 5 min, ' +
             'tried 4 times'
         )
       );
     } finally {
       chaptarrRetryDelays.libraryPageMs = saved;
     }
+  });
+
+  it('reports each page and what Chaptarr was busy with when one failed', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    let failures = 1;
+    const { chaptarr } = libraryApi((params) => {
+      if (params.monitored && failures > 0) {
+        failures--;
+        throw timeout();
+      }
+
+      return { records: [{ id: params.monitored ? 1 : 2 }], totalCount: 1 };
+    });
+    const api = chaptarr as unknown as {
+      axios: { get: (url: string, config?: unknown) => Promise<unknown> };
+    };
+    const pageGet = api.axios.get;
+    api.axios.get = async (url, config) =>
+      url === '/command'
+        ? {
+            data: [
+              { commandName: 'Refresh Book', status: 'started' },
+              { commandName: 'Rss Sync', status: 'completed' },
+              { name: 'RefreshAuthor', status: 'queued' },
+            ],
+          }
+        : pageGet(url, config);
+    const events: ChaptarrLibraryPageEvent[] = [];
+
+    try {
+      const books = await chaptarr.getActiveBooks((event) =>
+        events.push(event)
+      );
+
+      assert.deepStrictEqual(
+        books.map((book) => book.id),
+        [1, 2]
+      );
+      assert.deepStrictEqual(
+        events.map(
+          ({
+            books,
+            page,
+            attempt,
+            attempts,
+            error,
+            busyWith,
+            retryInMs,
+            records,
+          }) => ({
+            books,
+            page,
+            attempt,
+            attempts,
+            error,
+            busyWith,
+            retryInMs,
+            records,
+          })
+        ),
+        [
+          {
+            books: 'monitored',
+            page: 1,
+            attempt: 1,
+            attempts: 4,
+            error: 'no answer in 5 min',
+            busyWith: ['Refresh Book (started)', 'RefreshAuthor (queued)'],
+            retryInMs: 0,
+            records: undefined,
+          },
+          {
+            books: 'monitored',
+            page: 1,
+            attempt: 2,
+            attempts: 4,
+            error: undefined,
+            busyWith: undefined,
+            retryInMs: undefined,
+            records: 1,
+          },
+          {
+            books: 'downloaded',
+            page: 1,
+            attempt: 1,
+            attempts: 4,
+            error: undefined,
+            busyWith: undefined,
+            retryInMs: undefined,
+            records: 1,
+          },
+        ]
+      );
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+    }
+  });
+
+  it('says Chaptarr runs nothing when its command list cannot be read', async () => {
+    const chaptarr = new ChaptarrAPI({
+      url: 'http://localhost:8789/api/v1',
+      apiKey: 'test-key',
+    });
+    (
+      chaptarr as unknown as {
+        axios: { get: (url: string) => Promise<unknown> };
+      }
+    ).axios.get = async () => {
+      throw new Error('Request failed with status code 404');
+    };
+
+    assert.deepStrictEqual(await chaptarr.getRunningCommands(), []);
   });
 
   it('does not ask again for a page Chaptarr turned down', async () => {

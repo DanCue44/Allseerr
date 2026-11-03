@@ -580,8 +580,9 @@ export const chaptarrRetryDelays = {
   // Before adding again a book Chaptarr refused while it was still setting
   // up the author from an earlier request
   authorBusyMs: 30_000,
-  // Before each new try of a page of the library that failed
-  libraryPageMs: [2_000, 10_000, 30_000],
+  // Before each new try of a page of the library that failed. A large
+  // library can keep Chaptarr busy for minutes, so the later tries wait longer
+  libraryPageMs: [30_000, 120_000, 300_000],
 };
 
 const isTimeout = (e: { code?: string }): boolean =>
@@ -613,10 +614,43 @@ const LIBRARY_PAGE_SIZE = 500;
 const QUEUE_PAGE_SIZE = 200;
 // A library larger than this is not read further
 const MAX_LIBRARY_BOOKS = 100_000;
-// A page of a large library can take Chaptarr a while to build, and it is
-// slower still while Chaptarr refreshes books at the same time. A page that
-// fails is asked for again (chaptarrRetryDelays) before the read gives up.
-const LIBRARY_PAGE_TIMEOUT_MS = 60_000;
+// A page of a large library can take Chaptarr a while to build (it works
+// out statistics for the whole library first), and it is slower still while
+// Chaptarr refreshes books at the same time. A scan runs in the background,
+// so a page gets minutes, and one that fails is asked for again
+// (chaptarrRetryDelays) before the read gives up.
+const LIBRARY_PAGE_TIMEOUT_MS = 300_000;
+// How long the list of commands Chaptarr is running is waited for
+const COMMANDS_TIMEOUT_MS = 15_000;
+
+/**
+ * What happened to one request for a page of the library, for the scan log:
+ * how long it took, and for a try that failed, why and what Chaptarr was
+ * busy with at the time
+ */
+export interface ChaptarrLibraryPageEvent {
+  // Which books were asked for: monitored, downloaded or all
+  books: string;
+  page: number;
+  pages?: number;
+  // 1 for the first try of the page
+  attempt: number;
+  attempts: number;
+  ms: number;
+  records?: number;
+  error?: string;
+  // Commands Chaptarr was running or had queued when the try failed
+  busyWith?: string[];
+  // How long the scan waits before the next try, when there is one
+  retryInMs?: number;
+}
+
+export type ChaptarrLibraryPageListener = (
+  event: ChaptarrLibraryPageEvent
+) => void;
+
+const formatSeconds = (ms: number): string =>
+  ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`;
 
 // Says which page of the library could not be read, as it is
 class ChaptarrLibraryError extends Error {}
@@ -1167,7 +1201,9 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
    * leaves out here, so far fewer pages are read. Servers that cannot
    * filter the library list all of it.
    */
-  public async getActiveBooks(): Promise<ChaptarrBook[]> {
+  public async getActiveBooks(
+    onPage?: ChaptarrLibraryPageListener
+  ): Promise<ChaptarrBook[]> {
     try {
       const { isChaptarr } = await this.getCapabilities();
 
@@ -1183,7 +1219,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       ];
 
       for (const filter of filters) {
-        for (const book of await this.readLibrary(filter)) {
+        for (const book of await this.readLibrary(filter, onPage)) {
           if (book.id) {
             books.set(book.id, book);
           }
@@ -1207,7 +1243,8 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
    * a book added meanwhile does not shift the pages still to read
    */
   private async readLibrary(
-    filter: Record<string, boolean>
+    filter: Record<string, boolean>,
+    onPage?: ChaptarrLibraryPageListener
   ): Promise<ChaptarrBook[]> {
     const books: ChaptarrBook[] = [];
     let pages: number | undefined;
@@ -1216,7 +1253,8 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       const data = await this.getLibraryPage(
         { offset: books.length, ...filter },
         page,
-        pages
+        pages,
+        onPage
       );
       const records = data.records ?? [];
       books.push(...records);
@@ -1236,11 +1274,20 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
   private async getLibraryPage(
     params: Record<string, unknown>,
     page: number,
-    pages?: number
+    pages?: number,
+    onPage?: ChaptarrLibraryPageListener
   ): Promise<PagedBooks> {
     const which = `page ${page}${pages ? ` of ${pages}` : ''}`;
+    const books = params.monitored
+      ? 'monitored'
+      : params.downloaded
+        ? 'downloaded'
+        : 'all';
+    const attempts = chaptarrRetryDelays.libraryPageMs.length + 1;
 
     for (let attempt = 0; ; attempt++) {
+      const started = Date.now();
+
       try {
         const response = await this.axios.get<PagedBooks>('/book/paged', {
           params: {
@@ -1252,21 +1299,51 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           timeout: LIBRARY_PAGE_TIMEOUT_MS,
         });
 
+        onPage?.({
+          books,
+          page,
+          pages,
+          attempt: attempt + 1,
+          attempts,
+          ms: Date.now() - started,
+          records: response.data?.records?.length ?? 0,
+        });
+
         return response.data;
       } catch (e) {
+        const ms = Date.now() - started;
         const status: number | undefined = e.response?.status;
         // A request Chaptarr turned down fails the same way every time
         const final =
           attempt >= chaptarrRetryDelays.libraryPageMs.length ||
           (status !== undefined && status < 500 && status !== 429);
+        const timedOut =
+          e.code === 'ECONNABORTED' || /timeout/i.test(e.message ?? '');
+
+        if (onPage) {
+          onPage({
+            books,
+            page,
+            pages,
+            attempt: attempt + 1,
+            attempts,
+            ms,
+            error: timedOut
+              ? `no answer in ${formatSeconds(LIBRARY_PAGE_TIMEOUT_MS)}`
+              : e.message,
+            busyWith: await this.getRunningCommands(),
+            retryInMs: final
+              ? undefined
+              : chaptarrRetryDelays.libraryPageMs[attempt],
+          });
+        }
 
         if (final) {
           const tries = attempt + 1;
-          const reason =
-            e.code === 'ECONNABORTED' || /timeout/i.test(e.message ?? '')
-              ? `did not answer ${which} of the library in ` +
-                `${LIBRARY_PAGE_TIMEOUT_MS / 1000} s`
-              : `failed to send ${which} of the library (${e.message})`;
+          const reason = timedOut
+            ? `did not answer ${which} of the library in ` +
+              formatSeconds(LIBRARY_PAGE_TIMEOUT_MS)
+            : `failed to send ${which} of the library (${e.message})`;
 
           throw new ChaptarrLibraryError(
             `Chaptarr ${reason}${tries > 1 ? `, tried ${tries} times` : ''}`,
@@ -1276,6 +1353,34 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
         await sleep(chaptarrRetryDelays.libraryPageMs[attempt]);
       }
+    }
+  }
+
+  /**
+   * The commands Chaptarr is running or has queued, such as a book refresh,
+   * named the way its Tasks page names them. Empty when it cannot say.
+   */
+  public async getRunningCommands(): Promise<string[]> {
+    try {
+      const response = await this.axios.get<
+        {
+          name?: string;
+          commandName?: string;
+          status?: string;
+        }[]
+      >('/command', { timeout: COMMANDS_TIMEOUT_MS });
+
+      return (Array.isArray(response.data) ? response.data : [])
+        .filter(
+          (command) =>
+            command?.status === 'started' || command?.status === 'queued'
+        )
+        .map(
+          (command) =>
+            `${command.commandName || command.name || 'Unknown'} (${command.status})`
+        );
+    } catch {
+      return [];
     }
   }
 
