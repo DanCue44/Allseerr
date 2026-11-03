@@ -94,6 +94,8 @@ const messages = defineMessages('components.Settings.SettingsNoBookEndsSync', {
   imageCpu: 'CPU only ({image})',
   imageHelpGpuFound:
     'Docker has the NVIDIA runtime, so the GPU image is picked. It aligns a book many times faster.',
+  imageHelpNoDocker:
+    'Allseerr cannot see Docker, so it cannot tell whether this server has an NVIDIA card. Pick the GPU image only if it has one with the NVIDIA Container Toolkit (Unraid: the Nvidia Driver plugin). The CPU image works everywhere and aligns overnight.',
   imageHelpNoGpu:
     'No NVIDIA runtime was found. Pick the GPU image only if this server has an NVIDIA card with the NVIDIA Container Toolkit (Unraid: the Nvidia Driver plugin). The CPU image works everywhere and aligns overnight.',
   containerName: 'Container Name',
@@ -740,7 +742,9 @@ const SettingsNoBookEndsSync = () => {
                       {intl.formatMessage(
                         docker?.nvidiaRuntime
                           ? messages.imageHelpGpuFound
-                          : messages.imageHelpNoGpu
+                          : docker?.available
+                            ? messages.imageHelpNoGpu
+                            : messages.imageHelpNoDocker
                       )}
                     </span>
                   </label>

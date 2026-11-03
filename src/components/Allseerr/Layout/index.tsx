@@ -13,6 +13,7 @@ import { menuMessages } from '@app/components/Layout/Sidebar';
 import UserDropdown from '@app/components/Layout/UserDropdown';
 import UserWarnings from '@app/components/Layout/UserWarnings';
 import VersionStatus from '@app/components/Layout/VersionStatus';
+import NoBookEndsSyncNotice from '@app/components/NoBookEndsSyncNotice';
 import { AMBIENT_PALETTE } from '@app/context/InterfaceStyleContext';
 import { TourProvider } from '@app/context/TourContext';
 import useBranding from '@app/hooks/useBranding';
@@ -650,6 +651,7 @@ const AmbientShell = ({ children }: LayoutProps) => {
         >
           <div className="max-w-8xl mx-auto px-4">
             <UserWarnings />
+            <NoBookEndsSyncNotice />
             {children}
           </div>
         </main>

@@ -2643,6 +2643,7 @@
   "components.Settings.SettingsNoBookEndsSync.imageCpu": "CPU only ({image})",
   "components.Settings.SettingsNoBookEndsSync.imageGpu": "NVIDIA GPU ({image})",
   "components.Settings.SettingsNoBookEndsSync.imageHelpGpuFound": "Docker has the NVIDIA runtime, so the GPU image is picked. It aligns a book many times faster.",
+  "components.Settings.SettingsNoBookEndsSync.imageHelpNoDocker": "Allseerr cannot see Docker, so it cannot tell whether this server has an NVIDIA card. Pick the GPU image only if it has one with the NVIDIA Container Toolkit (Unraid: the Nvidia Driver plugin). The CPU image works everywhere and aligns overnight.",
   "components.Settings.SettingsNoBookEndsSync.imageHelpNoGpu": "No NVIDIA runtime was found. Pick the GPU image only if this server has an NVIDIA card with the NVIDIA Container Toolkit (Unraid: the Nvidia Driver plugin). The CPU image works everywhere and aligns overnight.",
   "components.Settings.SettingsNoBookEndsSync.install": "Install",
   "components.Settings.SettingsNoBookEndsSync.installDone": "NoBookEnds Sync is installed and connected.",
