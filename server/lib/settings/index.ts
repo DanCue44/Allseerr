@@ -292,6 +292,8 @@ export interface NoBookEndsSyncContainer {
   image: string;
   dataPath: string;
   network: string;
+  // Where Allseerr reaches it, to tell whether it is the connected server
+  internalUrl?: string;
 }
 
 export interface DVRSettings {

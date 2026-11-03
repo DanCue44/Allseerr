@@ -13,6 +13,7 @@ import {
   buildContainerBody,
   buildDockerRun,
   buildUnraidTemplate,
+  connectSyncServer,
   dismissNotice,
   ensureAbsAccount,
   getDockerStatus,
@@ -542,6 +543,45 @@ describe('automatic install', () => {
     await removeInstalledContainer(docker);
     assert.strictEqual(containers.has('c1'), false);
     assert.strictEqual(getSettings().nobookendsSync.enabled, false);
+  });
+});
+
+describe('connecting another server', () => {
+  it('forgets the installed container and leaves it running', async () => {
+    const { docker, containers, removed } = makeDocker();
+    await startInstall(options(), { docker });
+    await waitForInstall();
+    assert.strictEqual(
+      getSettings().nobookendsSync.container?.internalUrl,
+      'http://nobookends-sync:8000'
+    );
+
+    // Connecting the same container again keeps it
+    await connectSyncServer({
+      internalUrl: 'http://nobookends-sync:8000/',
+      adminToken: 'token',
+    });
+    assert.strictEqual(getSettings().nobookendsSync.container?.id, 'c1');
+
+    await connectSyncServer({
+      internalUrl: 'http://nobookends-sync-manual:8000',
+      adminToken: 'token',
+    });
+    assert.strictEqual(getSettings().nobookendsSync.container, undefined);
+    assert.ok(containers.has('c1'));
+    assert.deepStrictEqual(removed, []);
+  });
+
+  it('keeps a manually connected server on when the old container goes', async () => {
+    const { docker } = makeDocker();
+    await startInstall(options(), { docker });
+    await waitForInstall();
+
+    getSettings().nobookendsSync = { internalUrl: 'http://other-sync:8000' };
+    await removeInstalledContainer(docker);
+
+    assert.strictEqual(getSettings().nobookendsSync.enabled, true);
+    assert.strictEqual(getSettings().nobookendsSync.container, undefined);
   });
 });
 

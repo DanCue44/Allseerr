@@ -764,8 +764,15 @@ const pullTracker = () => {
       total += layer.total;
     });
 
+    // Docker reports layers as it finds them, so the share can drop; the
+    // bar only moves forward, and stays short of full until the pull ends
     if (total > 0) {
-      setInstallState({ progress: Math.min(1, current / total) });
+      setInstallState({
+        progress: Math.max(
+          installState.progress ?? 0,
+          Math.min(0.99, current / total)
+        ),
+      });
     }
   };
 };
@@ -811,6 +818,7 @@ export const connectSyncServer = async ({
   container?: NoBookEndsSyncSettings['container'];
 }): Promise<void> => {
   const settings = getSettings();
+  const installed = settings.nobookendsSync.container;
 
   settings.nobookendsSync = {
     enabled: true,
@@ -820,8 +828,22 @@ export const connectSyncServer = async ({
     ...(container ? { container } : {}),
   };
   delete settings.nobookendsSync.setupAdminToken;
+
+  // Another server was connected: the container Allseerr installed is no
+  // longer the one in use, so it is not offered for removal here any more
+  if (!container && installed && !isInstalledAt(installed, internalUrl)) {
+    delete settings.nobookendsSync.container;
+  }
+
   await settings.save();
 };
+
+const isInstalledAt = (
+  container: NonNullable<NoBookEndsSyncSettings['container']>,
+  url?: string
+): boolean =>
+  (url ?? '').replace(/\/+$/, '') ===
+  (container.internalUrl ?? `http://${container.name}:${SYNC_PORT}`);
 
 /**
  * Starts the automatic install and answers once it is under way. Docker,
@@ -919,6 +941,7 @@ export const startInstall = async (
           image,
           dataPath: options.dataPath,
           network: options.network || 'bridge',
+          internalUrl,
         },
       });
 
@@ -984,8 +1007,12 @@ export const removeInstalledContainer = async (
     await docker.removeContainer(container.id);
   }
 
+  // Turn the integration off only when it used this container
+  const inUse = isInstalledAt(container, settings.nobookendsSync.internalUrl);
   delete settings.nobookendsSync.container;
-  settings.nobookendsSync = { enabled: false };
+  if (inUse) {
+    settings.nobookendsSync = { enabled: false };
+  }
   await settings.save();
 };
 
