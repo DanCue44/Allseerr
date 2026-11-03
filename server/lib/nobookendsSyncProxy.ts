@@ -109,9 +109,12 @@ export const nobookendsSyncProxy = (
   const declaredLength = Number(req.headers['content-length'] ?? 0);
 
   if (declaredLength > MAX_PROXY_BODY_BYTES) {
-    // Read and drop the body, so the client sees the answer
+    // Read and drop the body before answering, so the client is not cut off
+    // while it is still sending and sees the 413
+    req.once('end', () => sendError(res, 413, 'Request body too large.'));
+    req.once('error', () => res.destroy());
     req.resume();
-    return sendError(res, 413, 'Request body too large.');
+    return;
   }
 
   let upstreamUrl: URL;
