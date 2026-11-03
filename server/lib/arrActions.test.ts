@@ -384,12 +384,12 @@ describe('markGrabbedReleases', () => {
 
   it('marks the grabbed release still in the client and lists it first', () => {
     const marked = markGrabbedReleases(
-      [release('OTHER-1'), release('MAM-1165528')],
-      [grab(1, 'DFBAEACB', 'MAM-1165528')],
+      [release('OTHER-1'), release('TRK-1165528')],
+      [grab(1, 'DFBAEACB', 'TRK-1165528')],
       [{ downloadId: 'dfbaeacb', trackedDownloadState: 'importBlocked' }]
     );
 
-    assert.strictEqual(marked[0].guid, 'MAM-1165528');
+    assert.strictEqual(marked[0].guid, 'TRK-1165528');
     assert.deepStrictEqual(marked[0].grabbed, {
       date: '2026-10-31T15:45:02Z',
       state: 'importBlocked',

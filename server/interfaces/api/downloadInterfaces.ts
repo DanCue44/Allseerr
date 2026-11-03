@@ -176,7 +176,7 @@ export interface SeedingTorrent {
   mediaType: SeedingMediaType | null;
   indexer: string | null;
   isPrivateTracker: boolean;
-  // Seeded only to build ratio (Talearr's MyAnonamouse filler), not a library book
+  // Seeded only to build ratio (Talearr's freeleech seeding filler), not a library book
   isFiller: boolean;
   downloadClient: string | null;
   state: SeedingState;

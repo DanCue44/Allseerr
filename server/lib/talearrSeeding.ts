@@ -144,7 +144,7 @@ export const parseTalearrSeeding = (
       privateUnsatisfied:
         asNumber(summary.privateUnsatisfied) ?? counted.privateUnsatisfied,
     },
-    // Talearr sends the tracker account as `mam`
+    // Talearr's field for the private tracker account
     trackerAccount: parseTrackerAccount(raw.mam),
   };
 };

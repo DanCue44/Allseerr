@@ -63,12 +63,12 @@ const messages = defineMessages('components.Allseerr.Downloads.Seeding', {
 
 const REFRESH_MS = 30_000;
 
-const TrackerAccountPanel = ({ mam }: { mam: TrackerAccount }) => {
+const TrackerAccountPanel = ({ account }: { account: TrackerAccount }) => {
   const intl = useIntl();
   const unknown = intl.formatMessage(messages.unknown);
   const number = (value: number | null) =>
     value === null ? unknown : intl.formatNumber(value);
-  const nearLimit = isNearUnsatisfiedLimit(mam);
+  const nearLimit = isNearUnsatisfiedLimit(account);
 
   return (
     <section className="flex flex-col gap-3 rounded-[22px] bg-as-surface p-4 sm:p-[18px]">
@@ -76,10 +76,10 @@ const TrackerAccountPanel = ({ mam }: { mam: TrackerAccount }) => {
         <h3 className="font-display text-lg font-medium text-as-ink">
           {intl.formatMessage(messages.trackerAccount)}
         </h3>
-        {mam.checkedAt && (
+        {account.checkedAt && (
           <span className="text-xs text-as-ink-muted">
             {intl.formatMessage(messages.checkedAt, {
-              time: intl.formatDate(mam.checkedAt, {
+              time: intl.formatDate(account.checkedAt, {
                 month: 'short',
                 day: 'numeric',
                 hour: 'numeric',
@@ -92,10 +92,10 @@ const TrackerAccountPanel = ({ mam }: { mam: TrackerAccount }) => {
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
         <StatTile
           label={intl.formatMessage(messages.userClass)}
-          value={mam.userClass ?? unknown}
+          value={account.userClass ?? unknown}
           tone="bg-as-raised text-as-ink"
           extra={
-            mam.isVip && (
+            account.isVip && (
               <span
                 className={`flex-none rounded-full px-2 py-0.5 font-sans text-[11px] font-bold uppercase tracking-wide ${statusTone.accent}`}
               >
@@ -107,23 +107,23 @@ const TrackerAccountPanel = ({ mam }: { mam: TrackerAccount }) => {
         <StatTile
           label={intl.formatMessage(messages.unsatisfied)}
           value={
-            mam.unsatisfiedLimit !== null
+            account.unsatisfiedLimit !== null
               ? intl.formatMessage(messages.unsatisfiedOf, {
-                  count: number(mam.unsatisfied),
-                  limit: number(mam.unsatisfiedLimit),
+                  count: number(account.unsatisfied),
+                  limit: number(account.unsatisfiedLimit),
                 })
-              : number(mam.unsatisfied)
+              : number(account.unsatisfied)
           }
           tone={nearLimit ? statusTone.warn : 'bg-as-raised text-as-ink'}
         />
         <StatTile
           label={intl.formatMessage(messages.wedges)}
-          value={number(mam.wedges)}
+          value={number(account.wedges)}
           tone="bg-as-raised text-as-ink"
         />
         <StatTile
           label={intl.formatMessage(messages.bonusPoints)}
-          value={number(mam.bonusPoints)}
+          value={number(account.bonusPoints)}
           tone="bg-as-raised text-as-ink"
         />
       </div>
@@ -176,7 +176,7 @@ const SeedingView = ({
   const torrents = sortSeeding(data.torrents);
   const { summary } = data;
 
-  const mam = data.trackerAccount;
+  const account = data.trackerAccount;
   const number = (value: number | null) =>
     value === null
       ? intl.formatMessage(messages.unknown)
@@ -210,13 +210,13 @@ const SeedingView = ({
               }),
             },
           ],
-          mam
+          account
             ? [
                 {
                   key: 'class',
                   text: [
-                    mam.userClass ?? intl.formatMessage(messages.unknown),
-                    mam.isVip ? intl.formatMessage(messages.vip) : '',
+                    account.userClass ?? intl.formatMessage(messages.unknown),
+                    account.isVip ? intl.formatMessage(messages.vip) : '',
                   ]
                     .filter(Boolean)
                     .join(' '),
@@ -225,27 +225,27 @@ const SeedingView = ({
                   key: 'unsatisfied',
                   text: intl.formatMessage(messages.compactUnsatisfied, {
                     count:
-                      mam.unsatisfiedLimit !== null
+                      account.unsatisfiedLimit !== null
                         ? intl.formatMessage(messages.unsatisfiedOf, {
-                            count: number(mam.unsatisfied),
-                            limit: number(mam.unsatisfiedLimit),
+                            count: number(account.unsatisfied),
+                            limit: number(account.unsatisfiedLimit),
                           })
-                        : number(mam.unsatisfied),
+                        : number(account.unsatisfied),
                   }),
-                  tone: isNearUnsatisfiedLimit(mam)
+                  tone: isNearUnsatisfiedLimit(account)
                     ? 'text-[#f0d9a8]'
                     : undefined,
                 },
                 {
                   key: 'wedges',
                   text: intl.formatMessage(messages.compactWedges, {
-                    count: number(mam.wedges),
+                    count: number(account.wedges),
                   }),
                 },
                 {
                   key: 'bonus',
                   text: intl.formatMessage(messages.compactBonus, {
-                    count: number(mam.bonusPoints),
+                    count: number(account.bonusPoints),
                   }),
                 },
               ]
@@ -270,7 +270,7 @@ const SeedingView = ({
         </div>
 
         {data.trackerAccount && (
-          <TrackerAccountPanel mam={data.trackerAccount} />
+          <TrackerAccountPanel account={data.trackerAccount} />
         )}
       </div>
 

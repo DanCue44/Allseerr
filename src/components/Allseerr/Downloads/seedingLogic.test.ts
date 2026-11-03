@@ -132,7 +132,7 @@ describe('getSeedingTone', () => {
 });
 
 describe('isNearUnsatisfiedLimit', () => {
-  const mam = {
+  const account = {
     userClass: 'User',
     isVip: false,
     unsatisfied: 10,
@@ -143,13 +143,13 @@ describe('isNearUnsatisfiedLimit', () => {
   };
 
   it('warns from 80 percent of the limit', () => {
-    assert.strictEqual(isNearUnsatisfiedLimit(mam), false);
+    assert.strictEqual(isNearUnsatisfiedLimit(account), false);
     assert.strictEqual(
-      isNearUnsatisfiedLimit({ ...mam, unsatisfied: 16 }),
+      isNearUnsatisfiedLimit({ ...account, unsatisfied: 16 }),
       true
     );
     assert.strictEqual(
-      isNearUnsatisfiedLimit({ ...mam, unsatisfiedLimit: null }),
+      isNearUnsatisfiedLimit({ ...account, unsatisfiedLimit: null }),
       false
     );
   });

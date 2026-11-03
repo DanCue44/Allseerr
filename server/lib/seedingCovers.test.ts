@@ -12,7 +12,7 @@ const torrent = (overrides: Partial<SeedingTorrent>): SeedingTorrent => ({
   bookTitle: 'Ghostface Killer',
   authorName: 'M Never',
   mediaType: 'audiobook',
-  indexer: 'MyAnonamouse',
+  indexer: 'Private Tracker',
   isPrivateTracker: true,
   isFiller: true,
   downloadClient: 'qBittorrent',

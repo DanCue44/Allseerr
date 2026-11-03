@@ -74,9 +74,9 @@ export const messages = defineMessages(
     comic: 'Comic',
     stateSeedingFiller: 'Seeding (Filler)',
     fillerExplain:
-      'Ratio filler: not in your library. Talearr downloaded this freeleech torrent from MyAnonamouse only to seed it and keep your ratio healthy.',
+      'Ratio filler: not in your library. Talearr downloaded this freeleech torrent from your private tracker only to seed it and keep your ratio healthy.',
     fillerTurnOff:
-      'Turn this off in Talearr: Settings > Indexers > MyAnonamouse > Freeleech Seeding Filler.',
+      'Turn this off in Talearr: Settings > Indexers > your tracker > Freeleech Seeding Filler.',
     fillerOpenSettings: 'Open Talearr indexer settings',
     goalHint:
       'Time left until this torrent reaches the seeding time {indexer} asks for: {target} ({done} done). Removing it before then counts against your account as a hit and run.',
