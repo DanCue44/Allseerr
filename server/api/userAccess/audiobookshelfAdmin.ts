@@ -337,6 +337,62 @@ export class AudiobookshelfAdminAPI implements UserAccessAppClient {
     }
   }
 
+  /**
+   * A read only account for a companion service such as NoBookEnds Sync:
+   * it may download from every library, including explicit content, and
+   * change nothing
+   */
+  public async createServiceAccount(
+    username: string,
+    password: string
+  ): Promise<RemoteAccount> {
+    const data = await this.call(() =>
+      this.axios.post<{ user?: AbsUser }>('/api/users', {
+        username,
+        password,
+        type: 'user',
+        isActive: true,
+        permissions: {
+          download: true,
+          update: false,
+          delete: false,
+          upload: false,
+          createEreader: false,
+          accessAllLibraries: true,
+          accessAllTags: true,
+          accessExplicitContent: true,
+          selectedTagsNotAccessible: false,
+        },
+        librariesAccessible: [],
+        itemTagsSelected: [],
+      })
+    );
+
+    if (!data.user?.id) {
+      throw new UserAccessAppError(
+        'Audiobookshelf did not return the new account.'
+      );
+    }
+
+    return { id: data.user.id, username: data.user.username };
+  }
+
+  /**
+   * The account's own token, which Audiobookshelf before 2.26 uses in place
+   * of API keys, or null when the server does not show it
+   */
+  public async getLegacyUserToken(
+    account: RemoteAccount
+  ): Promise<string | null> {
+    const data = await this.call(() =>
+      this.axios.get<{ token?: string }>(
+        `/api/users/${encodeURIComponent(account.id)}`
+      )
+    );
+
+    return typeof data?.token === 'string' && data.token ? data.token : null;
+  }
+
   public async deleteUserKey(keyId: string): Promise<void> {
     try {
       await this.axios.delete(`/api/api-keys/${encodeURIComponent(keyId)}`);

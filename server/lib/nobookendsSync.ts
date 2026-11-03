@@ -46,13 +46,80 @@ export const getNoBookEndsSyncTarget = (
   return { url, adminToken };
 };
 
+// Where Allseerr serves the Sync server's reader API when it proxies it
+export const NOBOOKENDS_SYNC_PROXY_PATH = '/api/v1/nbe-sync';
+
+/**
+ * Where Allseerr forwards the proxied reader API, or null while the
+ * integration is off, does not proxy, or has no address
+ */
+export const getNoBookEndsSyncProxyTarget = (
+  settings: NoBookEndsSyncSettings = getSettings().nobookendsSync
+): string | null => {
+  if (!settings.enabled || !settings.proxy) {
+    return null;
+  }
+
+  return trimUrl(settings.internalUrl) ?? trimUrl(settings.url) ?? null;
+};
+
+/**
+ * The proxied address under Allseerr's application URL, or undefined while
+ * Allseerr does not proxy the Sync server or has no application URL
+ */
+export const getNoBookEndsSyncProxyUrl = (
+  settings: NoBookEndsSyncSettings = getSettings().nobookendsSync,
+  applicationUrl: string | undefined = getSettings().main.applicationUrl
+): string | undefined => {
+  const base = trimUrl(applicationUrl);
+
+  return getNoBookEndsSyncProxyTarget(settings) && base
+    ? `${base}${NOBOOKENDS_SYNC_PROXY_PATH}`
+    : undefined;
+};
+
 /**
  * The public address the apps open, or undefined while the integration is
- * off or has no address
+ * off or has no address. When Allseerr proxies the Sync server, that is the
+ * proxied address.
  */
 export const getNoBookEndsSyncPublicUrl = (
-  settings: NoBookEndsSyncSettings = getSettings().nobookendsSync
-): string | undefined => (settings.enabled ? trimUrl(settings.url) : undefined);
+  settings: NoBookEndsSyncSettings = getSettings().nobookendsSync,
+  applicationUrl: string | undefined = getSettings().main.applicationUrl
+): string | undefined => {
+  if (!settings.enabled) {
+    return undefined;
+  }
+
+  if (getNoBookEndsSyncProxyTarget(settings)) {
+    return getNoBookEndsSyncProxyUrl(settings, applicationUrl);
+  }
+
+  return trimUrl(settings.url);
+};
+
+/**
+ * What the apps are told about the Sync server: its address when there is
+ * one, and the proxy path when Allseerr serves it, which the app joins to
+ * the Allseerr address it already uses (one without an application URL
+ * set still works that way)
+ */
+export const getNoBookEndsSyncAppInfo = (
+  settings: NoBookEndsSyncSettings = getSettings().nobookendsSync,
+  applicationUrl: string | undefined = getSettings().main.applicationUrl
+): { url?: string; proxyPath?: string } | undefined => {
+  const url = getNoBookEndsSyncPublicUrl(settings, applicationUrl);
+  const proxied = !!getNoBookEndsSyncProxyTarget(settings);
+
+  if (!url && !proxied) {
+    return undefined;
+  }
+
+  return {
+    ...(url ? { url } : {}),
+    ...(proxied ? { proxyPath: NOBOOKENDS_SYNC_PROXY_PATH } : {}),
+  };
+};
 
 export interface NoBookEndsSyncPair {
   audioItemId: string;

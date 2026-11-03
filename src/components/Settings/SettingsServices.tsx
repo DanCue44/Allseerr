@@ -53,6 +53,7 @@ import type {
   SonarrSettings,
 } from '@server/lib/settings';
 import axios from 'axios';
+import Link from 'next/link';
 import { Fragment, useState } from 'react';
 import { useIntl } from 'react-intl';
 import useSWR, { mutate } from 'swr';
@@ -76,6 +77,8 @@ const messages = defineMessages('components.Settings', {
     'Connect a NoBookEnds Sync server, which aligns audiobooks to their EPUBs so the NoBookEnds app can highlight the words as they are read. Books are queued there once both formats are in Audiobookshelf.',
   nobookendsSyncRecommended:
     'Recommended for the full NoBookEnds experience. <SyncLink>How to set it up</SyncLink>',
+  nobookendsSyncSetupPage:
+    'Allseerr can install and connect it for you on the <PageLink>NoBookEnds Sync</PageLink> page.',
   configurenobookendssync: 'Configure NoBookEnds Sync',
   deletenobookendssync: 'Remove NoBookEnds Sync',
   deletenobookendssyncconfirm:
@@ -1179,6 +1182,18 @@ const SettingsServices = () => {
               >
                 {msg}
               </a>
+            ),
+          })}
+        </p>
+        <p className="description">
+          {intl.formatMessage(messages.nobookendsSyncSetupPage, {
+            PageLink: (msg: React.ReactNode) => (
+              <Link
+                href="/settings/nobookends-sync"
+                className="text-white transition duration-300 hover:underline"
+              >
+                {msg}
+              </Link>
             ),
           })}
         </p>

@@ -258,6 +258,40 @@ export interface NoBookEndsSyncSettings {
   internalUrl?: string;
   // The Sync server's ADMIN_TOKEN. Never returned by the API.
   adminToken?: string;
+  // Phones reach the Sync server through Allseerr, under
+  // /api/v1/nbe-sync, so it needs no public address of its own
+  proxy?: boolean;
+  // The read only Audiobookshelf account Allseerr made for the Sync server
+  absAccount?: NoBookEndsSyncAbsAccount;
+  // The container Allseerr installed through the Docker socket
+  container?: NoBookEndsSyncContainer;
+  // The ADMIN_TOKEN made for a Sync server being set up. It becomes
+  // adminToken once that server is connected. Never returned by the API
+  // except in the install instructions.
+  setupAdminToken?: string;
+  // Admins who closed the notice about the NoBookEnds Sync page
+  noticeDismissedBy?: number[];
+}
+
+export interface NoBookEndsSyncAbsAccount {
+  userId: string;
+  username: string;
+  // The API key's id, so it can be removed again. Empty for the token of
+  // Audiobookshelf before 2.26
+  keyId?: string;
+  // ABS_API_KEY for the Sync server. Only shown to admins in the install
+  // instructions, never logged.
+  apiKey: string;
+  // Made by Allseerr, so Allseerr may remove it again
+  created: boolean;
+}
+
+export interface NoBookEndsSyncContainer {
+  id: string;
+  name: string;
+  image: string;
+  dataPath: string;
+  network: string;
 }
 
 export interface DVRSettings {
@@ -792,6 +826,7 @@ class Settings {
         url: '',
         internalUrl: '',
         adminToken: '',
+        proxy: false,
       },
       userAccess: {
         audiobookshelf: {},

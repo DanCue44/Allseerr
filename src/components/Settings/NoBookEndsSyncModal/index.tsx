@@ -32,7 +32,7 @@ const messages = defineMessages('components.Settings.NoBookEndsSyncModal', {
     'Queue books with both an audiobook and an ebook, and offer Listen and Read in the app.',
   url: 'Public URL',
   urlHelp:
-    'Address the NoBookEnds app reaches the Sync server at, such as https://sync.example.com.',
+    'Address the NoBookEnds app reaches the Sync server at, such as https://sync.example.com. Not needed while Allseerr serves it to phones (NoBookEnds Sync settings).',
   internalUrl: 'Internal URL',
   internalUrlHelp:
     'Optional. Address this server reaches it at, when the public one does not work from here, such as http://NoBookEnds-Sync:8000. The public URL is used otherwise.',
@@ -145,8 +145,9 @@ const NoBookEndsSyncModal = ({
     );
 
   const NoBookEndsSyncSettingsSchema = Yup.object().shape({
+    // Served through Allseerr, the apps need no public address
     url: urlRule.when('enabled', {
-      is: true,
+      is: (enabled: boolean) => enabled && !nobookendsSync.proxy,
       then: (schema) =>
         schema.required(intl.formatMessage(messages.validationUrlRequired)),
     }),
@@ -435,7 +436,9 @@ const NoBookEndsSyncModal = ({
               <div className="form-row">
                 <label htmlFor="url" className="text-label">
                   {intl.formatMessage(messages.url)}
-                  {values.enabled && <span className="label-required">*</span>}
+                  {values.enabled && !nobookendsSync.proxy && (
+                    <span className="label-required">*</span>
+                  )}
                   <span className="label-tip">
                     {intl.formatMessage(messages.urlHelp)}
                   </span>
