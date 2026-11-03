@@ -623,6 +623,22 @@ describe('GET /nobookends/status', () => {
     getSettings().nobookendsSync = { enabled: true, url: '' };
     const noUrl = await agent.get('/nobookends/status');
     assert.strictEqual('nobookendsSync' in noUrl.body, false);
+
+    // Served through Allseerr: the proxied address and its path, and only
+    // the path without an application URL
+    getSettings().nobookendsSync = { enabled: true, proxy: true };
+    const proxied = await agent.get('/nobookends/status');
+    assert.deepStrictEqual(proxied.body.nobookendsSync, {
+      url: 'https://allseerr.example.com/api/v1/nbe-sync',
+      proxyPath: '/api/v1/nbe-sync',
+    });
+    assert.doesNotMatch(JSON.stringify(proxied.body), /admin-token|192\.168/);
+
+    getSettings().main.applicationUrl = '';
+    const noAppUrl = await agent.get('/nobookends/status');
+    assert.deepStrictEqual(noAppUrl.body.nobookendsSync, {
+      proxyPath: '/api/v1/nbe-sync',
+    });
   });
 });
 

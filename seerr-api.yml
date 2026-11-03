@@ -64,7 +64,7 @@ tags:
 
       On a Plex server the app can also connect with a Plex token it got itself: `POST /auth/nobookends/plex` answers the same `nobookends://connect#...` app URL. When an admin lists the server in the NoBookEnds directory, people who sign in to NoBookEnds with Plex find this Allseerr without typing its address. The directory checks the address with `GET /nobookends/directory`.
 
-      When an admin set up NoBookEnds Sync, the status carries its public address in `nobookendsSync.url`. The app fetches Listen and Read alignments from there with the user's Audiobookshelf token. Allseerr queues each book on the Sync server, at user priority, once it has both an audiobook and an ebook in Audiobookshelf.
+      When an admin set up NoBookEnds Sync, the status carries its public address in `nobookendsSync.url`, and `nobookendsSync.proxyPath` when Allseerr serves it under its own address (`/api/v1/nbe-sync`). The app fetches Listen and Read alignments from there with the user's Audiobookshelf token. Allseerr queues each book on the Sync server, at user priority, once it has both an audiobook and an ebook in Audiobookshelf.
   - name: other
     description: Endpoints related to other TMDB data
   - name: person
@@ -1398,6 +1398,108 @@ components:
           type: string
           writeOnly: true
           description: The Sync server's ADMIN_TOKEN. Leave it out to keep the saved token, send an empty string to remove it.
+        proxy:
+          type: boolean
+          description: Serve the Sync server's reader API under Allseerr's own address (`/api/v1/nbe-sync`), so phones need no public address for it. The apps are then given the proxied address.
+          example: true
+        proxyPath:
+          type: string
+          readOnly: true
+          example: /api/v1/nbe-sync
+        proxyUrl:
+          type: string
+          nullable: true
+          readOnly: true
+          description: The proxied address under the application URL, null while no application URL is set
+          example: https://allseerr.example.com/api/v1/nbe-sync
+        absAccount:
+          type: object
+          nullable: true
+          readOnly: true
+          description: The read only Audiobookshelf account Allseerr made or reused for the Sync server. Its API key is never returned here.
+          properties:
+            username:
+              type: string
+              example: nobookends-sync
+            created:
+              type: boolean
+              description: Allseerr made the account, so removing it here deletes it in Audiobookshelf
+        container:
+          type: object
+          nullable: true
+          readOnly: true
+          description: The container Allseerr installed through the Docker socket
+          properties:
+            name:
+              type: string
+              example: nobookends-sync
+            image:
+              type: string
+              example: ghcr.io/dancue44/nobookends-sync:cpu
+            dataPath:
+              type: string
+              example: /mnt/user/appdata/nobookends-sync
+            network:
+              type: string
+              example: proxynet
+    NoBookEndsSyncInstallOptions:
+      type: object
+      properties:
+        gpu:
+          type: boolean
+          description: Use the NVIDIA GPU image (`:latest`) instead of the CPU image (`:cpu`)
+        containerName:
+          type: string
+          example: nobookends-sync
+        dataPath:
+          type: string
+          description: Host folder mounted at /data
+          example: /mnt/user/appdata/nobookends-sync
+        network:
+          type: string
+          description: Docker network, empty for Docker's default bridge. On a shared network Allseerr reaches the container by name.
+          example: proxynet
+        absUrl:
+          type: string
+          description: Audiobookshelf as the Sync container reaches it
+          example: http://audiobookshelf:80
+        timezone:
+          type: string
+          example: America/New_York
+        autoWindow:
+          type: string
+          example: 01:00-06:00
+        hostPort:
+          type: integer
+          nullable: true
+          description: Host port to publish 8000 on. Needed on Docker's default bridge or the host network.
+          example: 8000
+        absUsername:
+          type: string
+          description: Audiobookshelf account to make or reuse
+          example: nobookends-sync
+    NoBookEndsSyncInstallState:
+      type: object
+      properties:
+        state:
+          type: string
+          enum: [idle, running, done, failed]
+        step:
+          type: string
+          enum: [pull, create, start, health, connect]
+        progress:
+          type: number
+          description: 0 to 1 while the image downloads
+        error:
+          type: string
+        containerName:
+          type: string
+        image:
+          type: string
+        startedAt:
+          type: number
+        finishedAt:
+          type: number
     BookRelease:
       type: object
       properties:
@@ -6706,6 +6808,270 @@ paths:
           description: NoBookEnds Sync is not enabled or has no admin token
         '502':
           description: The Sync server did not answer
+  /settings/nobookends-sync/status:
+    get:
+      summary: Get the saved NoBookEnds Sync server's status
+      description: Health, and with the saved admin token the status (version, GPU or CPU, background window, queue, running job), of the saved Sync server. Same answer as the test endpoint.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: The Sync server answered
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '404':
+          description: NoBookEnds Sync is not set up
+        '502':
+          description: The Sync server did not answer
+  /settings/nobookends-sync/setup:
+    get:
+      summary: Get what the NoBookEnds Sync setup can offer
+      description: Whether Allseerr can reach Docker (only when an admin mounted the Docker socket; it is never required), whether the NVIDIA runtime is installed, the Docker networks and Allseerr's own one, the default install values, whether Audiobookshelf is connected with an admin key, and the state of an automatic install.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  docker:
+                    type: object
+                    properties:
+                      available:
+                        type: boolean
+                      reason:
+                        type: string
+                        enum: [no_socket, no_permission, no_answer]
+                        description: no_permission means the socket is mounted, but Allseerr's user is not in the group that owns it (add it with --group-add)
+                      socketGroup:
+                        type: integer
+                        nullable: true
+                        description: Group id that owns the socket
+                      processUser:
+                        type: object
+                        nullable: true
+                        properties:
+                          uid:
+                            type: integer
+                          gid:
+                            type: integer
+                      nvidiaRuntime:
+                        type: boolean
+                      networks:
+                        type: array
+                        items:
+                          type: string
+                      ownNetwork:
+                        type: string
+                        nullable: true
+                      ownGateway:
+                        type: string
+                        nullable: true
+                      hostOs:
+                        type: string
+                        nullable: true
+                  absConnected:
+                    type: boolean
+                  defaults:
+                    type: object
+                    additionalProperties: true
+                  install:
+                    $ref: '#/components/schemas/NoBookEndsSyncInstallState'
+  /settings/nobookends-sync/abs-account:
+    post:
+      summary: Make the Audiobookshelf account for NoBookEnds Sync
+      description: Makes a read only Audiobookshelf account (download only, all libraries, explicit content) and an API key acting as it, with the Audiobookshelf admin key from User Access. A saved key that still works is kept. An existing account with that name gets a new key and is otherwise left alone; an admin account is refused. The account is marked as a service account. The key is kept in the settings and never returned here.
+      tags:
+        - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                  example: nobookends-sync
+      responses:
+        '200':
+          description: The account is ready
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoBookEndsSyncSettings'
+        '400':
+          description: Audiobookshelf is not connected with an admin key, or the name is invalid
+        '409':
+          description: An admin account has that name
+    delete:
+      summary: Remove the Audiobookshelf account for NoBookEnds Sync
+      description: Deletes the API key Allseerr made and, when Allseerr also made the account, the account.
+      tags:
+        - settings
+      responses:
+        '204':
+          description: Removed
+  /settings/nobookends-sync/manual:
+    post:
+      summary: Write install instructions for NoBookEnds Sync
+      description: Makes the Audiobookshelf account and an admin token when needed, then answers a Docker Compose file, a docker run command and an Unraid template with every value filled in, secrets included, for the admin to paste. Then connect it with `POST /settings/nobookends-sync/connect`.
+      tags:
+        - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoBookEndsSyncInstallOptions'
+      responses:
+        '200':
+          description: The instructions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  compose:
+                    type: string
+                  dockerRun:
+                    type: string
+                  unraidTemplate:
+                    type: string
+                  unraidTemplatePath:
+                    type: string
+                  suggestedInternalUrl:
+                    type: string
+        '400':
+          description: A value is invalid, or Audiobookshelf is not connected with an admin key
+  /settings/nobookends-sync/install:
+    get:
+      summary: Get the automatic NoBookEnds Sync install state
+      tags:
+        - settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoBookEndsSyncInstallState'
+    post:
+      summary: Install NoBookEnds Sync through Docker
+      description: Needs the Docker socket mounted into Allseerr. Makes the Audiobookshelf account and an admin token, then in the background pulls the image, creates the container (restart policy, data folder, network, environment filled in), starts it, waits for its health check and saves it with the reader API served through Allseerr. Read the progress with the GET.
+      tags:
+        - settings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NoBookEndsSyncInstallOptions'
+      responses:
+        '202':
+          description: The install started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NoBookEndsSyncInstallState'
+        '400':
+          description: Docker cannot be reached, a value is invalid, or Audiobookshelf is not connected
+        '409':
+          description: An install is running, or a container with that name exists
+  /settings/nobookends-sync/container:
+    delete:
+      summary: Remove the NoBookEnds Sync container Allseerr installed
+      description: Removes the container Allseerr installed (only one carrying Allseerr's label) and turns the integration off. The data folder is kept.
+      tags:
+        - settings
+      responses:
+        '204':
+          description: Removed
+        '404':
+          description: Allseerr did not install a container
+        '409':
+          description: The container was not made by Allseerr
+  /settings/nobookends-sync/connect:
+    post:
+      summary: Connect a NoBookEnds Sync server installed by hand
+      description: Checks that the Sync server answers at the address and accepts the admin token from the install instructions, then saves it, enabled, with the reader API served through Allseerr.
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [internalUrl]
+              properties:
+                internalUrl:
+                  type: string
+                  example: http://nobookends-sync:8000
+      responses:
+        '200':
+          description: Connected
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          description: Invalid address, or no instructions were written yet
+        '409':
+          description: The Sync server refused the admin token
+        '502':
+          description: The Sync server did not answer
+  /settings/nobookends-sync/notice:
+    get:
+      summary: Whether to show the NoBookEnds Sync notice
+      description: True until this admin closed the one time notice about the NoBookEnds Sync settings page.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  show:
+                    type: boolean
+  /settings/nobookends-sync/notice/dismiss:
+    post:
+      summary: Close the NoBookEnds Sync notice
+      description: Remembers, for this admin, that the notice was closed.
+      tags:
+        - settings
+      responses:
+        '204':
+          description: Closed
+  /nbe-sync/{path}:
+    get:
+      summary: NoBookEnds Sync reader API, through Allseerr
+      description: |
+        While an admin turned on serving NoBookEnds Sync through Allseerr, `/api/v1/nbe-sync/api/v1/...` is streamed to the Sync server's `/api/v1/...` (health, capabilities, alignments, user data; GET, HEAD, POST and DELETE). The reader's `Authorization: Bearer <Audiobookshelf token>` is passed on untouched and checked by the Sync server with Audiobookshelf. Allseerr's cookies and keys are not passed on, the admin API is not served, bodies over 9 MB answer 413 and a Sync server that does not answer within 60 seconds answers 504. Answers 404 while the proxy is off. The NoBookEnds status carries the address in `nobookendsSync`.
+      tags:
+        - nobookends
+      security: []
+      parameters:
+        - in: path
+          name: path
+          required: true
+          schema:
+            type: string
+          example: api/v1/health
+      responses:
+        '200':
+          description: The Sync server's answer
+        '404':
+          description: The proxy is off, or the path is not served
+        '502':
+          description: The Sync server could not be reached
   /settings/bazarr/test:
     post:
       summary: Test Bazarr configuration
@@ -13014,12 +13380,16 @@ paths:
                     description: Whether book pages offer to open books in NoBookEnds
                   nobookendsSync:
                     type: object
-                    description: The NoBookEnds Sync server to fetch Listen and Read alignments from. Only present while an admin enabled it and set its public URL.
+                    description: The NoBookEnds Sync server to fetch Listen and Read alignments from. Only present while an admin enabled it and it has a public URL or is served through Allseerr.
                     properties:
                       url:
                         type: string
-                        description: Public address of the Sync server, without a trailing slash
+                        description: Address of the Sync server, without a trailing slash. When Allseerr serves it, the proxied address under the application URL (left out when no application URL is set).
                         example: https://sync.example.com
+                      proxyPath:
+                        type: string
+                        description: Set when Allseerr serves the Sync server. Join it to the Allseerr address the app uses to get the Sync server address.
+                        example: /api/v1/nbe-sync
         '403':
           description: Not signed in
   /nobookends/attention:

@@ -4,6 +4,7 @@ import SearchInput from '@app/components/Layout/SearchInput';
 import Sidebar from '@app/components/Layout/Sidebar';
 import UserDropdown from '@app/components/Layout/UserDropdown';
 import UserWarnings from '@app/components/Layout/UserWarnings';
+import NoBookEndsSyncNotice from '@app/components/NoBookEndsSyncNotice';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
 import { useUser } from '@app/hooks/useUser';
@@ -127,6 +128,7 @@ const Layout = ({ children }: LayoutProps) => {
           <div className="mb-6">
             <div className="max-w-8xl mx-auto px-4">
               <UserWarnings />
+              <NoBookEndsSyncNotice />
               {children}
             </div>
           </div>

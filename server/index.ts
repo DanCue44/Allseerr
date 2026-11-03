@@ -8,6 +8,8 @@ import { initI18n } from '@server/i18n';
 import { startJobs } from '@server/job/schedule';
 import { buildWebManifest, getIconFile } from '@server/lib/branding';
 import { getMusicGenrePool } from '@server/lib/musicGenres';
+import { NOBOOKENDS_SYNC_PROXY_PATH } from '@server/lib/nobookendsSync';
+import nobookendsSyncProxy from '@server/lib/nobookendsSyncProxy';
 import notificationManager from '@server/lib/notifications';
 import DiscordAgent from '@server/lib/notifications/agents/discord';
 import EmailAgent from '@server/lib/notifications/agents/email';
@@ -187,6 +189,10 @@ app
     // Signing in to other apps with Allseerr. The provider reads its own
     // request bodies, so it comes before the body parsers and CSRF checks.
     server.use(OIDC_PATH, oidcMiddleware);
+    // The NoBookEnds Sync reader API, streamed to the Sync server. It checks
+    // the reader's Audiobookshelf token itself, so it comes before the body
+    // parsers, sessions and CSRF checks.
+    server.use(NOBOOKENDS_SYNC_PROXY_PATH, nobookendsSyncProxy);
     // Logos are uploaded as base64 inside JSON, so allow a larger body there
     server.use('/api/v1/settings/main/logo', express.json({ limit: '3mb' }));
     server.use(express.json());

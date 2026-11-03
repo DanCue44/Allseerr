@@ -9,7 +9,7 @@ import {
 import type { BookService } from '@server/constants/bookService';
 import { isTalearrService, usesChaptarr } from '@server/constants/bookService';
 import type { User } from '@server/entity/User';
-import { getNoBookEndsSyncPublicUrl } from '@server/lib/nobookendsSync';
+import { getNoBookEndsSyncAppInfo } from '@server/lib/nobookendsSync';
 import { Permission } from '@server/lib/permissions';
 import type { AudiobookshelfSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
@@ -293,8 +293,9 @@ export interface NoBookEndsStatus {
   };
   openInNoBookEnds: boolean;
   // The NoBookEnds Sync server the apps fetch Listen and Read alignments
-  // from, only while it is enabled and has a public address
-  nobookendsSync?: { url: string };
+  // from, only while it is enabled and reachable. proxyPath is set when
+  // Allseerr serves it: the app joins it to the Allseerr address it uses.
+  nobookendsSync?: { url?: string; proxyPath?: string };
 }
 
 /**
@@ -308,7 +309,10 @@ export const getNoBookEndsStatus = async (
   const audiobookshelfUrl = trimUrl(audiobookshelf.url) ?? null;
   const booksEnabled = !!settings.bookService;
   const canManageRequests = user.hasPermission(Permission.MANAGE_REQUESTS);
-  const syncUrl = getNoBookEndsSyncPublicUrl(settings.nobookendsSync);
+  const syncInfo = getNoBookEndsSyncAppInfo(
+    settings.nobookendsSync,
+    settings.main.applicationUrl
+  );
   const audiobookVersions = getAudiobookVersionsMode(
     settings.bookService,
     settings.main.audiobookVersions
@@ -364,6 +368,6 @@ export const getNoBookEndsStatus = async (
       itemLinks: !!audiobookshelfUrl && !!audiobookshelf.apiKey,
     },
     openInNoBookEnds: isNoBookEndsLinkEnabled(audiobookshelf),
-    ...(syncUrl ? { nobookendsSync: { url: syncUrl } } : {}),
+    ...(syncInfo ? { nobookendsSync: syncInfo } : {}),
   };
 };

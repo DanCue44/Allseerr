@@ -5,6 +5,10 @@ import type {
 import type { AudiobookVersionsMode } from '@server/constants/audiobookVersion';
 import type { BookLanguage } from '@server/constants/bookLanguages';
 import type { BookFormatChoice } from '@server/constants/media';
+import type {
+  DockerStatus,
+  InstallState,
+} from '@server/lib/nobookendsSyncSetup';
 import type { AudiobookshelfSettings, BookService } from '@server/lib/settings';
 import type { DnsEntries, DnsStats } from 'dns-caching';
 import type { PaginatedResponse } from './common';
@@ -117,6 +121,47 @@ export interface NoBookEndsSyncSettingsResponse {
   url: string;
   internalUrl: string;
   adminTokenSet: boolean;
+  // Phones reach the Sync server through Allseerr
+  proxy: boolean;
+  proxyPath: string;
+  // The proxied address under the application URL, null without one
+  proxyUrl: string | null;
+  // The read only Audiobookshelf account Allseerr made or reused
+  absAccount: { username: string; created: boolean } | null;
+  // The container Allseerr installed
+  container: {
+    name: string;
+    image: string;
+    dataPath: string;
+    network: string;
+  } | null;
+}
+
+export interface NoBookEndsSyncSetupResponse {
+  docker: DockerStatus;
+  // Allseerr has an Audiobookshelf admin key to make the account with
+  absConnected: boolean;
+  defaults: {
+    gpu: boolean;
+    containerName: string;
+    dataPath: string;
+    network: string;
+    absUrl: string;
+    timezone: string;
+    autoWindow: string;
+    absUsername: string;
+    images: { gpu: string; cpu: string };
+  };
+  install: InstallState;
+}
+
+export interface NoBookEndsSyncManualResponse {
+  compose: string;
+  dockerRun: string;
+  unraidTemplate: string;
+  unraidTemplatePath: string;
+  // Where Allseerr likely reaches it, empty when it cannot be guessed
+  suggestedInternalUrl: string;
 }
 
 export interface NoBookEndsSyncTestResponse extends NoBookEndsSyncHealth {

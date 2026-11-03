@@ -169,6 +169,11 @@ describe('/settings/nobookends-sync', () => {
       url: SYNC_URL,
       internalUrl: INTERNAL_URL,
       adminTokenSet: true,
+      proxy: false,
+      proxyPath: '/api/v1/nbe-sync',
+      proxyUrl: null,
+      absAccount: null,
+      container: null,
     });
     assert.doesNotMatch(JSON.stringify(res.body), new RegExp(TOKEN));
   });
@@ -189,6 +194,11 @@ describe('/settings/nobookends-sync', () => {
       url: SYNC_URL,
       internalUrl: INTERNAL_URL,
       adminTokenSet: true,
+      proxy: false,
+      proxyPath: '/api/v1/nbe-sync',
+      proxyUrl: null,
+      absAccount: null,
+      container: null,
     });
     assert.strictEqual(getSettings().nobookendsSync.adminToken, TOKEN);
 
