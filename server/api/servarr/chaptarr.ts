@@ -670,20 +670,59 @@ class ChaptarrLibraryError extends Error {}
 
 /**
  * The books a scan read of one part of a library (monitored or downloaded)
- * before it stopped, by server and part. A scan that stops on a slow page
- * leaves them for the next scan to go on from.
+ * before it stopped. A scan that stops on a slow page leaves them for the
+ * next scan to go on from.
  */
-interface LibraryProgress {
+export interface LibraryProgress {
   books: ChaptarrBook[];
   done: boolean;
   // When the first of the books was read
   savedAt: number;
 }
 
-const libraryProgress = new Map<string, LibraryProgress>();
+/**
+ * Keeps what a library read got through, by server and part, a page at a
+ * time, so a read that stops (or a restart) loses at most one page
+ */
+export interface LibraryProgressStore {
+  // What an earlier read with this key left, if anything
+  load(key: string): Promise<LibraryProgress | undefined>;
+  // A read with this key starts from the first page
+  start(key: string, savedAt: number): Promise<void>;
+  // Books a read with this key went on to read
+  add(key: string, books: ChaptarrBook[]): Promise<void>;
+  // A read with this key reached the end of the library
+  finish(key: string): Promise<void>;
+  clear(key: string): Promise<void>;
+}
 
-// Forgets what earlier scans read, for tests
-export const clearLibraryProgress = (): void => libraryProgress.clear();
+// Keeps library progress in memory only, for tests
+export const createMemoryLibraryProgress = (): LibraryProgressStore => {
+  const saved = new Map<string, LibraryProgress>();
+
+  return {
+    load: async (key) => {
+      const progress = saved.get(key);
+      return progress && { ...progress, books: [...progress.books] };
+    },
+    start: async (key, savedAt) => {
+      saved.set(key, { books: [], done: false, savedAt });
+    },
+    add: async (key, books) => {
+      saved.get(key)?.books.push(...books);
+    },
+    finish: async (key) => {
+      const progress = saved.get(key);
+
+      if (progress) {
+        progress.done = true;
+      }
+    },
+    clear: async (key) => {
+      saved.delete(key);
+    },
+  };
+};
 
 const libraryBook = (book: ChaptarrBook): ChaptarrBook => {
   const kept = { ...book };
@@ -1243,7 +1282,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
    */
   public async getActiveBooks(
     onPage?: ChaptarrLibraryPageListener,
-    { resume = false }: { resume?: boolean } = {}
+    { progress }: { progress?: LibraryProgressStore } = {}
   ): Promise<ChaptarrBook[]> {
     try {
       const { isChaptarr } = await this.getCapabilities();
@@ -1267,7 +1306,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         for (const book of await this.readLibrary(
           filter,
           onPage,
-          resume ? resumeKeys[index] : undefined
+          progress ? { store: progress, key: resumeKeys[index] } : undefined
         )) {
           if (book.id) {
             books.set(book.id, book);
@@ -1275,7 +1314,9 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         }
       }
 
-      resumeKeys.forEach((key) => libraryProgress.delete(key));
+      for (const key of resumeKeys) {
+        await progress?.clear(key);
+      }
 
       return [...books.values()];
     } catch (e) {
@@ -1291,16 +1332,16 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
   /**
    * Reads the library a page at a time, in the order books were added so
-   * a book added meanwhile does not shift the pages still to read. With a
-   * resume key, a read that stops keeps what it read, and the next read
-   * with that key goes on from there.
+   * a book added meanwhile does not shift the pages still to read. With
+   * progress, each page read is kept, and the next read with the same key
+   * goes on from where this one stopped.
    */
   private async readLibrary(
     filter: Record<string, boolean>,
     onPage?: ChaptarrLibraryPageListener,
-    resumeKey?: string
+    progress?: { store: LibraryProgressStore; key: string }
   ): Promise<ChaptarrBook[]> {
-    const saved = resumeKey ? libraryProgress.get(resumeKey) : undefined;
+    const saved = await progress?.store.load(progress.key);
     const earlier =
       saved && Date.now() - saved.savedAt < LIBRARY_PROGRESS_MAX_AGE_MS
         ? saved
@@ -1312,6 +1353,11 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
     const books = earlier?.books ?? [];
     const savedAt = earlier?.savedAt ?? Date.now();
+
+    if (progress && !earlier) {
+      await progress.store.start(progress.key, savedAt);
+    }
+
     const seen = new Set(books.map((book) => book.id));
     // A book removed since moves the rest back, so the last page read
     // before is read again and its repeats skipped
@@ -1331,25 +1377,25 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           resumedBooks
         );
       } catch (e) {
-        if (resumeKey) {
-          libraryProgress.set(resumeKey, { books, done: false, savedAt });
-
-          if (e instanceof ChaptarrLibraryError) {
-            e.message += '. The next scan goes on from this page';
-          }
+        if (progress && e instanceof ChaptarrLibraryError) {
+          e.message += '. The next scan goes on from this page';
         }
         throw e;
       }
 
       resumedBooks = undefined;
       const records = data.records ?? [];
+      const added: ChaptarrBook[] = [];
 
       for (const record of records) {
         if (record.id === undefined || !seen.has(record.id)) {
           seen.add(record.id);
-          books.push(libraryBook(record));
+          added.push(libraryBook(record));
         }
       }
+
+      books.push(...added);
+      await progress?.store.add(progress.key, added);
 
       offset += records.length;
       pages = Math.max(
@@ -1362,9 +1408,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       }
     }
 
-    if (resumeKey) {
-      libraryProgress.set(resumeKey, { books, done: true, savedAt });
-    }
+    await progress?.store.finish(progress.key);
 
     return books;
   }

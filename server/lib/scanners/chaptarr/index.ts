@@ -31,6 +31,7 @@ import type {
 } from '@server/lib/scanners/baseScanner';
 import BaseScanner from '@server/lib/scanners/baseScanner';
 import { syncChaptarrAvailability } from '@server/lib/scanners/chaptarr/availability';
+import { createDiskLibraryProgress } from '@server/lib/scanners/chaptarr/libraryProgress';
 import type {
   MatchMemory,
   MatchProgress,
@@ -250,7 +251,7 @@ class ChaptarrScanner
           ? await this.getAwaitedBooks(chaptarr, serverIds)
           : await chaptarr.getActiveBooks(
               (event) => this.logLibraryPage(event),
-              { resume: true }
+              { progress: createDiskLibraryProgress() }
             );
 
         if (!this.isRecentOnly) {

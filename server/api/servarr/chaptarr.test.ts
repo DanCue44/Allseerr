@@ -9,7 +9,7 @@ import type {
 } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI, {
   chaptarrRetryDelays,
-  clearLibraryProgress,
+  createMemoryLibraryProgress,
   isAuthorBusyError,
   isMonitoredFor,
   parseTalearrAddRecording,
@@ -449,7 +449,7 @@ describe('ChaptarrAPI library', () => {
   it('goes on from where a scan that stopped left off', async () => {
     const saved = chaptarrRetryDelays.libraryPageMs;
     chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
-    clearLibraryProgress();
+    const progress = createMemoryLibraryProgress();
     let slow = true;
     const { chaptarr, asked } = libraryApi((params) => {
       const offset = params.offset as number;
@@ -474,7 +474,7 @@ describe('ChaptarrAPI library', () => {
 
     try {
       await assert.rejects(
-        chaptarr.getActiveBooks(undefined, { resume: true }),
+        chaptarr.getActiveBooks(undefined, { progress }),
         /did not answer page 3 of 3 .*The next scan goes on from this page/
       );
 
@@ -482,7 +482,7 @@ describe('ChaptarrAPI library', () => {
       asked.length = 0;
       const books = await chaptarr.getActiveBooks(
         (event) => events.push(event),
-        { resume: true }
+        { progress }
       );
 
       assert.strictEqual(books.length, 1200);
@@ -498,21 +498,19 @@ describe('ChaptarrAPI library', () => {
 
       // A scan that finished leaves nothing for the next one
       asked.length = 0;
-      await chaptarr.getActiveBooks(undefined, { resume: true });
+      await chaptarr.getActiveBooks(undefined, { progress });
       assert.strictEqual(
         asked.filter((params) => params?.monitored)[0].offset,
         0
       );
     } finally {
       chaptarrRetryDelays.libraryPageMs = saved;
-      clearLibraryProgress();
     }
   });
 
   it('starts over without resume', async () => {
     const saved = chaptarrRetryDelays.libraryPageMs;
     chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
-    clearLibraryProgress();
     const { chaptarr, asked } = libraryApi((params) => {
       if ((params.offset as number) === 500) {
         throw timeout();
