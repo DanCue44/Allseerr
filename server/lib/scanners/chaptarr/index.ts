@@ -248,8 +248,9 @@ class ChaptarrScanner
         const readStarted = Date.now();
         this.items = this.isRecentOnly
           ? await this.getAwaitedBooks(chaptarr, serverIds)
-          : await chaptarr.getActiveBooks((event) =>
-              this.logLibraryPage(event)
+          : await chaptarr.getActiveBooks(
+              (event) => this.logLibraryPage(event),
+              { resume: true }
             );
 
         if (!this.isRecentOnly) {
@@ -318,6 +319,14 @@ class ChaptarrScanner
     const page = `page ${event.page}${event.pages ? ` of ${event.pages}` : ''}`;
     const seconds = Math.round(event.ms / 1000);
 
+    if (event.resumedBooks && event.attempt === 1) {
+      this.log(
+        `Going on from ${page} of the ${event.books} books, where the last ` +
+          `scan stopped (${event.resumedBooks} books already read)`,
+        'info'
+      );
+    }
+
     if (!event.error) {
       this.log(
         `Read ${page} of the ${event.books} books (${event.records} books) ` +
@@ -335,7 +344,10 @@ class ChaptarrScanner
       : 'Chaptarr was not running any task it reports';
     const next =
       event.retryInMs !== undefined
-        ? `trying again in ${Math.round(event.retryInMs / 1000)} s`
+        ? `trying again in ${Math.round(event.retryInMs / 1000)} s` +
+          (event.retryPageSize
+            ? ` with ${event.retryPageSize} books at a time`
+            : '')
         : 'no tries left';
 
     this.log(

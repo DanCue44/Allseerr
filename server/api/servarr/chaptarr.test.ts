@@ -9,6 +9,7 @@ import type {
 } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI, {
   chaptarrRetryDelays,
+  clearLibraryProgress,
   isAuthorBusyError,
   isMonitoredFor,
   parseTalearrAddRecording,
@@ -443,6 +444,178 @@ describe('ChaptarrAPI library', () => {
     };
 
     assert.deepStrictEqual(await chaptarr.getRunningCommands(), []);
+  });
+
+  it('goes on from where a scan that stopped left off', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    clearLibraryProgress();
+    let slow = true;
+    const { chaptarr, asked } = libraryApi((params) => {
+      const offset = params.offset as number;
+
+      if (!params.monitored) {
+        return { records: [], totalCount: 0 };
+      }
+
+      if (offset === 1000 && slow) {
+        throw timeout();
+      }
+
+      return {
+        records: Array.from(
+          { length: offset < 1000 ? 500 : 200 },
+          (_, index) => ({ id: offset + index + 1 })
+        ),
+        totalCount: 1200,
+      };
+    });
+    const events: ChaptarrLibraryPageEvent[] = [];
+
+    try {
+      await assert.rejects(
+        chaptarr.getActiveBooks(undefined, { resume: true }),
+        /did not answer page 3 of 3 .*The next scan goes on from this page/
+      );
+
+      slow = false;
+      asked.length = 0;
+      const books = await chaptarr.getActiveBooks(
+        (event) => events.push(event),
+        { resume: true }
+      );
+
+      assert.strictEqual(books.length, 1200);
+      assert.strictEqual(new Set(books.map((book) => book.id)).size, 1200);
+      // The last page read before is read again, then the rest
+      assert.deepStrictEqual(
+        asked.filter((params) => params?.monitored).map((p) => p.offset),
+        [500, 1000]
+      );
+      assert.strictEqual(events[0].resumedBooks, 1000);
+      assert.strictEqual(events[0].page, 2);
+      assert.strictEqual(events[1].resumedBooks, undefined);
+
+      // A scan that finished leaves nothing for the next one
+      asked.length = 0;
+      await chaptarr.getActiveBooks(undefined, { resume: true });
+      assert.strictEqual(
+        asked.filter((params) => params?.monitored)[0].offset,
+        0
+      );
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+      clearLibraryProgress();
+    }
+  });
+
+  it('starts over without resume', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    clearLibraryProgress();
+    const { chaptarr, asked } = libraryApi((params) => {
+      if ((params.offset as number) === 500) {
+        throw timeout();
+      }
+
+      return {
+        records: Array.from({ length: 500 }, (_, index) => ({
+          id: (params.offset as number) + index + 1,
+        })),
+        totalCount: 1000,
+      };
+    });
+
+    try {
+      await assert.rejects(chaptarr.getActiveBooks(), /did not answer page 2/);
+      asked.length = 0;
+      await assert.rejects(chaptarr.getActiveBooks(), /did not answer page 2/);
+      assert.strictEqual(asked[0].offset, 0);
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+    }
+  });
+
+  it('asks for fewer books after a page took too long', async () => {
+    const saved = chaptarrRetryDelays.libraryPageMs;
+    chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
+    let failures = 3;
+    const { chaptarr, asked } = libraryApi((params) => {
+      // The list of what Chaptarr is running
+      if (!params) {
+        return [];
+      }
+
+      if (failures > 0) {
+        failures--;
+        throw timeout();
+      }
+
+      return {
+        records: Array.from(
+          {
+            length: Math.min(
+              params.pageSize as number,
+              300 - (params.offset as number)
+            ),
+          },
+          (_, index) => ({ id: (params.offset as number) + index + 1 })
+        ),
+        totalCount: 300,
+      };
+    });
+    const events: ChaptarrLibraryPageEvent[] = [];
+
+    try {
+      const books = await chaptarr.getActiveBooks((event) =>
+        events.push(event)
+      );
+
+      assert.strictEqual(books.length, 300);
+      assert.deepStrictEqual(
+        asked
+          .filter((params) => params?.monitored)
+          .map((params) => [params.offset, params.pageSize]),
+        [
+          [0, 500],
+          [0, 250],
+          [0, 125],
+          [0, 125],
+          [125, 500],
+        ]
+      );
+      assert.deepStrictEqual(
+        events.slice(0, 3).map((event) => event.retryPageSize),
+        [250, 125, undefined]
+      );
+    } finally {
+      chaptarrRetryDelays.libraryPageMs = saved;
+    }
+  });
+
+  it('leaves out the fields a scan does not use', async () => {
+    const { chaptarr } = libraryApi(() => ({
+      records: [
+        {
+          id: 1,
+          title: 'Kept',
+          images: [{ url: 'cover.jpg' }],
+          genres: ['Fantasy'],
+          overview: 'A long description',
+          links: [],
+          statistics: { bookFileCount: 1 },
+        },
+      ],
+      totalCount: 1,
+    }));
+
+    const [book] = await chaptarr.getAllBooks();
+
+    assert.deepStrictEqual(book, {
+      id: 1,
+      title: 'Kept',
+      statistics: { bookFileCount: 1 },
+    });
   });
 
   it('does not ask again for a page Chaptarr turned down', async () => {

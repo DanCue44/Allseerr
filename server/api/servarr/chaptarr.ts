@@ -610,10 +610,19 @@ export const isAuthorBusyError = (e: {
   e?.response?.status === 400 &&
   /root folder/i.test(JSON.stringify(e.response.data ?? ''));
 const LIBRARY_PAGE_SIZE = 500;
+// A page that took too long is asked for again in halves down to this size
+const LIBRARY_MIN_PAGE_SIZE = 125;
 // Downloads read from the queue at once, more than a queue holds
 const QUEUE_PAGE_SIZE = 200;
-// A library larger than this is not read further
-const MAX_LIBRARY_BOOKS = 100_000;
+// A library larger than this is not read further. Each book is kept without
+// the fields a scan does not use (libraryBook), so a library this large
+// still fits in memory.
+const MAX_LIBRARY_BOOKS = 500_000;
+// Fields of a library book nothing that reads the library uses
+const UNUSED_LIBRARY_FIELDS = ['images', 'genres', 'overview', 'links'];
+// How long the books a scan read before it stopped are kept for the next
+// scan to go on from. Older ones are out of date and the read starts over.
+const LIBRARY_PROGRESS_MAX_AGE_MS = 36 * 60 * 60 * 1000;
 // A page of a large library can take Chaptarr a while to build (it works
 // out statistics for the whole library first), and it is slower still while
 // Chaptarr refreshes books at the same time. A scan runs in the background,
@@ -638,11 +647,15 @@ export interface ChaptarrLibraryPageEvent {
   attempts: number;
   ms: number;
   records?: number;
+  // Books read by an earlier scan that stopped, which this one goes on from
+  resumedBooks?: number;
   error?: string;
   // Commands Chaptarr was running or had queued when the try failed
   busyWith?: string[];
   // How long the scan waits before the next try, when there is one
   retryInMs?: number;
+  // How many books the next try asks for, when fewer than this one
+  retryPageSize?: number;
 }
 
 export type ChaptarrLibraryPageListener = (
@@ -654,6 +667,33 @@ const formatSeconds = (ms: number): string =>
 
 // Says which page of the library could not be read, as it is
 class ChaptarrLibraryError extends Error {}
+
+/**
+ * The books a scan read of one part of a library (monitored or downloaded)
+ * before it stopped, by server and part. A scan that stops on a slow page
+ * leaves them for the next scan to go on from.
+ */
+interface LibraryProgress {
+  books: ChaptarrBook[];
+  done: boolean;
+  // When the first of the books was read
+  savedAt: number;
+}
+
+const libraryProgress = new Map<string, LibraryProgress>();
+
+// Forgets what earlier scans read, for tests
+export const clearLibraryProgress = (): void => libraryProgress.clear();
+
+const libraryBook = (book: ChaptarrBook): ChaptarrBook => {
+  const kept = { ...book };
+
+  for (const field of UNUSED_LIBRARY_FIELDS) {
+    delete kept[field];
+  }
+
+  return kept;
+};
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -1202,7 +1242,8 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
    * filter the library list all of it.
    */
   public async getActiveBooks(
-    onPage?: ChaptarrLibraryPageListener
+    onPage?: ChaptarrLibraryPageListener,
+    { resume = false }: { resume?: boolean } = {}
   ): Promise<ChaptarrBook[]> {
     try {
       const { isChaptarr } = await this.getCapabilities();
@@ -1218,13 +1259,23 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         { downloaded: true },
       ];
 
-      for (const filter of filters) {
-        for (const book of await this.readLibrary(filter, onPage)) {
+      const resumeKeys = filters.map(
+        (filter) => `${this.axios.defaults.baseURL}|${Object.keys(filter)}`
+      );
+
+      for (const [index, filter] of filters.entries()) {
+        for (const book of await this.readLibrary(
+          filter,
+          onPage,
+          resume ? resumeKeys[index] : undefined
+        )) {
           if (book.id) {
             books.set(book.id, book);
           }
         }
       }
+
+      resumeKeys.forEach((key) => libraryProgress.delete(key));
 
       return [...books.values()];
     } catch (e) {
@@ -1240,32 +1291,79 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
   /**
    * Reads the library a page at a time, in the order books were added so
-   * a book added meanwhile does not shift the pages still to read
+   * a book added meanwhile does not shift the pages still to read. With a
+   * resume key, a read that stops keeps what it read, and the next read
+   * with that key goes on from there.
    */
   private async readLibrary(
     filter: Record<string, boolean>,
-    onPage?: ChaptarrLibraryPageListener
+    onPage?: ChaptarrLibraryPageListener,
+    resumeKey?: string
   ): Promise<ChaptarrBook[]> {
-    const books: ChaptarrBook[] = [];
+    const saved = resumeKey ? libraryProgress.get(resumeKey) : undefined;
+    const earlier =
+      saved && Date.now() - saved.savedAt < LIBRARY_PROGRESS_MAX_AGE_MS
+        ? saved
+        : undefined;
+
+    if (earlier?.done) {
+      return earlier.books;
+    }
+
+    const books = earlier?.books ?? [];
+    const savedAt = earlier?.savedAt ?? Date.now();
+    const seen = new Set(books.map((book) => book.id));
+    // A book removed since moves the rest back, so the last page read
+    // before is read again and its repeats skipped
+    let offset = Math.max(0, books.length - LIBRARY_PAGE_SIZE);
+    let resumedBooks = books.length || undefined;
     let pages: number | undefined;
 
-    for (let page = 1; books.length < MAX_LIBRARY_BOOKS; page++) {
-      const data = await this.getLibraryPage(
-        { offset: books.length, ...filter },
-        page,
-        pages,
-        onPage
-      );
+    while (books.length < MAX_LIBRARY_BOOKS) {
+      let data: PagedBooks;
+
+      try {
+        data = await this.getLibraryPage(
+          { offset, ...filter },
+          Math.floor(offset / LIBRARY_PAGE_SIZE) + 1,
+          pages,
+          onPage,
+          resumedBooks
+        );
+      } catch (e) {
+        if (resumeKey) {
+          libraryProgress.set(resumeKey, { books, done: false, savedAt });
+
+          if (e instanceof ChaptarrLibraryError) {
+            e.message += '. The next scan goes on from this page';
+          }
+        }
+        throw e;
+      }
+
+      resumedBooks = undefined;
       const records = data.records ?? [];
-      books.push(...records);
+
+      for (const record of records) {
+        if (record.id === undefined || !seen.has(record.id)) {
+          seen.add(record.id);
+          books.push(libraryBook(record));
+        }
+      }
+
+      offset += records.length;
       pages = Math.max(
         1,
         Math.ceil((data.totalCount ?? 0) / LIBRARY_PAGE_SIZE)
       );
 
-      if (records.length === 0 || books.length >= (data.totalCount ?? 0)) {
+      if (records.length === 0 || offset >= (data.totalCount ?? 0)) {
         break;
       }
+    }
+
+    if (resumeKey) {
+      libraryProgress.set(resumeKey, { books, done: true, savedAt });
     }
 
     return books;
@@ -1275,7 +1373,8 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
     params: Record<string, unknown>,
     page: number,
     pages?: number,
-    onPage?: ChaptarrLibraryPageListener
+    onPage?: ChaptarrLibraryPageListener,
+    resumedBooks?: number
   ): Promise<PagedBooks> {
     const which = `page ${page}${pages ? ` of ${pages}` : ''}`;
     const books = params.monitored
@@ -1284,6 +1383,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         ? 'downloaded'
         : 'all';
     const attempts = chaptarrRetryDelays.libraryPageMs.length + 1;
+    let pageSize = LIBRARY_PAGE_SIZE;
 
     for (let attempt = 0; ; attempt++) {
       const started = Date.now();
@@ -1291,7 +1391,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       try {
         const response = await this.axios.get<PagedBooks>('/book/paged', {
           params: {
-            pageSize: LIBRARY_PAGE_SIZE,
+            pageSize,
             includeUnmonitored: true,
             sortKey: 'id',
             ...params,
@@ -1307,6 +1407,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           attempts,
           ms: Date.now() - started,
           records: response.data?.records?.length ?? 0,
+          resumedBooks,
         });
 
         return response.data;
@@ -1319,6 +1420,11 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           (status !== undefined && status < 500 && status !== 429);
         const timedOut =
           e.code === 'ECONNABORTED' || /timeout/i.test(e.message ?? '');
+        // Fewer books are less for Chaptarr to put together while it is busy
+        const nextPageSize =
+          timedOut && !final
+            ? Math.max(LIBRARY_MIN_PAGE_SIZE, pageSize / 2)
+            : pageSize;
 
         if (onPage) {
           onPage({
@@ -1335,6 +1441,8 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
             retryInMs: final
               ? undefined
               : chaptarrRetryDelays.libraryPageMs[attempt],
+            retryPageSize: nextPageSize < pageSize ? nextPageSize : undefined,
+            resumedBooks,
           });
         }
 
@@ -1351,6 +1459,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           );
         }
 
+        pageSize = nextPageSize;
         await sleep(chaptarrRetryDelays.libraryPageMs[attempt]);
       }
     }
