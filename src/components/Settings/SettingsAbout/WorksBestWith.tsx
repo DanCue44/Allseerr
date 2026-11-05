@@ -7,8 +7,7 @@ const messages = defineMessages('components.Settings.SettingsAbout', {
   worksbestwith: 'Works best with',
   nobookendsdescription:
     'Listen and read your Audiobookshelf library on iPhone and Android.',
-  talearrdescription:
-    'Finds and organizes your ebooks and audiobooks. Coming soon.',
+  talearrdescription: 'Finds and organizes your ebooks and audiobooks.',
 });
 
 interface Companion {

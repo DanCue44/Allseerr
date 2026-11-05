@@ -12,6 +12,7 @@ import defineMessages from '@app/utils/defineMessages';
 import {
   ALLSEERR_BRANCH,
   ALLSEERR_REPO_URL,
+  ALLSEERR_TIP_URL,
   SEERR_REPO_URL,
 } from '@server/constants/repository';
 import type {
@@ -34,6 +35,9 @@ const messages = defineMessages('components.Settings.SettingsAbout', {
   appDataPath: 'Data Directory',
   documentation: 'Documentation',
   credits: 'Credits',
+  supportallseerr: 'Support Allseerr',
+  leaveatip: 'Leave a Tip',
+  tipdescription: 'Any amount, one time. Tips do not unlock anything.',
   basedonseerr: 'Based on Seerr',
   outofdate: 'Out of Date',
   uptodate: 'Up to Date',
@@ -166,6 +170,20 @@ const SettingsAbout = () => {
           </List.Item>
           <List.Item title={intl.formatMessage(messages.githubdiscussions)}>
             {link(`${ALLSEERR_REPO_URL}/discussions`)}
+          </List.Item>
+        </List>
+      </div>
+      <div className="section">
+        <List title={intl.formatMessage(messages.supportallseerr)}>
+          <List.Item title={intl.formatMessage(messages.leaveatip)}>
+            <a
+              href={ALLSEERR_TIP_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="text-indigo-500 transition duration-300 hover:underline"
+            >
+              {intl.formatMessage(messages.tipdescription)}
+            </a>
           </List.Item>
         </List>
       </div>

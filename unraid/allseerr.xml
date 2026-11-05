@@ -19,8 +19,8 @@
   <ExtraParams>--init</ExtraParams>
   <PostArgs/>
   <CPUset/>
-  <DonateText/>
-  <DonateLink/>
+  <DonateText>Leave a tip for Allseerr</DonateText>
+  <DonateLink>https://buy.stripe.com/14A9AU14dd2P6HkcS58k800</DonateLink>
   <Requires>The appdata folder must be writable by UID 1000 (chown -R 1000:1000 /mnt/user/appdata/allseerr). The image ignores PUID and PGID.</Requires>
   <Config Name="WebUI Port" Target="5055" Default="5055" Mode="tcp" Description="Port for the Allseerr web interface" Type="Port" Display="always" Required="true" Mask="false">5055</Config>
   <Config Name="Config" Target="/app/config" Default="/mnt/user/appdata/allseerr" Mode="rw" Description="Settings, database and logs. Must be writable by UID 1000." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/allseerr</Config>
