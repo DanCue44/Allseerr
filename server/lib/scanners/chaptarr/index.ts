@@ -6,6 +6,7 @@ import type {
   ChaptarrMediaType,
 } from '@server/api/servarr/chaptarr';
 import ChaptarrAPI, {
+  describeLibraryBooks,
   getBookFileCount,
   isMonitoredFor,
 } from '@server/api/servarr/chaptarr';
@@ -317,12 +318,17 @@ class ChaptarrScanner
    * try that failed, what Chaptarr was busy with
    */
   private logLibraryPage(event: ChaptarrLibraryPageEvent): void {
-    const page = `page ${event.page}${event.pages ? ` of ${event.pages}` : ''}`;
+    const asked = describeLibraryBooks(
+      event.firstBook,
+      event.pageSize,
+      event.totalBooks
+    );
     const seconds = Math.round(event.ms / 1000);
 
     if (event.resumedBooks && event.attempt === 1) {
       this.log(
-        `Going on from ${page} of the ${event.books} books, where the last ` +
+        `Going on from book ${event.firstBook.toLocaleString('en-US')} of ` +
+          `the ${event.books} books, where the last ` +
           `scan stopped (${event.resumedBooks} books already read)`,
         'info'
       );
@@ -330,8 +336,11 @@ class ChaptarrScanner
 
     if (!event.error) {
       this.log(
-        `Read ${page} of the ${event.books} books (${event.records} books) ` +
-          `in ${seconds} s` +
+        `Read ${event.books} ${describeLibraryBooks(
+          event.firstBook,
+          event.records ?? 0,
+          event.totalBooks
+        )} (${event.records} books) in ${seconds} s` +
           (event.attempt > 1
             ? `, try ${event.attempt} of ${event.attempts}`
             : ''),
@@ -352,7 +361,7 @@ class ChaptarrScanner
         : 'no tries left';
 
     this.log(
-      `Chaptarr did not send ${page} of the ${event.books} books ` +
+      `Chaptarr did not send ${event.books} ${asked} ` +
         `(try ${event.attempt} of ${event.attempts}, ${event.error}, ` +
         `after ${seconds} s). ${busy}; ${next}`,
       'warn'

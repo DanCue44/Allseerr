@@ -610,7 +610,8 @@ export const isAuthorBusyError = (e: {
   e?.response?.status === 400 &&
   /root folder/i.test(JSON.stringify(e.response.data ?? ''));
 const LIBRARY_PAGE_SIZE = 500;
-// A page that took too long is asked for again in halves down to this size
+// A page that took too long is asked for again in halves down to this size,
+// and the rest of the read keeps asking for the size that worked
 const LIBRARY_MIN_PAGE_SIZE = 125;
 // Downloads read from the queue at once, more than a queue holds
 const QUEUE_PAGE_SIZE = 200;
@@ -640,8 +641,12 @@ const COMMANDS_TIMEOUT_MS = 15_000;
 export interface ChaptarrLibraryPageEvent {
   // Which books were asked for: monitored, downloaded or all
   books: string;
-  page: number;
-  pages?: number;
+  // Where in the library the page starts, 1 for the first book
+  firstBook: number;
+  // How many books this try asked for
+  pageSize: number;
+  // How many books the library has, once Chaptarr has said
+  totalBooks?: number;
   // 1 for the first try of the page
   attempt: number;
   attempts: number;
@@ -661,6 +666,29 @@ export interface ChaptarrLibraryPageEvent {
 export type ChaptarrLibraryPageListener = (
   event: ChaptarrLibraryPageEvent
 ) => void;
+
+/**
+ * Which books a page holds, for the scan log, such as "books 54,501 to
+ * 54,625 of 251,902". Counted in books rather than pages, since the size of
+ * a page can change during a read.
+ */
+export const describeLibraryBooks = (
+  firstBook: number,
+  count: number,
+  totalBooks?: number
+): string => {
+  const format = (n: number) => n.toLocaleString('en-US');
+  const end = firstBook + count - 1;
+  const last = Math.max(
+    firstBook,
+    totalBooks ? Math.min(end, totalBooks) : end
+  );
+
+  return (
+    `books ${format(firstBook)} to ${format(last)}` +
+    (totalBooks ? ` of ${format(totalBooks)}` : '')
+  );
+};
 
 const formatSeconds = (ms: number): string =>
   ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`;
@@ -1363,19 +1391,22 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
     // before is read again and its repeats skipped
     let offset = Math.max(0, books.length - LIBRARY_PAGE_SIZE);
     let resumedBooks = books.length || undefined;
-    let pages: number | undefined;
+    let totalBooks: number | undefined;
+    // A slow library stays slow, so once a smaller page is what Chaptarr
+    // answers, the rest of the read asks for that many
+    let pageSize = LIBRARY_PAGE_SIZE;
 
     while (books.length < MAX_LIBRARY_BOOKS) {
       let data: PagedBooks;
 
       try {
-        data = await this.getLibraryPage(
+        ({ data, pageSize } = await this.getLibraryPage(
           { offset, ...filter },
-          Math.floor(offset / LIBRARY_PAGE_SIZE) + 1,
-          pages,
+          pageSize,
+          totalBooks,
           onPage,
           resumedBooks
-        );
+        ));
       } catch (e) {
         if (progress && e instanceof ChaptarrLibraryError) {
           e.message += '. The next scan goes on from this page';
@@ -1398,10 +1429,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
       await progress?.store.add(progress.key, added);
 
       offset += records.length;
-      pages = Math.max(
-        1,
-        Math.ceil((data.totalCount ?? 0) / LIBRARY_PAGE_SIZE)
-      );
+      totalBooks = data.totalCount ?? undefined;
 
       if (records.length === 0 || offset >= (data.totalCount ?? 0)) {
         break;
@@ -1413,21 +1441,25 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
     return books;
   }
 
+  /**
+   * One page of the library, asked for again with fewer books after a try
+   * that took too long. Returns the page and the size that worked.
+   */
   private async getLibraryPage(
     params: Record<string, unknown>,
-    page: number,
-    pages?: number,
+    startPageSize: number,
+    totalBooks?: number,
     onPage?: ChaptarrLibraryPageListener,
     resumedBooks?: number
-  ): Promise<PagedBooks> {
-    const which = `page ${page}${pages ? ` of ${pages}` : ''}`;
+  ): Promise<{ data: PagedBooks; pageSize: number }> {
+    const firstBook = (params.offset as number) + 1;
     const books = params.monitored
       ? 'monitored'
       : params.downloaded
         ? 'downloaded'
         : 'all';
     const attempts = chaptarrRetryDelays.libraryPageMs.length + 1;
-    let pageSize = LIBRARY_PAGE_SIZE;
+    let pageSize = startPageSize;
 
     for (let attempt = 0; ; attempt++) {
       const started = Date.now();
@@ -1445,8 +1477,9 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
         onPage?.({
           books,
-          page,
-          pages,
+          firstBook,
+          pageSize,
+          totalBooks: response.data?.totalCount ?? totalBooks,
           attempt: attempt + 1,
           attempts,
           ms: Date.now() - started,
@@ -1454,7 +1487,7 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
           resumedBooks,
         });
 
-        return response.data;
+        return { data: response.data, pageSize };
       } catch (e) {
         const ms = Date.now() - started;
         const status: number | undefined = e.response?.status;
@@ -1473,8 +1506,9 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
         if (onPage) {
           onPage({
             books,
-            page,
-            pages,
+            firstBook,
+            pageSize,
+            totalBooks,
             attempt: attempt + 1,
             attempts,
             ms,
@@ -1492,10 +1526,11 @@ class ChaptarrAPI extends ServarrBase<{ bookId: number }> {
 
         if (final) {
           const tries = attempt + 1;
+          const which = describeLibraryBooks(firstBook, pageSize, totalBooks);
           const reason = timedOut
-            ? `did not answer ${which} of the library in ` +
+            ? `did not send ${which} in ` +
               formatSeconds(LIBRARY_PAGE_TIMEOUT_MS)
-            : `failed to send ${which} of the library (${e.message})`;
+            : `failed to send ${which} (${e.message})`;
 
           throw new ChaptarrLibraryError(
             `Chaptarr ${reason}${tries > 1 ? `, tried ${tries} times` : ''}`,

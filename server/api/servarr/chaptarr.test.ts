@@ -10,6 +10,7 @@ import type {
 import ChaptarrAPI, {
   chaptarrRetryDelays,
   createMemoryLibraryProgress,
+  describeLibraryBooks,
   isAuthorBusyError,
   isMonitoredFor,
   parseTalearrAddRecording,
@@ -304,7 +305,7 @@ describe('ChaptarrAPI library', () => {
     }
   });
 
-  it('says which page Chaptarr did not answer', async () => {
+  it('says which books Chaptarr did not send', async () => {
     const saved = chaptarrRetryDelays.libraryPageMs;
     chaptarrRetryDelays.libraryPageMs = [0, 0, 0];
     const { chaptarr } = libraryApi((params) => {
@@ -324,7 +325,7 @@ describe('ChaptarrAPI library', () => {
       await assert.rejects(
         chaptarr.getAllBooks(),
         new Error(
-          'Chaptarr did not answer page 3 of 120 of the library in 5 min, ' +
+          'Chaptarr did not send books 1,001 to 1,125 of 60,000 in 5 min, ' +
             'tried 4 times'
         )
       );
@@ -374,7 +375,7 @@ describe('ChaptarrAPI library', () => {
         events.map(
           ({
             books,
-            page,
+            firstBook,
             attempt,
             attempts,
             error,
@@ -383,7 +384,7 @@ describe('ChaptarrAPI library', () => {
             records,
           }) => ({
             books,
-            page,
+            firstBook,
             attempt,
             attempts,
             error,
@@ -395,7 +396,7 @@ describe('ChaptarrAPI library', () => {
         [
           {
             books: 'monitored',
-            page: 1,
+            firstBook: 1,
             attempt: 1,
             attempts: 4,
             error: 'no answer in 5 min',
@@ -405,7 +406,7 @@ describe('ChaptarrAPI library', () => {
           },
           {
             books: 'monitored',
-            page: 1,
+            firstBook: 1,
             attempt: 2,
             attempts: 4,
             error: undefined,
@@ -415,7 +416,7 @@ describe('ChaptarrAPI library', () => {
           },
           {
             books: 'downloaded',
-            page: 1,
+            firstBook: 1,
             attempt: 1,
             attempts: 4,
             error: undefined,
@@ -475,7 +476,7 @@ describe('ChaptarrAPI library', () => {
     try {
       await assert.rejects(
         chaptarr.getActiveBooks(undefined, { progress }),
-        /did not answer page 3 of 3 .*The next scan goes on from this page/
+        /did not send books 1,001 to 1,125 of 1,200 .*The next scan goes on from this page/
       );
 
       slow = false;
@@ -493,7 +494,7 @@ describe('ChaptarrAPI library', () => {
         [500, 1000]
       );
       assert.strictEqual(events[0].resumedBooks, 1000);
-      assert.strictEqual(events[0].page, 2);
+      assert.strictEqual(events[0].firstBook, 501);
       assert.strictEqual(events[1].resumedBooks, undefined);
 
       // A scan that finished leaves nothing for the next one
@@ -525,9 +526,15 @@ describe('ChaptarrAPI library', () => {
     });
 
     try {
-      await assert.rejects(chaptarr.getActiveBooks(), /did not answer page 2/);
+      await assert.rejects(
+        chaptarr.getActiveBooks(),
+        /did not send books 501 to 625/
+      );
       asked.length = 0;
-      await assert.rejects(chaptarr.getActiveBooks(), /did not answer page 2/);
+      await assert.rejects(
+        chaptarr.getActiveBooks(),
+        /did not send books 501 to 625/
+      );
       assert.strictEqual(asked[0].offset, 0);
     } finally {
       chaptarrRetryDelays.libraryPageMs = saved;
@@ -570,6 +577,8 @@ describe('ChaptarrAPI library', () => {
       );
 
       assert.strictEqual(books.length, 300);
+      // No book is left out or read twice when the size changes
+      assert.strictEqual(new Set(books.map((book) => book.id)).size, 300);
       assert.deepStrictEqual(
         asked
           .filter((params) => params?.monitored)
@@ -579,7 +588,9 @@ describe('ChaptarrAPI library', () => {
           [0, 250],
           [0, 125],
           [0, 125],
-          [125, 500],
+          // The rest of the read keeps the size that worked
+          [125, 125],
+          [250, 125],
         ]
       );
       assert.deepStrictEqual(
@@ -589,6 +600,19 @@ describe('ChaptarrAPI library', () => {
     } finally {
       chaptarrRetryDelays.libraryPageMs = saved;
     }
+  });
+
+  it('names the books of a page by where they are in the library', () => {
+    assert.strictEqual(
+      describeLibraryBooks(54_501, 125, 251_902),
+      'books 54,501 to 54,625 of 251,902'
+    );
+    // A last page asked for in full ends at the last book
+    assert.strictEqual(
+      describeLibraryBooks(1001, 500, 1200),
+      'books 1,001 to 1,200 of 1,200'
+    );
+    assert.strictEqual(describeLibraryBooks(1, 500), 'books 1 to 500');
   });
 
   it('leaves out the fields a scan does not use', async () => {
@@ -625,7 +649,7 @@ describe('ChaptarrAPI library', () => {
 
     await assert.rejects(
       chaptarr.getActiveBooks(),
-      /failed to send page 1 of the library/
+      /failed to send books 1 to 500 /
     );
     assert.strictEqual(asked.length, 1);
   });
