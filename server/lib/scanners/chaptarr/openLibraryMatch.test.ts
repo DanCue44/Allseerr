@@ -91,6 +91,55 @@ describe('rankTitleMatches', () => {
     assert.deepEqual(rankTitleMatches('1984', 'George Orwell', docs), []);
   });
 
+  it('counts a co-written book listed under the other author when the year agrees', () => {
+    const docs = [
+      doc(
+        'OL21898543W',
+        'Descent of the Reaper',
+        ['Scott Moon', 'J. N. Chaney'],
+        {
+          first_publish_year: 2019,
+        }
+      ),
+      doc('OL2W', '1984', ['Xavier Coste', 'George Orwell'], {
+        first_publish_year: 2021,
+      }),
+    ];
+
+    assert.deepEqual(
+      rankTitleMatches('Descent of the Reaper', 'J.N. Chaney', docs, 2019),
+      ['OL21898543W']
+    );
+    assert.deepEqual(
+      rankTitleMatches('Descent of the Reaper', 'J.N. Chaney', docs),
+      [],
+      'without the year a second author is not trusted'
+    );
+    assert.deepEqual(
+      rankTitleMatches('1984', 'George Orwell', docs, 1949),
+      [],
+      'an adaptation from years later still does not count'
+    );
+  });
+
+  it('prefers the work the author leads over a co-written one', () => {
+    assert.deepEqual(
+      rankTitleMatches(
+        'Emma',
+        'Jane Austen',
+        [
+          doc('OL9W', 'Emma', ['Somebody Else', 'Jane Austen'], {
+            first_publish_year: 1815,
+            edition_count: 50,
+          }),
+          doc('OL3W', 'Emma', ['Jane Austen'], { edition_count: 2 }),
+        ],
+        1815
+      ),
+      ['OL3W', 'OL9W']
+    );
+  });
+
   it('skips adaptations marked by a bracketed note', () => {
     assert.deepEqual(
       rankTitleMatches('1984', 'George Orwell', [

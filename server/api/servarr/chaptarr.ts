@@ -120,6 +120,7 @@ export interface ChaptarrBook {
   statistics?: ChaptarrBookStatistics;
   hasFiles?: boolean;
   added?: string;
+  releaseDate?: string | null;
   ratings?: { votes?: number; value?: number };
   addOptions?: { searchForNewBook?: boolean; [key: string]: unknown };
   localEbookBooks?: ChaptarrLocalBook[];

@@ -33,6 +33,8 @@ export interface UnmatchedBook {
   bookIds: number[];
   // A Goodreads edition id, when the book's metadata comes from Goodreads
   goodreadsId?: string;
+  // The year the book came out, to tell a co-written book from a later adaptation
+  year?: number;
 }
 
 /**
@@ -125,11 +127,17 @@ const isWork = (doc: OlSearchDoc): boolean =>
  * of popular books). When both have a subtitle it has to match too, and a
  * bracketed note such as "(adaptation)" marks another version. Returns
  * nothing rather than a guess.
+ *
+ * A co-written book often lists the other author first ("Scott Moon, J. N.
+ * Chaney"), the same shape as a graphic novel adapted by someone else. It
+ * counts when it came out within a year of the book; an adaptation comes
+ * years later. Works the author leads still come first.
  */
 export const rankTitleMatches = (
   title: string,
   author: string | undefined,
-  docs: OlSearchDoc[]
+  docs: OlSearchDoc[],
+  year?: number
 ): string[] => {
   if (!author) {
     return [];
@@ -137,17 +145,24 @@ export const rankTitleMatches = (
 
   const normalized = normalizeTitle(title);
   const subtitle = getSubtitle(title);
+  const authorsMatch = (doc: OlSearchDoc, authors: string[]) =>
+    isEditionMatch(title, [author], {
+      title: doc.title,
+      subtitle: doc.subtitle,
+      authors,
+    });
+  const leads = (doc: OlSearchDoc) =>
+    authorsMatch(doc, (doc.author_name ?? []).slice(0, 1));
+  const coWrote = (doc: OlSearchDoc) =>
+    year !== undefined &&
+    doc.first_publish_year !== undefined &&
+    Math.abs(doc.first_publish_year - year) <= 1 &&
+    authorsMatch(doc, doc.author_name ?? []);
   const matches = docs.filter(
     (doc) =>
       isWork(doc) &&
       (BRACKET_NOTE.test(title) || !BRACKET_NOTE.test(doc.title)) &&
-      // The book's author has to lead, so a graphic novel adapted from it
-      // by someone else does not count
-      isEditionMatch(title, [author], {
-        title: doc.title,
-        subtitle: doc.subtitle,
-        authors: (doc.author_name ?? []).slice(0, 1),
-      }) &&
+      (leads(doc) || coWrote(doc)) &&
       // Volumes of a series often share a title and differ in the subtitle
       !(
         subtitle &&
@@ -161,8 +176,9 @@ export const rankTitleMatches = (
       const exact =
         Number(normalizeTitle(b.title) === normalized) -
         Number(normalizeTitle(a.title) === normalized);
+      const lead = Number(leads(b)) - Number(leads(a));
 
-      return exact || (b.edition_count ?? 0) - (a.edition_count ?? 0);
+      return exact || lead || (b.edition_count ?? 0) - (a.edition_count ?? 0);
     })
     .map((doc) => getOlId(doc.key));
 };
@@ -318,7 +334,8 @@ export const matchBooks = async (
       olIds = rankTitleMatches(
         title,
         author,
-        await deps.search(getMatchQuery(title, author))
+        await deps.search(getMatchQuery(title, author)),
+        book.year
       );
 
       if (olIds.length) {

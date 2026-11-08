@@ -542,6 +542,38 @@ describe('Chaptarr Scanner', () => {
       assert.deepStrictEqual(searches, [emmaQuery]);
     });
 
+    it('matches a co-written book OpenLibrary lists under the other author', async () => {
+      const reaperQuery = 'title:"Descent of the Reaper" author:"chaney"';
+      searchAnswers = {
+        [reaperQuery]: [
+          {
+            key: '/works/OL21898543W',
+            title: 'Descent of the Reaper',
+            author_name: ['Scott Moon', 'J. N. Chaney'],
+            first_publish_year: 2019,
+          },
+        ],
+      };
+      books = [
+        fakeBook({
+          id: 60,
+          title: 'Descent of the Reaper',
+          foreignBookId: 'hc:60',
+          author: { authorName: 'J.N. Chaney' } as ChaptarrBook['author'],
+          releaseDate: '2019-03-12T00:00:00Z',
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      await runWithMockTimers(() => chaptarrScanner.run());
+
+      const reaper = await getRepository(Media).findOne({
+        where: { olId: 'OL21898543W' },
+      });
+      assert.ok(reaper, 'the book is matched to the co-written work');
+      assert.strictEqual(reaper.externalServiceId, 60);
+    });
+
     it('links a book requested before instead of adding another', async () => {
       const mediaRepository = getRepository(Media);
       await mediaRepository.save(

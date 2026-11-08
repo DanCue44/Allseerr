@@ -107,6 +107,16 @@ const getOpenLibraryId = (book: ChaptarrBook): string | undefined => {
   return olId && WORK_ID_REGEX.test(olId) ? olId : undefined;
 };
 
+// The earliest year a copy of a book came out, for telling a co-written book
+// from a later adaptation in the OpenLibrary match
+export const getReleaseYear = (copies: ChaptarrBook[]): number | undefined => {
+  const years = copies
+    .map((copy) => Number(copy.releaseDate?.slice(0, 4)))
+    .filter((year) => Number.isInteger(year) && year > 0);
+
+  return years.length ? Math.min(...years) : undefined;
+};
+
 /**
  * Applies a Chaptarr book to the formats of a book it holds, dating the
  * book as added to the library the first time a format becomes available.
@@ -680,6 +690,7 @@ class ChaptarrScanner
             .map((copy) => copy.id)
             .filter((id): id is number => !!id),
           goodreadsId: edition,
+          year: getReleaseYear(work),
         };
       }
     );
