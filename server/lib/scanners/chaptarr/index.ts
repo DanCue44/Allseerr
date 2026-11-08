@@ -22,6 +22,7 @@ import MediaRequest from '@server/entity/MediaRequest';
 import type { AudiobookshelfBackfillBook } from '@server/lib/audiobookshelfItem';
 import { backfillAudiobookshelfItemIds } from '@server/lib/audiobookshelfItem';
 import {
+  getChaptarrLibraryBook,
   linkChaptarrBook,
   matchChaptarrLibraryBook,
 } from '@server/lib/chaptarrRequests';
@@ -378,6 +379,76 @@ class ChaptarrScanner
     );
   }
 
+  /**
+   * Links the books requested while Chaptarr was still importing their
+   * author, which were saved without a Chaptarr book id. Chaptarr adds,
+   * searches for and downloads them on its own once the import is done,
+   * so they are looked up by their work id here; otherwise only the full
+   * scan, which can take days on a large library, would find them. A book
+   * Chaptarr does not have yet is tried again on the next scan.
+   */
+  private async linkImportedBooks(
+    chaptarr: ChaptarrAPI,
+    serverIds: number[],
+    linkedIds: Set<number>
+  ): Promise<ChaptarrBook[]> {
+    const processing = MediaStatus.PROCESSING;
+    const unlinked = await getRepository(Media)
+      .createQueryBuilder('media')
+      .where('media.mediaType = :type', { type: MediaType.BOOK })
+      .andWhere('media.serviceId IN (:...serverIds)', { serverIds })
+      .andWhere('media.foreignBookId IS NOT NULL')
+      .andWhere(
+        '((media.status = :processing AND media.externalServiceId IS NULL) OR ' +
+          '(media.statusAudio = :processing AND ' +
+          'media.externalServiceIdAudio IS NULL))',
+        { processing }
+      )
+      .getMany();
+    const books: ChaptarrBook[] = [];
+
+    for (const media of unlinked) {
+      for (const format of ['ebook', 'audiobook'] as const) {
+        if (
+          media[STATUS_KEYS[format]] !== processing ||
+          media[BOOK_ID_KEYS[format]]
+        ) {
+          continue;
+        }
+
+        try {
+          const book = await getChaptarrLibraryBook(
+            chaptarr,
+            { foreignBookId: media.foreignBookId },
+            format
+          );
+
+          if (!book?.id || linkedIds.has(book.id)) {
+            continue;
+          }
+
+          await linkChaptarrBook(
+            media,
+            media.serviceId as number,
+            format,
+            book
+          );
+          linkedIds.add(book.id);
+          books.push(book);
+        } catch (e) {
+          this.log('Failed to look up a requested book', 'warn', {
+            ...requestErrorLogFields(e),
+            mediaId: media.id,
+            foreignBookId: media.foreignBookId,
+            format,
+          });
+        }
+      }
+    }
+
+    return books;
+  }
+
   private async getAwaitedBooks(
     chaptarr: ChaptarrAPI,
     serverIds: number[]
@@ -420,9 +491,10 @@ class ChaptarrScanner
       bookIds.add(request.recordingBookId as number);
     }
 
+    const books = await this.linkImportedBooks(chaptarr, serverIds, bookIds);
+
     // A failed lookup fails the scan rather than reading as a deleted book
     const ids = [...bookIds];
-    const books: ChaptarrBook[] = [];
     for (let i = 0; i < ids.length; i += RECENT_FETCH_BATCH) {
       const batch = await Promise.all(
         ids

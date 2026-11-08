@@ -469,6 +469,85 @@ describe('Chaptarr Scanner', () => {
     assert.strictEqual(emma.status, MediaStatus.AVAILABLE);
   });
 
+  it('the recent scan links a book requested while its author was importing', async () => {
+    const mediaRepository = getRepository(Media);
+    await mediaRepository.save(
+      new Media({
+        olId: PRIDE_ID,
+        mediaType: MediaType.BOOK,
+        statusAudio: MediaStatus.PROCESSING,
+        serviceId: 0,
+        foreignBookId: 'gr:3060926',
+      })
+    );
+    const lookups: string[] = [];
+    const lookupBooks = mock.method(
+      ChaptarrAPI.prototype,
+      'lookupBooks',
+      async (term: string, mediaType?: string) => {
+        lookups.push(`${term} ${mediaType}`);
+        return [fakeBook({ id: 31, mediaType: 'audiobook' })];
+      }
+    );
+    const getBook = mock.method(
+      ChaptarrAPI.prototype,
+      'getBook',
+      async (bookId: number) =>
+        fakeBook({
+          id: bookId,
+          mediaType: 'audiobook',
+          monitored: true,
+          statistics: { bookFileCount: 1 },
+        })
+    );
+
+    try {
+      await runWithMockTimers(() => chaptarrRecentScanner.run());
+    } finally {
+      lookupBooks.mock.restore();
+      getBook.mock.restore();
+    }
+
+    assert.deepStrictEqual(lookups, ['gr:3060926 audiobook']);
+    assert.strictEqual(getAllBooksCalls, 0);
+    const pride = await mediaRepository.findOneOrFail({
+      where: { olId: PRIDE_ID },
+    });
+    assert.strictEqual(pride.externalServiceIdAudio, 31);
+    assert.strictEqual(pride.statusAudio, MediaStatus.AVAILABLE);
+  });
+
+  it('the recent scan waits for a book Chaptarr is still importing', async () => {
+    const mediaRepository = getRepository(Media);
+    await mediaRepository.save(
+      new Media({
+        olId: PRIDE_ID,
+        mediaType: MediaType.BOOK,
+        status: MediaStatus.PROCESSING,
+        serviceId: 0,
+        foreignBookId: 'gr:3060926',
+      })
+    );
+    const lookupBooks = mock.method(
+      ChaptarrAPI.prototype,
+      'lookupBooks',
+      async () => [fakeBook({ id: undefined })]
+    );
+
+    try {
+      await runWithMockTimers(() => chaptarrRecentScanner.run());
+    } finally {
+      lookupBooks.mock.restore();
+    }
+
+    const pride = await mediaRepository.findOneOrFail({
+      where: { olId: PRIDE_ID },
+    });
+    assert.strictEqual(pride.externalServiceId, null);
+    assert.strictEqual(pride.status, MediaStatus.PROCESSING);
+    assert.strictEqual(chaptarrRecentScanner.status().running, false);
+  });
+
   it('the recent scan fails instead of losing books it could not read', async () => {
     const mediaRepository = getRepository(Media);
     await mediaRepository.save(
