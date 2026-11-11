@@ -3,10 +3,12 @@ import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import useComicsEnabled from '@app/hooks/useComicsEnabled';
 import useDiscover from '@app/hooks/useDiscover';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import useSettings from '@app/hooks/useSettings';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
+import { isResultShown } from '@server/lib/hiddenMediaTypes';
 import type {
   AlbumResult,
   ArtistResult,
@@ -76,8 +78,11 @@ const AmbientSearch = () => {
   const settings = useSettings();
   const booksEnabled = !!settings.currentSettings.booksEnabled;
   const comicsEnabled = useComicsEnabled();
+  const hiddenMediaTypes = useHiddenMediaTypes();
+  // Types the user cannot request are not offered while the admin hides them
   const isOffered = (type: SearchType) =>
-    type === 'book' ? booksEnabled : type === 'comic' ? comicsEnabled : true;
+    (type === 'all' || isResultShown(type, hiddenMediaTypes)) &&
+    (type === 'book' ? booksEnabled : type === 'comic' ? comicsEnabled : true);
   const requested = router.query.type as SearchType | undefined;
   const searchType: SearchType =
     requested && searchTypes.includes(requested) && isOffered(requested)

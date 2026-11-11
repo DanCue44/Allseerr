@@ -1,8 +1,9 @@
 import Badge from '@app/components/Common/Badge';
 import { menuMessages } from '@app/components/Layout/Sidebar';
 import useClickOutside from '@app/hooks/useClickOutside';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import { Permission, useUser } from '@app/hooks/useUser';
-import { SPACES } from '@app/utils/spaces';
+import { SPACES, isHiddenSpacePath } from '@app/utils/spaces';
 import { Transition } from '@headlessui/react';
 import {
   BookOpenIcon,
@@ -68,6 +69,7 @@ const MobileMenu = ({
   const intl = useIntl();
   const [isOpen, setIsOpen] = useState(false);
   const { hasPermission } = useUser();
+  const hiddenMediaTypes = useHiddenMediaTypes();
   const router = useRouter();
   useClickOutside(ref, () => {
     setTimeout(() => {
@@ -181,12 +183,14 @@ const MobileMenu = ({
     },
   ];
 
+  // Spaces the user cannot request in leave while the admin hides them
   const filteredLinks = menuLinks.filter(
     (link) =>
-      !link.requiredPermission ||
-      hasPermission(link.requiredPermission, {
-        type: link.permissionType ?? 'and',
-      })
+      !isHiddenSpacePath(link.href, hiddenMediaTypes) &&
+      (!link.requiredPermission ||
+        hasPermission(link.requiredPermission, {
+          type: link.permissionType ?? 'and',
+        }))
   );
 
   useEffect(() => {

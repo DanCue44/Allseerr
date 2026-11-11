@@ -17,6 +17,7 @@ import NoBookEndsSyncNotice from '@app/components/NoBookEndsSyncNotice';
 import { AMBIENT_PALETTE } from '@app/context/InterfaceStyleContext';
 import { TourProvider } from '@app/context/TourContext';
 import useBranding from '@app/hooks/useBranding';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import useLocale from '@app/hooks/useLocale';
 import useSettings from '@app/hooks/useSettings';
 import { Permission, useUser } from '@app/hooks/useUser';
@@ -106,6 +107,7 @@ const AmbientShell = ({ children }: LayoutProps) => {
   const router = useRouter();
   const { user, hasPermission } = useUser();
   const { currentSettings } = useSettings();
+  const hiddenMediaTypes = useHiddenMediaTypes();
   const { setLocale } = useLocale();
   const [isMoreOpen, setMoreOpen] = useState(false);
   const [isSearchOpen, setSearchOpen] = useState(false);
@@ -179,10 +181,12 @@ const AmbientShell = ({ children }: LayoutProps) => {
     !!router.pathname.match(link.activeRegExp);
 
   // Music needs Lidarr and books need LazyLibrarian; without them their
-  // spaces leave the navigation
+  // spaces leave the navigation, as do the spaces the user cannot request in
+  // while the admin hides them
   const availableSpaces = getAvailableSpaces({
     musicEnabled: currentSettings.musicEnabled,
     booksEnabled: currentSettings.booksEnabled,
+    hiddenMediaTypes,
   });
   const hiddenSpaceKeys = SPACE_KEYS.filter(
     (space) => !availableSpaces.includes(space)

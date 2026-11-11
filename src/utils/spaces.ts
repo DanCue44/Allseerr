@@ -118,17 +118,35 @@ export const LEGACY_SPACE_REDIRECTS: Record<string, string> = {
   '/discover/books': SPACES.books.path,
 };
 
-/** The spaces on offer: music needs Lidarr and books need LazyLibrarian. */
+/**
+ * The spaces on offer: music needs Lidarr and books need LazyLibrarian, and
+ * the media types kept from the user (useHiddenMediaTypes) are left out.
+ */
 export const getAvailableSpaces = ({
   musicEnabled,
   booksEnabled,
+  hiddenMediaTypes = [],
 }: {
   musicEnabled: boolean;
   booksEnabled: boolean;
+  hiddenMediaTypes?: SpaceMediaType[];
 }): SpaceKey[] =>
   SPACE_KEYS.filter(
     (key) =>
-      (key !== 'music' || musicEnabled) && (key !== 'books' || booksEnabled)
+      (key !== 'music' || musicEnabled) &&
+      (key !== 'books' || booksEnabled) &&
+      !hiddenMediaTypes.includes(SPACES[key].mediaType)
+  );
+
+/** Whether a link leads to a space of a media type kept from the user */
+export const isHiddenSpacePath = (
+  href: string,
+  hiddenMediaTypes: SpaceMediaType[]
+): boolean =>
+  SPACE_KEYS.some(
+    (key) =>
+      SPACES[key].path === href &&
+      hiddenMediaTypes.includes(SPACES[key].mediaType)
   );
 
 export type PhoneTabKey = 'home' | SpaceKey | 'requests' | 'library';

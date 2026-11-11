@@ -2,9 +2,10 @@ import AppLogo from '@app/components/Common/AppLogo';
 import Badge from '@app/components/Common/Badge';
 import VersionStatus from '@app/components/Layout/VersionStatus';
 import useClickOutside from '@app/hooks/useClickOutside';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import { Permission, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
-import { SPACES } from '@app/utils/spaces';
+import { SPACES, isHiddenSpacePath } from '@app/utils/spaces';
 import { Transition, TransitionChild } from '@headlessui/react';
 import {
   ArrowDownTrayIcon,
@@ -176,7 +177,17 @@ const Sidebar = ({
   const router = useRouter();
   const intl = useIntl();
   const { hasPermission } = useUser();
+  const hiddenMediaTypes = useHiddenMediaTypes();
   useClickOutside(navRef, () => setClosed());
+
+  // Spaces the user cannot request in leave while the admin hides them
+  const isShown = (link: SidebarLinkProps) =>
+    !isHiddenSpacePath(link.href, hiddenMediaTypes) &&
+    (link.requiredPermission
+      ? hasPermission(link.requiredPermission, {
+          type: link.permissionType ?? 'and',
+        })
+      : true);
 
   useEffect(() => {
     if (openIssuesCount) {
@@ -243,13 +254,7 @@ const Sidebar = ({
                       </span>
                     </div>
                     <nav className="mt-10 flex-1 space-y-4 px-4">
-                      {SidebarLinks.filter((link) =>
-                        link.requiredPermission
-                          ? hasPermission(link.requiredPermission, {
-                              type: link.permissionType ?? 'and',
-                            })
-                          : true
-                      ).map((sidebarLink) => {
+                      {SidebarLinks.filter(isShown).map((sidebarLink) => {
                         return (
                           <Link
                             key={`mobile-${sidebarLink.messagesKey}`}
@@ -306,13 +311,7 @@ const Sidebar = ({
                 </span>
               </div>
               <nav className="mt-8 flex-1 space-y-4 px-4">
-                {SidebarLinks.filter((link) =>
-                  link.requiredPermission
-                    ? hasPermission(link.requiredPermission, {
-                        type: link.permissionType ?? 'and',
-                      })
-                    : true
-                ).map((sidebarLink) => {
+                {SidebarLinks.filter(isShown).map((sidebarLink) => {
                   return (
                     <Link
                       key={`desktop-${sidebarLink.messagesKey}`}

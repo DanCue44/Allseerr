@@ -2896,6 +2896,8 @@
   "components.Settings.SettingsUsers.defaultPermissions": "Default Permissions",
   "components.Settings.SettingsUsers.defaultPermissionsTip": "Initial permissions assigned to new users",
   "components.Settings.SettingsUsers.disabledMediaServerLoginWarning": "Some users may not have a {applicationTitle} password set. Disabling {mediaServerName} sign-in could lock them out. Affected users will need to set a password from their profile or via a password reset link.",
+  "components.Settings.SettingsUsers.hideUnrequestable": "Hide What Users Can't Request",
+  "components.Settings.SettingsUsers.hideUnrequestableTip": "Leave movies, series, music or books out of the navigation and search of users who cannot request them. Admins and users with Manage Requests see everything.",
   "components.Settings.SettingsUsers.localLogin": "Enable Local Sign-In",
   "components.Settings.SettingsUsers.localLoginTip": "Allow users to sign in using their email address and password",
   "components.Settings.SettingsUsers.loginMethods": "Login Methods",

@@ -40,6 +40,9 @@ const messages = defineMessages('components.Settings.SettingsUsers', {
   tvRequestLimitLabel: 'Global Series Request Limit',
   musicRequestLimitLabel: 'Global Music Request Limit',
   bookRequestLimitLabel: 'Global Book Request Limit',
+  hideUnrequestable: "Hide What Users Can't Request",
+  hideUnrequestableTip:
+    'Leave movies, series, music or books out of the navigation and search of users who cannot request them. Admins and users with Manage Requests see everything.',
   defaultPermissions: 'Default Permissions',
   defaultPermissionsTip: 'Initial permissions assigned to new users',
   disabledMediaServerLoginWarning:
@@ -121,6 +124,7 @@ const SettingsUsers = () => {
             bookQuotaLimit: data?.defaultQuotas.book?.quotaLimit ?? 0,
             bookQuotaDays: data?.defaultQuotas.book?.quotaDays ?? 7,
             defaultPermissions: data?.defaultPermissions ?? 0,
+            hideUnrequestable: data?.hideUnrequestable ?? false,
           }}
           validationSchema={schema}
           enableReinitialize
@@ -149,6 +153,7 @@ const SettingsUsers = () => {
                   },
                 },
                 defaultPermissions: values.defaultPermissions,
+                hideUnrequestable: values.hideUnrequestable,
               });
               mutate('/api/v1/settings/public');
 
@@ -324,6 +329,27 @@ const SettingsUsers = () => {
                     </div>
                   </div>
                 )}
+                <div className="form-row">
+                  <label htmlFor="hideUnrequestable" className="checkbox-label">
+                    {intl.formatMessage(messages.hideUnrequestable)}
+                    <span className="label-tip">
+                      {intl.formatMessage(messages.hideUnrequestableTip)}
+                    </span>
+                  </label>
+                  <div className="form-input-area">
+                    <Field
+                      type="checkbox"
+                      id="hideUnrequestable"
+                      name="hideUnrequestable"
+                      onChange={() => {
+                        setFieldValue(
+                          'hideUnrequestable',
+                          !values.hideUnrequestable
+                        );
+                      }}
+                    />
+                  </div>
+                </div>
                 <div
                   role="group"
                   aria-labelledby="group-label"

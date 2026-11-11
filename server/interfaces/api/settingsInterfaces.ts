@@ -66,6 +66,7 @@ export interface PublicSettingsResponse {
   mediaServerType: number;
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
+  hideUnrequestable: boolean;
   defaultBookFormat: BookFormatChoice;
   bookLanguage: BookLanguage;
   // Talearr only, the Audiobook Versions setting in effect

@@ -413,6 +413,8 @@ export interface MainSettings {
   mediaServerType: number;
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
+  // Media types a user cannot request leave their navigation and search
+  hideUnrequestable: boolean;
   defaultBookFormat: BookFormatChoice;
   // Language books are requested in, unless a user picks their own
   bookLanguage: BookLanguage;
@@ -525,6 +527,7 @@ interface FullPublicSettings extends PublicSettings {
   jellyfinServerName?: string;
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
+  hideUnrequestable: boolean;
   defaultBookFormat: BookFormatChoice;
   bookLanguage: BookLanguage;
   // Talearr only, the Audiobook Versions setting in effect
@@ -790,6 +793,7 @@ class Settings {
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
         allowCurrentSeasonRequests: false,
+        hideUnrequestable: false,
         defaultBookFormat: 'both',
         bookLanguage: 'en',
         audiobookVersions: 'both',
@@ -1277,6 +1281,7 @@ class Settings {
       partialRequestsEnabled: this.data.main.partialRequestsEnabled,
       allowCurrentSeasonRequests:
         this.data.main.allowCurrentSeasonRequests ?? false,
+      hideUnrequestable: this.data.main.hideUnrequestable ?? false,
       defaultBookFormat: this.data.main.defaultBookFormat ?? 'both',
       bookLanguage: getEffectiveBookLanguage(
         undefined,

@@ -34,6 +34,7 @@ const defaultSettings: PublicSettingsResponse = {
   mediaServerType: MediaServerType.NOT_CONFIGURED,
   partialRequestsEnabled: true,
   allowCurrentSeasonRequests: false,
+  hideUnrequestable: false,
   defaultBookFormat: 'both',
   bookLanguage: 'en',
   enableSpecialEpisodes: false,

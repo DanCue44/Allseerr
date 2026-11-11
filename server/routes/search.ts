@@ -11,6 +11,10 @@ import {
   mapComicResults,
   searchComics,
 } from '@server/lib/comics';
+import {
+  getHiddenMediaTypes,
+  isResultShown,
+} from '@server/lib/hiddenMediaTypes';
 import { rankMusicResult } from '@server/lib/musicSearchRank';
 import { findSearchProvider } from '@server/lib/search';
 import { rankCombinedResults } from '@server/lib/searchRank';
@@ -135,8 +139,23 @@ searchRoutes.get('/', async (req, res, next) => {
   const searchType = (req.query.type as string | undefined) ?? 'all';
   const searchProvider = findSearchProvider(queryString.toLowerCase());
   let results: TmdbSearchMultiResponse;
+  // Media types the user cannot request, while the admin hides them
+  const hidden = getHiddenMediaTypes(
+    req.user?.permissions ?? 0,
+    getSettings().main.hideUnrequestable ?? false
+  );
+  const shown = (mediaType: string) => isResultShown(mediaType, hidden);
 
   try {
+    if (
+      (searchType === 'music' && !shown('music')) ||
+      ((searchType === 'book' || searchType === 'comic') && !shown('book'))
+    ) {
+      return res
+        .status(200)
+        .json({ page: 1, totalPages: 1, totalResults: 0, results: [] });
+    }
+
     if (searchType === 'music') {
       const musicResults = await searchMusic({ query: queryString });
 
@@ -174,7 +193,10 @@ searchRoutes.get('/', async (req, res, next) => {
       });
     }
 
-    if (searchProvider) {
+    if (!shown('movie') && !shown('tv')) {
+      // Neither movies nor series, so TMDB has nothing to offer
+      results = { page: 1, total_pages: 1, total_results: 0, results: [] };
+    } else if (searchProvider) {
       const [id] = queryString
         .toLowerCase()
         .match(searchProvider.pattern) as RegExpMatchArray;
@@ -205,7 +227,7 @@ searchRoutes.get('/', async (req, res, next) => {
     // lookup asks AniList and Hardcover, so a slow one is left out rather
     // than holding the page up.
     const comicSearch =
-      !searchProvider && page === 1
+      !searchProvider && page === 1 && shown('comic')
         ? withTimeout(
             searchComicResults(queryString, {
               limit: ALL_SEARCH_COMICS_LIMIT,
@@ -218,10 +240,16 @@ searchRoutes.get('/', async (req, res, next) => {
     // books when a book service can fulfil book requests. All three sources
     // are asked at once.
     const [musicResults, bookResults, comicResults] = await Promise.all([
-      !searchProvider && page === 1 && getSettings().lidarr.length > 0
+      !searchProvider &&
+      page === 1 &&
+      shown('music') &&
+      getSettings().lidarr.length > 0
         ? searchMusic({ query: queryString }).catch(() => undefined)
         : undefined,
-      !searchProvider && page === 1 && getSettings().bookService
+      !searchProvider &&
+      page === 1 &&
+      shown('book') &&
+      getSettings().bookService
         ? searchBooks({
             query: queryString,
             bookLimit: 10,
@@ -241,7 +269,9 @@ searchRoutes.get('/', async (req, res, next) => {
         (comicResults?.length ?? 0),
       // Close title matches first across kinds, see rankCombinedResults
       results: rankCombinedResults(queryString, [
-        ...mapSearchResults(results.results, media),
+        ...mapSearchResults(results.results, media).filter((result) =>
+          shown(result.mediaType)
+        ),
         ...(musicResults?.results ?? []),
         ...(bookResults?.results ?? []),
         ...(comicResults ?? []),

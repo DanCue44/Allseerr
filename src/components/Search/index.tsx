@@ -3,10 +3,12 @@ import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import useComicsEnabled from '@app/hooks/useComicsEnabled';
 import useDiscover from '@app/hooks/useDiscover';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import useSettings from '@app/hooks/useSettings';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
+import { isResultShown } from '@server/lib/hiddenMediaTypes';
 import type {
   AlbumResult,
   ArtistResult,
@@ -34,6 +36,7 @@ const Search = () => {
   const router = useRouter();
   const settings = useSettings();
   const comicsEnabled = useComicsEnabled();
+  const hiddenMediaTypes = useHiddenMediaTypes();
   const searchType: SearchType =
     router.query.type === 'music' ||
     router.query.type === 'book' ||
@@ -71,7 +74,7 @@ const Search = () => {
     return <ErrorPage statusCode={500} />;
   }
 
-  const searchTypes: { type: SearchType; label: string }[] = [
+  const allSearchTypes: { type: SearchType; label: string }[] = [
     { type: 'all', label: intl.formatMessage(globalMessages.all) },
     { type: 'music', label: intl.formatMessage(globalMessages.music) },
     // Books are offered once LazyLibrarian can fulfil book requests
@@ -93,6 +96,10 @@ const Search = () => {
         ]
       : []),
   ];
+  // Types the user cannot request leave while the admin hides them
+  const searchTypes = allSearchTypes.filter(
+    ({ type }) => type === 'all' || isResultShown(type, hiddenMediaTypes)
+  );
 
   return (
     <>
