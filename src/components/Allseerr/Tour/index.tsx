@@ -1,5 +1,6 @@
 import { menuMessages } from '@app/components/Layout/Sidebar';
 import { useTour } from '@app/context/TourContext';
+import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
 import useSettings from '@app/hooks/useSettings';
 import { Permission, UserType, useUser } from '@app/hooks/useUser';
 import defineMessages from '@app/utils/defineMessages';
@@ -172,6 +173,7 @@ const Tour = () => {
   const intl = useIntl();
   const { isOpen, closeTour } = useTour();
   const { currentSettings } = useSettings();
+  const hiddenMediaTypes = useHiddenMediaTypes();
   const { user, hasPermission } = useUser();
   const [index, setIndex] = useState(0);
   const [visibleSteps, setVisibleSteps] = useState<TourStep[]>([]);
@@ -204,14 +206,21 @@ const Tour = () => {
     );
 
   const steps = useMemo<TourStep[]>(() => {
-    const { musicEnabled, booksEnabled, subtitlesEnabled, applicationTitle } =
-      currentSettings;
+    const { subtitlesEnabled, applicationTitle } = currentSettings;
+    // Media types kept from the user while the admin hides what they cannot
+    // request are left out of the tour too
+    const moviesShown = !hiddenMediaTypes.includes('movie');
+    const seriesShown = !hiddenMediaTypes.includes('tv');
+    const musicEnabled =
+      currentSettings.musicEnabled && !hiddenMediaTypes.includes('music');
+    const booksEnabled =
+      currentSettings.booksEnabled && !hiddenMediaTypes.includes('book');
     const list = (items: string[]) =>
       intl.formatList(items, { type: 'conjunction' });
 
     const kinds = [
-      intl.formatMessage(messages.movies),
-      intl.formatMessage(messages.series),
+      ...(moviesShown ? [intl.formatMessage(messages.movies)] : []),
+      ...(seriesShown ? [intl.formatMessage(messages.series)] : []),
       ...(musicEnabled ? [intl.formatMessage(messages.music)] : []),
       ...(booksEnabled
         ? [
@@ -232,8 +241,8 @@ const Tour = () => {
     ];
     // The navigation names of the spaces, as shown in the tab bar
     const spaceNames = [
-      intl.formatMessage(menuMessages.browsemovies),
-      intl.formatMessage(menuMessages.browsetv),
+      ...(moviesShown ? [intl.formatMessage(menuMessages.browsemovies)] : []),
+      ...(seriesShown ? [intl.formatMessage(menuMessages.browsetv)] : []),
       ...(musicEnabled ? [intl.formatMessage(menuMessages.browsemusic)] : []),
       ...(booksEnabled ? [intl.formatMessage(menuMessages.browsebooks)] : []),
     ];
@@ -342,7 +351,14 @@ const Tour = () => {
     ];
 
     return all.filter((step): step is TourStep => !!step);
-  }, [currentSettings, intl, canRequest, canReport, canAutoRequest]);
+  }, [
+    currentSettings,
+    hiddenMediaTypes,
+    intl,
+    canRequest,
+    canReport,
+    canAutoRequest,
+  ]);
 
   // Works out which steps have something to show at the current size
   const refreshSteps = useCallback(() => {
