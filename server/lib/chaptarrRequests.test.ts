@@ -14,6 +14,7 @@ import type {
 } from '@server/api/servarr/chaptarr';
 import {
   getChaptarrFormatSettings,
+  isSameBookTitle,
   matchChaptarrLibraryBook,
   pickChaptarrMatch,
   preferEditionInLanguage,
@@ -281,6 +282,42 @@ describe('pickChaptarrMatch', () => {
       pickChaptarrMatch(results, { ...wanted, language: 'any' })?.foreignBookId,
       'gr:danish'
     );
+  });
+});
+
+describe('isSameBookTitle', () => {
+  it('matches a title with or without its subtitle or series', () => {
+    assert.ok(
+      isSameBookTitle(
+        "Carl's Doomsday Scenario",
+        "Carl's Doomsday Scenario: Dungeon Crawler Carl Book 2"
+      )
+    );
+    assert.ok(
+      isSameBookTitle('Skyshade (The Lightlark, #3)', 'Skyshade: A Novel')
+    );
+    assert.ok(
+      isSameBookTitle(
+        'He Who Fights with Monsters 6',
+        'He Who Fights with Monsters 6'
+      )
+    );
+  });
+
+  it('refuses books that only share a main title or a series name', () => {
+    assert.ok(
+      !isSameBookTitle(
+        'True Crime Stories: A Prequel',
+        'True Crime Stories: 12 Shocking Cases'
+      )
+    );
+    assert.ok(
+      !isSameBookTitle(
+        'He Who Fights with Monsters 6',
+        'He Who Fights with Monsters 7'
+      )
+    );
+    assert.ok(!isSameBookTitle('', ''));
   });
 });
 
@@ -673,6 +710,128 @@ describe('sendBookToChaptarr', () => {
     assert.deepStrictEqual(chaptarr.monitored, []);
     assert.deepStrictEqual(chaptarr.searched, [[12]]);
     assert.strictEqual(result.bookId, 12);
+  });
+
+  describe('when Chaptarr holds the book twice under its author', () => {
+    // The lookup points at an empty duplicate from another metadata source
+    const lookupDuplicate = () => {
+      chaptarr.lookupResults['Pride and Prejudice Jane Austen'] = [
+        book({
+          foreignBookId: 'hc:2',
+          localEbookBooks: [{ id: 21, mediaType: 'ebook' }],
+        }),
+      ];
+    };
+    const duplicate = book({
+      id: 21,
+      authorId: 7,
+      mediaType: 'ebook',
+      foreignBookId: 'hc:2',
+      title: 'Pride and Prejudice: Annotated Edition',
+      statistics: { bookFileCount: 0 },
+    });
+
+    it('uses the entry that has the file', async () => {
+      lookupDuplicate();
+      chaptarr.library = [
+        duplicate,
+        book({
+          id: 19,
+          authorId: 7,
+          mediaType: 'ebook',
+          ebookMonitored: true,
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      const result = await sendBookToChaptarr(asApi(chaptarr), {
+        olId: WORK_ID,
+        mediaType: 'ebook',
+        add,
+      });
+
+      assert.strictEqual(result.bookId, 19);
+      assert.strictEqual(chaptarr.added.length, 0);
+      assert.deepStrictEqual(chaptarr.monitored, []);
+      assert.deepStrictEqual(chaptarr.searched, []);
+    });
+
+    it('uses the entry already monitored for the format', async () => {
+      lookupDuplicate();
+      chaptarr.library = [
+        duplicate,
+        book({
+          id: 19,
+          authorId: 7,
+          mediaType: 'ebook',
+          ebookMonitored: true,
+          statistics: { bookFileCount: 0 },
+        }),
+      ];
+
+      const result = await sendBookToChaptarr(asApi(chaptarr), {
+        olId: WORK_ID,
+        mediaType: 'ebook',
+        add,
+      });
+
+      assert.strictEqual(result.bookId, 19);
+      assert.deepStrictEqual(chaptarr.monitored, []);
+      assert.deepStrictEqual(chaptarr.searched, [[19]]);
+    });
+
+    it('ignores the other format and books that only share a main title', async () => {
+      lookupDuplicate();
+      chaptarr.library = [
+        duplicate,
+        book({
+          id: 19,
+          authorId: 7,
+          mediaType: 'audiobook',
+          audiobookMonitored: true,
+          statistics: { bookFileCount: 1 },
+        }),
+        book({
+          id: 20,
+          authorId: 7,
+          mediaType: 'ebook',
+          title: 'Pride and Prejudice: A Sequel',
+          ebookMonitored: true,
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      const result = await sendBookToChaptarr(asApi(chaptarr), {
+        olId: WORK_ID,
+        mediaType: 'ebook',
+        add,
+      });
+
+      assert.strictEqual(result.bookId, 21);
+      assert.deepStrictEqual(chaptarr.monitored, [[[21], true]]);
+      assert.deepStrictEqual(chaptarr.searched, [[21]]);
+    });
+
+    it('links an unlinked book to the entry that has the file', async () => {
+      lookupDuplicate();
+      chaptarr.library = [
+        duplicate,
+        book({
+          id: 19,
+          authorId: 7,
+          mediaType: 'ebook',
+          statistics: { bookFileCount: 1 },
+        }),
+      ];
+
+      const found = await matchChaptarrLibraryBook(
+        asApi(chaptarr),
+        WORK_ID,
+        'ebook'
+      );
+
+      assert.strictEqual(found?.id, 19);
+    });
   });
 
   it('does not search when automatic search is off', async () => {

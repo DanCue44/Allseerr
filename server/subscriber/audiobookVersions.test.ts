@@ -186,6 +186,13 @@ mock.method(
 mock.method(ChaptarrAPI.prototype, 'getBook', async (bookId: number) =>
   library.find((book) => book.id === bookId)
 );
+// Duplicates of a book are looked for among its author's books
+mock.method(
+  ChaptarrAPI.prototype,
+  'getBooksByAuthor',
+  async (authorId: number) =>
+    library.filter((book) => book.authorId === authorId)
+);
 // The library books here list no editions, so none is switched
 mock.method(ChaptarrAPI.prototype, 'getEditions', async () => []);
 mock.method(

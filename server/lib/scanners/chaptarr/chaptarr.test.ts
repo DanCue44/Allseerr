@@ -262,6 +262,34 @@ describe('Chaptarr Scanner', () => {
     assert.strictEqual(pride.status, MediaStatus.AVAILABLE);
   });
 
+  it('moves the link to another copy that has the file of a waiting format', async () => {
+    const mediaRepository = getRepository(Media);
+    await mediaRepository.save(
+      new Media({
+        olId: PRIDE_ID,
+        mediaType: MediaType.BOOK,
+        status: MediaStatus.PROCESSING,
+        serviceId: 0,
+        externalServiceId: 12,
+        foreignBookId: 'gr:3060926',
+      })
+    );
+    books = [
+      // The empty duplicate a request monitored
+      fakeBook({ id: 12, monitored: true }),
+      // The copy Chaptarr already had, with its file
+      fakeBook({ id: 10, monitored: true, statistics: { bookFileCount: 1 } }),
+    ];
+
+    await runWithMockTimers(() => chaptarrScanner.run());
+
+    const pride = await mediaRepository.findOneOrFail({
+      where: { olId: PRIDE_ID },
+    });
+    assert.strictEqual(pride.externalServiceId, 10);
+    assert.strictEqual(pride.status, MediaStatus.AVAILABLE);
+  });
+
   it('saves books added in Chaptarr by their OpenLibrary work id', async () => {
     books = [
       fakeBook({

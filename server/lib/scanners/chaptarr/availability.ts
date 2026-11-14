@@ -11,6 +11,7 @@ import {
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MediaRequest from '@server/entity/MediaRequest';
+import { isSameBookTitle } from '@server/lib/chaptarrRequests';
 import logger from '@server/logger';
 import { requestErrorLogFields } from '@server/utils/requestError';
 import { In, IsNull } from 'typeorm';
@@ -110,16 +111,22 @@ export const checkChaptarrFormat = async (
     }
   }
 
-  const copy = media.foreignBookId
-    ? books.find(
-        (book) =>
-          !!book.id &&
-          book.id !== bookId &&
-          book.foreignBookId === media.foreignBookId &&
-          (book.mediaType ?? 'ebook') === format &&
-          getChaptarrFileState(book) === 'present'
-      )
-    : undefined;
+  // Chaptarr can also hold the same book twice under its author, as
+  // editions from different metadata sources with their own work ids
+  const linked = fresh ?? listed;
+  const isCopy = (book: ChaptarrBook) =>
+    (!!media.foreignBookId && book.foreignBookId === media.foreignBookId) ||
+    (!!linked?.authorId &&
+      book.authorId === linked.authorId &&
+      isSameBookTitle(book.title, linked.title));
+  const copy = books.find(
+    (book) =>
+      !!book.id &&
+      book.id !== bookId &&
+      (book.mediaType ?? 'ebook') === format &&
+      getChaptarrFileState(book) === 'present' &&
+      isCopy(book)
+  );
 
   if (copy?.id) {
     return { state: 'moved', bookId: copy.id };

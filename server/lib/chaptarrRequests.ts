@@ -633,6 +633,84 @@ export const findDuplicateLibraryBook = async (
   )[0];
 };
 
+/**
+ * Whether two titles of one author's books name the same book: the same
+ * title, or one is the other without its subtitle or series. Books that
+ * only share a main title, such as "True Crime Stories: A Prequel" and
+ * "True Crime Stories: 12 Shocking Cases", are not the same book.
+ */
+export const isSameBookTitle = (a = '', b = ''): boolean => {
+  const fullA = normalizeBookTitle(a);
+  const fullB = normalizeBookTitle(b);
+
+  return (
+    !!fullA &&
+    !!fullB &&
+    (titleKeys(b).includes(fullA) || titleKeys(a).includes(fullB))
+  );
+};
+
+/**
+ * Chaptarr can hold a book more than once under its author, as editions
+ * from different metadata sources. Of the author's entries for the same
+ * book in the requested format, one that has its file wins, then one
+ * already monitored for the format, so a request does not monitor and
+ * download an empty copy of a book the library has. Keeps the given book
+ * when it has its file, when no other entry qualifies, or when the
+ * author's books cannot be read.
+ */
+export const preferHeldLibraryBook = async (
+  chaptarr: ChaptarrAPI,
+  book: ChaptarrBook,
+  mediaType: ChaptarrMediaType
+): Promise<ChaptarrBook> => {
+  if (!book.id || !book.authorId || getBookFileCount(book) > 0) {
+    return book;
+  }
+
+  let authorBooks: ChaptarrBook[];
+
+  try {
+    authorBooks = await chaptarr.getBooksByAuthor(book.authorId);
+  } catch (e) {
+    logger.debug('Could not read the books of the author in Chaptarr', {
+      label: 'Chaptarr',
+      authorId: book.authorId,
+      errorMessage: e.message,
+    });
+    return book;
+  }
+
+  const copies = authorBooks
+    .filter(
+      (other) =>
+        !!other.id &&
+        other.id !== book.id &&
+        (!other.mediaType || other.mediaType === mediaType) &&
+        isSameBookTitle(other.title, book.title)
+    )
+    .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
+  const held =
+    copies.find((copy) => getBookFileCount(copy) > 0) ??
+    (isMonitoredFor(book, mediaType)
+      ? undefined
+      : copies.find((copy) => isMonitoredFor(copy, mediaType)));
+
+  if (!held) {
+    return book;
+  }
+
+  logger.info('Chaptarr has this book more than once, using the entry it has', {
+    label: 'Chaptarr',
+    title: book.title,
+    mediaType,
+    bookId: held.id,
+    duplicateId: book.id,
+  });
+
+  return held;
+};
+
 const getWantedBook = async (olId: string): Promise<ChaptarrWantedBook> => {
   const openLibrary = new OpenLibrary();
   const summary = await openLibrary.getWorkSummary(olId);
@@ -683,10 +761,11 @@ export const sendBookToChaptarr = async (
         );
     return workTitle;
   };
-  const monitor = (book: ChaptarrBook) =>
+  const monitor = async (book: ChaptarrBook) =>
     monitorAndSearch(
       chaptarr,
-      book,
+      // An empty duplicate gives way to the entry that has the book
+      await preferHeldLibraryBook(chaptarr, book, mediaType),
       mediaType,
       search,
       add,
@@ -933,10 +1012,11 @@ export const matchChaptarrLibraryBook = async (
     return undefined;
   }
 
-  return (
+  const book =
     (await getLibraryBook(chaptarr, match, format)) ??
-    findLibraryBook(chaptarr, match.foreignBookId, format)
-  );
+    (await findLibraryBook(chaptarr, match.foreignBookId, format));
+
+  return book ? preferHeldLibraryBook(chaptarr, book, format) : undefined;
 };
 
 /**

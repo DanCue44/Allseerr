@@ -998,16 +998,27 @@ class ChaptarrScanner
           return;
         }
 
+        let changed = false;
+
         if (
           media.serviceId === server.id &&
           media[BOOK_ID_KEYS[format]] &&
           media[BOOK_ID_KEYS[format]] !== bookId
         ) {
-          // Another copy of a book that is linked already
-          return;
-        }
+          // Another copy of a book that is linked already. Chaptarr can hold
+          // a book twice, so a copy with the file takes the link over from
+          // one that has not made the format available.
+          if (
+            getChaptarrBookState(book, format) !== 'available' ||
+            media[STATUS_KEYS[format]] === MediaStatus.AVAILABLE
+          ) {
+            return;
+          }
 
-        let changed = false;
+          media[BOOK_ID_KEYS[format]] = bookId;
+          changed = true;
+          this.log(`Linked ${format} to the copy with its file: ${book.title}`);
+        }
 
         // Links the book to the media, unless the media is kept on another
         // Chaptarr server or already has a book of this format there

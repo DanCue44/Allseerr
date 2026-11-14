@@ -66,6 +66,11 @@ mock.method(ChaptarrAPI.prototype, 'getBook', async (bookId: number) => {
   }
   return bookById[bookId];
 });
+// Books of an author are looked up on OpenLibrary with its name and ISBNs
+mock.method(ChaptarrAPI.prototype, 'getAuthor', async () => ({
+  authorName: 'Jane Austen',
+}));
+mock.method(ChaptarrAPI.prototype, 'getEditions', async () => []);
 mock.method(MediaRequest, 'sendNotification', async () => undefined);
 // Library books without an OpenLibrary work id are looked up, these
 // tests have nothing to find
@@ -337,6 +342,61 @@ describe('Chaptarr availability sync', () => {
     const pride = await reload();
     assert.strictEqual(pride.status, MediaStatus.AVAILABLE);
     assert.strictEqual(pride.externalServiceId, 12);
+  });
+
+  it('moves the link to a duplicate of the book by its author that has the file', async () => {
+    await saveAvailableBook({ statusAudio: MediaStatus.UNKNOWN });
+    const emptied = fakeBook({
+      authorId: 7,
+      statistics: { bookFileCount: 0 },
+    });
+    books = [
+      emptied,
+      // The same book from another metadata source, with its own work id
+      fakeBook({
+        id: 12,
+        authorId: 7,
+        foreignBookId: 'hc:2',
+        title: 'Pride and Prejudice: Annotated Edition',
+      }),
+      // Only shares the main title, not the same book
+      fakeBook({
+        id: 13,
+        authorId: 7,
+        foreignBookId: 'hc:3',
+        title: 'Pride and Prejudice and Zombies',
+      }),
+    ];
+    bookById = { 10: emptied };
+
+    await scan();
+
+    const pride = await reload();
+    assert.strictEqual(pride.status, MediaStatus.AVAILABLE);
+    assert.strictEqual(pride.externalServiceId, 12);
+  });
+
+  it('does not move the link to a book that only shares the main title', async () => {
+    await saveAvailableBook({ statusAudio: MediaStatus.UNKNOWN });
+    const emptied = fakeBook({
+      authorId: 7,
+      title: 'True Crime Stories: A Prequel',
+      statistics: { bookFileCount: 0 },
+    });
+    books = [
+      emptied,
+      fakeBook({
+        id: 12,
+        authorId: 7,
+        foreignBookId: 'hc:2',
+        title: 'True Crime Stories: 12 Shocking Cases',
+      }),
+    ];
+    bookById = { 10: emptied };
+
+    await scan();
+
+    assert.strictEqual((await reload()).status, MediaStatus.DELETED);
   });
 
   it('leaves books of other servers alone', async () => {
