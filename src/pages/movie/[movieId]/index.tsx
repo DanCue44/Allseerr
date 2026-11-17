@@ -14,9 +14,9 @@ const MoviePage: NextPage<MoviePageProps> = ({ movie }) => {
   const [interfaceStyle] = useInterfaceStyle();
 
   return interfaceStyle === 'ambient' ? (
-    <AmbientMovieDetails movie={movie} />
+    <AmbientMovieDetails key={movie?.id} movie={movie} />
   ) : (
-    <MovieDetails movie={movie} />
+    <MovieDetails key={movie?.id} movie={movie} />
   );
 };
 

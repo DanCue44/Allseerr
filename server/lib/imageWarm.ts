@@ -1,3 +1,4 @@
+import { MAX_IMAGE_CACHE_SIZE } from '@server/lib/imageProxies';
 import ImageProxy from '@server/lib/imageproxy';
 import logger from '@server/logger';
 
@@ -8,6 +9,7 @@ const getCaaProxy = () => {
   if (!caaProxy) {
     caaProxy = new ImageProxy('caa', 'https://archive.org', {
       rateLimitOptions: { maxRequests: 4, maxRPS: 4 },
+      maxCacheSize: MAX_IMAGE_CACHE_SIZE,
     });
   }
   return caaProxy;

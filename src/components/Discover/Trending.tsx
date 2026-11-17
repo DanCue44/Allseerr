@@ -8,6 +8,7 @@ import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import useDiscover from '@app/hooks/useDiscover';
 import useInterfaceStyle from '@app/hooks/useInterfaceStyle';
+import { useUpdateQueryParams } from '@app/hooks/useUpdateQueryParams';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
 import defineMessages from '@app/utils/defineMessages';
@@ -18,7 +19,6 @@ import type {
   TvResult,
 } from '@server/models/Search';
 import { useRouter } from 'next/router';
-import { useState } from 'react';
 import { useIntl } from 'react-intl';
 
 const messages = defineMessages('components.Discover', {
@@ -31,16 +31,26 @@ type MediaType = 'all' | 'movie' | 'tv';
 
 type TimeWindow = 'day' | 'week';
 
+const parseMediaType = (value: string | string[] | undefined): MediaType => {
+  const mediaType = Array.isArray(value) ? value[0] : value;
+
+  return mediaType === 'movie' || mediaType === 'tv' || mediaType === 'all'
+    ? mediaType
+    : 'all';
+};
+
+const parseTimeWindow = (value: string | string[] | undefined): TimeWindow => {
+  const timeWindow = Array.isArray(value) ? value[0] : value;
+
+  return timeWindow === 'week' || timeWindow === 'day' ? timeWindow : 'day';
+};
+
 const Trending = () => {
   const intl = useIntl();
   const router = useRouter();
-  // Opened narrowed to movies or series from a Discover page showing one type
-  const [currentMediaType, setCurrentMediaType] = useState<MediaType>(() =>
-    router.query.mediaType === 'movie' || router.query.mediaType === 'tv'
-      ? router.query.mediaType
-      : 'all'
-  );
-  const [currentTimeWindow, setCurrentTimeWindow] = useState<TimeWindow>('day');
+  const updateQueryParams = useUpdateQueryParams({});
+  const currentMediaType = parseMediaType(router.query.mediaType);
+  const currentTimeWindow = parseTimeWindow(router.query.timeWindow);
   const [interfaceStyle] = useInterfaceStyle();
   const {
     isLoadingInitialData,
@@ -89,9 +99,7 @@ const Trending = () => {
                 label={intl.formatMessage(listPageMessages.mediaType)}
                 icon={<CircleStackIcon />}
                 value={currentMediaType}
-                onChange={(e) =>
-                  setCurrentMediaType(e.target.value as MediaType)
-                }
+                onChange={(e) => updateQueryParams('mediaType', e.target.value)}
               >
                 {mediaTypeOptions}
               </PillSelect>
@@ -101,7 +109,7 @@ const Trending = () => {
                 icon={<FunnelIcon />}
                 value={currentTimeWindow}
                 onChange={(e) =>
-                  setCurrentTimeWindow(e.target.value as TimeWindow)
+                  updateQueryParams('timeWindow', e.target.value)
                 }
               >
                 {timeWindowOptions}
@@ -135,7 +143,7 @@ const Trending = () => {
             <select
               id="mediaType"
               name="mediaType"
-              onChange={(e) => setCurrentMediaType(e.target.value as MediaType)}
+              onChange={(e) => updateQueryParams('mediaType', e.target.value)}
               value={currentMediaType}
               className="rounded-r-only"
             >
@@ -149,9 +157,7 @@ const Trending = () => {
             <select
               id="timeWindow"
               name="timeWindow"
-              onChange={(e) =>
-                setCurrentTimeWindow(e.target.value as TimeWindow)
-              }
+              onChange={(e) => updateQueryParams('timeWindow', e.target.value)}
               value={currentTimeWindow}
               className="rounded-r-only"
             >

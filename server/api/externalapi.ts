@@ -7,6 +7,7 @@ import {
   rememberStaleAnswer,
 } from '@server/api/externalApiHealth';
 import type { CacheStore } from '@server/lib/cache';
+import logger from '@server/logger';
 import { proxyRequestInterceptor } from '@server/utils/customProxyAgent';
 import { userAgentRequestInterceptor } from '@server/utils/userAgent';
 import type { AxiosInstance, AxiosRequestConfig } from 'axios';
@@ -209,8 +210,16 @@ class ExternalAPI {
           .then((data) => {
             this.cache?.set(cacheKey, data, ttl ?? DEFAULT_TTL);
           })
-          // The cached answer was already returned, a failed refresh keeps it
-          .catch(() => undefined);
+          // The cached answer was already returned, a failed refresh keeps it.
+          // Only the address is logged: the request config holds credentials
+          .catch((e) => {
+            logger.warn('Failed to refresh cached response in background', {
+              label: 'External API',
+              baseUrl: e?.config?.baseURL ?? this.axios.defaults.baseURL,
+              endpoint,
+              errorMessage: e?.message,
+            });
+          });
       }
       return cachedItem;
     }

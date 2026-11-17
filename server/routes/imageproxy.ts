@@ -3,21 +3,47 @@ import {
   getAudiobookshelfCover,
 } from '@server/lib/audiobookshelfCover';
 import { getImageProxy } from '@server/lib/imageProxies';
+import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { Router } from 'express';
 
 const router = Router();
 
+// Image types the browser only loads through the proxy while image caching is
+// on. Music, book and Audiobookshelf covers always go through it.
+const CACHE_SETTING_TYPES = ['tmdb', 'tvdb'];
+
+const isAllowedSegment = (segment: string) =>
+  segment !== '.' &&
+  segment !== '..' &&
+  (/^[\w.-]+$/.test(segment) ||
+    /^w\d+_filter\(duotone,[\da-f]{6},[\da-f]{6}\)$/i.test(segment));
+
 router.get<{
   type: string;
   path: string[];
 }>('/:type/*path', async (req, res, next) => {
-  const imagePath = '/' + req.params.path.join('/');
+  if (
+    CACHE_SETTING_TYPES.includes(req.params.type) &&
+    !getSettings().main.cacheImages
+  ) {
+    return next({ status: 404, message: 'Image caching is disabled.' });
+  }
 
-  if (imagePath.startsWith('//') || imagePath.includes('://')) {
-    logger.error('Invalid URL for image proxy', { imagePath });
+  const joinedPath = '/' + req.params.path.join('/');
+
+  if (joinedPath.startsWith('//') || joinedPath.includes('://')) {
+    logger.error('Invalid URL for image proxy', { imagePath: joinedPath });
     return next({ status: 403, message: 'Invalid URL for image proxy.' });
   }
+
+  const segments = joinedPath.split('/').filter((segment) => segment !== '');
+
+  if (!segments.every(isAllowedSegment)) {
+    return next({ status: 400, message: 'Invalid image path.' });
+  }
+
+  const imagePath = '/' + segments.join('/');
 
   const isCover = req.params.type === AUDIOBOOKSHELF_IMAGE_TYPE;
   const proxy = isCover ? undefined : getImageProxy(req.params.type);

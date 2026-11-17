@@ -1801,6 +1801,7 @@
   "components.RequestModal.futureonlydescription": "Monitor only episodes that have not aired yet. Episodes that already aired are not searched for.",
   "components.RequestModal.hideepisodes": "Hide episodes of season {number}",
   "components.RequestModal.monitormode": "Seasons to request",
+  "components.RequestModal.noSeasonsAvailable": "All of the selected seasons are already requested or available.",
   "components.RequestModal.nocurrentseason": "The current season of this series is already requested or available.",
   "components.RequestModal.nofutureseasons": "This series has no airing or announced seasons to follow.",
   "components.RequestModal.numberofepisodes": "# of Episodes",

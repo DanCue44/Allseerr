@@ -1711,5 +1711,6 @@
   "components.Settings.Notifications.usePublicLogoTip": "Om din Seerr-instans inte är offentligt åtkomlig aktiverar du det här alternativet så att e-postklienter utanför ditt nätverk kan visa bilden. Bilden hämtas från det offentliga GitHub-repot.",
   "components.Settings.SettingsMain.hideRequested": "Dölj begärd media",
   "components.Settings.SettingsMain.hideRequestedTip": "Dölj media som har begärts från Upptäck-sidorna men inte från sökresultaten",
-  "components.Login.demoModeInfo": "Demoläget är aktiverat. Använd demouppgifterna för att logga in."
+  "components.Login.demoModeInfo": "Demoläget är aktiverat. Använd demouppgifterna för att logga in.",
+  "components.RequestModal.noSeasonsAvailable": "Alla valda säsonger är begärda eller tillgängliga redan."
 }

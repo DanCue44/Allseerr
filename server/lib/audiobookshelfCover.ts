@@ -1,6 +1,7 @@
 import { MediaStatus } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import { MAX_IMAGE_CACHE_SIZE } from '@server/lib/imageProxies';
 import type { ImageResponse } from '@server/lib/imageproxy';
 import ImageProxy from '@server/lib/imageproxy';
 import { getSettings } from '@server/lib/settings';
@@ -63,6 +64,7 @@ const getProxy = (): ImageProxy | undefined => {
         {
           headers: { Authorization: `Bearer ${apiKey}` },
           rateLimitOptions: { maxRequests: 20, maxRPS: 50 },
+          maxCacheSize: MAX_IMAGE_CACHE_SIZE,
         }
       ),
     };

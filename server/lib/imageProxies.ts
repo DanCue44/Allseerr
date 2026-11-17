@@ -13,6 +13,9 @@ const ORIGINS: Record<ImageProxyType, string> = {
 const isImageProxyType = (type: string): type is ImageProxyType =>
   Object.prototype.hasOwnProperty.call(ORIGINS, type);
 
+// Per image host, so a flood of new image paths cannot fill the config volume
+export const MAX_IMAGE_CACHE_SIZE = 1024 * 1024 * 1024;
+
 // Created on first use, once the outgoing proxy (if any) is configured
 const proxies: Partial<Record<ImageProxyType, ImageProxy>> = {};
 
@@ -30,6 +33,7 @@ export const getImageProxy = (type: string): ImageProxy | undefined => {
         maxRequests: 20,
         maxRPS: 50,
       },
+      maxCacheSize: MAX_IMAGE_CACHE_SIZE,
     });
   }
   return proxies[type];

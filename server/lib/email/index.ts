@@ -96,7 +96,8 @@ class PreparedEmail extends Email {
           { selector: 'a.as-img-link', format: 'skip' },
         ],
       },
-      transport: transport,
+      // @types/email-templates still types transports against @types/nodemailer
+      transport: transport as unknown as Email.NodeMailerTransportOptions,
       preview: false,
     });
   }

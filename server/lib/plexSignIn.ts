@@ -215,5 +215,14 @@ export const signInWithPlex = async ({
     throw new PlexSignInError(403, 'Access denied.');
   }
 
+  if (
+    settings.main.mediaServerType === MediaServerType.NOT_CONFIGURED &&
+    user.id === mainUser.id
+  ) {
+    settings.main.mediaServerType = MediaServerType.PLEX;
+    await settings.save();
+    startJobs();
+  }
+
   return user;
 };

@@ -14,9 +14,9 @@ const TvPage: NextPage<TvPageProps> = ({ tv }) => {
   const [interfaceStyle] = useInterfaceStyle();
 
   return interfaceStyle === 'ambient' ? (
-    <AmbientTvDetails tv={tv} />
+    <AmbientTvDetails key={tv?.id} tv={tv} />
   ) : (
-    <TvDetails tv={tv} />
+    <TvDetails key={tv?.id} tv={tv} />
   );
 };
 

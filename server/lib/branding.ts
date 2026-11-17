@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import { existsSync, readFileSync } from 'fs';
 import fs from 'fs/promises';
 import path from 'path';
+import type { Metadata, SharpOptions } from 'sharp';
 import sharp from 'sharp';
 
 export const DEFAULT_APPLICATION_TITLE = 'Allseerr';
@@ -214,7 +215,7 @@ export const decodeLogoUpload = (
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 };
 
 const openLogo = async (buffer: Buffer, type: LogoType, size: number) => {
-  let options: sharp.SharpOptions | undefined;
+  let options: SharpOptions | undefined;
 
   if (type === 'svg') {
     // Rasterize at a density that renders the vector at the target size
@@ -234,7 +235,7 @@ export const validateLogo = async (
   buffer: Buffer,
   type: LogoType
 ): Promise<{ width: number; height: number }> => {
-  let metadata: sharp.Metadata;
+  let metadata: Metadata;
 
   try {
     metadata = await sharp(buffer).metadata();
