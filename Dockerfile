@@ -18,6 +18,29 @@ RUN CI=true pnpm install --prod --frozen-lockfile
 # not supported in pnpm for now due to this bug: https://github.com/pnpm/pnpm/issues/9654
 RUN du -shL ./node_modules/.pnpm/* | grep '[0-9]M.*' | grep 'linux-x64-gnu@' | awk '{print $2}' | xargs rm -rf
 
+# The Allseerr image runner uses the classic Docker builder, which cannot
+# exclude files in COPY, so the runtime's unneeded files are removed here.
+# @next/swc is only for next build and for next.config.ts
+# ts-node, @swc/core, and typescript are only needed for build-time type checking and compilation
+# ace-builds, country-flag-icons and @heroicons subfolders are large module files not needed for production
+# Source map files are not needed for production
+RUN rm -rf \
+  node_modules/.pnpm/@next+swc-* \
+  node_modules/.pnpm/@swc+core* \
+  node_modules/.pnpm/ts-node@* \
+  node_modules/.pnpm/typescript@* && \
+  find node_modules/.pnpm \( \
+  -path "*/ace-builds/src-noconflict" -o \
+  -path "*/ace-builds/src" -o \
+  -path "*/ace-builds/src-min" -o \
+  -path "*/country-flag-icons/react" -o \
+  -path "*/country-flag-icons/string" -o \
+  -path "*/country-flag-icons/1x1" -o \
+  -path "*/@heroicons/react/16" \
+  \) -prune -exec rm -rf {} + && \
+  find node_modules -name '*.map' -type f -delete && \
+  rm -rf src server
+
 FROM base AS build
 
 ARG COMMIT_TAG
@@ -35,6 +58,8 @@ RUN \
 RUN CYPRESS_INSTALL_BINARY=0 pnpm install --frozen-lockfile
 
 RUN pnpm build
+
+RUN rm -rf .next/cache && find .next -name '*.map' -type f -delete
 
 FROM node:22.23.5-alpine3.23@sha256:6868d4695b947ee120bffaa463fecd68cde370d7bfec92955e7c8ac576b4f475
 ARG SOURCE_DATE_EPOCH
@@ -61,27 +86,9 @@ USER node:node
 
 WORKDIR /app
 
-COPY --chown=node:node --exclude=src --exclude=server . .
-# @next/swc is only for next build and for next.config.ts
-# ts-node, @swc/core, and typescript are only needed for build-time type checking and compilation
-# ace-builds, country-flag-icons and @heroicons subfolders are large module files not needed for production
-# Source map files are not needed for production
-# Remove large module files not needed for production
-COPY --chown=node:node --from=prod-deps \
-  --exclude=.pnpm/@next+swc-* \
-  --exclude=.pnpm/@swc+core* \
-  --exclude=.pnpm/ts-node@* \
-  --exclude=.pnpm/typescript@* \
-  --exclude=**/ace-builds/src-noconflict \
-  --exclude=**/ace-builds/src \
-  --exclude=**/ace-builds/src-min \
-  --exclude=**/country-flag-icons/react \
-  --exclude=**/country-flag-icons/string \
-  --exclude=**/country-flag-icons/1x1 \
-  --exclude=**/@heroicons/react/16 \
-  --exclude=**/*.map \
-  /app/node_modules ./node_modules
-COPY --chown=node:node --from=build --exclude=cache --exclude=**/*.map /app/.next ./.next
+# The app files without src and server, from the pruned prod-deps stage
+COPY --chown=node:node --from=prod-deps /app ./
+COPY --chown=node:node --from=build /app/.next ./.next
 COPY --chown=node:node --from=build /app/dist ./dist
 
 RUN touch config/DOCKER && \
