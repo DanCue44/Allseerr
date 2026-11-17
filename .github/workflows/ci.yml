@@ -25,7 +25,7 @@ jobs:
     # The self-hosted runner has no Node toolchain of its own, so the job runs
     # in a Node container (git, python3 and build tools included).
     container:
-      image: node:22-bookworm
+      image: node:22-trixie
     steps:
       - name: Checkout
         uses: actions/checkout@v7
