@@ -20,6 +20,7 @@ import {
 import logger from '@server/logger';
 import type { NextFunction, Request } from 'express';
 import { Router } from 'express';
+import { canModifyUser } from '.';
 
 /**
  * A person's own reading app accounts, under their user settings. The
@@ -35,6 +36,9 @@ const findUser = async (req: Request): Promise<User | null> => {
     ? getRepository(User).findOne({ where: { id } })
     : null;
 };
+
+const CANNOT_MODIFY =
+  "You do not have permission to modify this user's settings.";
 
 const parseApp = (value: string): UserAccessApp | null =>
   isUserAccessApp(value) ? value : null;
@@ -80,6 +84,9 @@ readingAppsRoutes.post<{ id: string; app: string }, ReadingAppSetupResult>(
     if (!user) {
       return next({ status: 404, message: 'User not found.' });
     }
+    if (!canModifyUser(user, req.user)) {
+      return next({ status: 403, message: CANNOT_MODIFY });
+    }
     if (!app) {
       return next({ status: 404, message: 'Unknown app.' });
     }
@@ -114,6 +121,9 @@ readingAppsRoutes.post<{ id: string; app: string }, NewAppPassword>(
     if (!user) {
       return next({ status: 404, message: 'User not found.' });
     }
+    if (!canModifyUser(user, req.user)) {
+      return next({ status: 403, message: CANNOT_MODIFY });
+    }
     if (!app) {
       return next({ status: 404, message: 'Unknown app.' });
     }
@@ -143,6 +153,9 @@ readingAppsRoutes.post<{ id: string; app: string }, { app: ReadingAppStatus }>(
 
     if (!user) {
       return next({ status: 404, message: 'User not found.' });
+    }
+    if (!canModifyUser(user, req.user)) {
+      return next({ status: 403, message: CANNOT_MODIFY });
     }
     if (!app) {
       return next({ status: 404, message: 'Unknown app.' });

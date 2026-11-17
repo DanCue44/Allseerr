@@ -1018,6 +1018,13 @@ userSettingsRoutes.delete<{ id: string }>(
         return next({ status: 404, message: 'User not found.' });
       }
 
+      if (!canModifyUser(user, req.user)) {
+        return next({
+          status: 403,
+          message: "You do not have permission to modify this user's settings.",
+        });
+      }
+
       await userRepository.update(user.id, {
         apiKeyHash: null,
         apiKeyCreatedAt: null,
@@ -1158,6 +1165,13 @@ userSettingsRoutes.delete<{ id: string }>(
         return next({ status: 404, message: 'User not found.' });
       }
 
+      if (!canModifyUser(user, req.user)) {
+        return next({
+          status: 403,
+          message: "You do not have permission to modify this user's settings.",
+        });
+      }
+
       await getRepository(NoBookEndsDevice).delete({ user: { id: user.id } });
       await userRepository.update(user.id, {
         nobookendsKeyHash: null,
@@ -1196,6 +1210,17 @@ userSettingsRoutes.delete<{ id: string; deviceId: string }>(
 
       if (!device) {
         return next({ status: 404, message: 'Device not found.' });
+      }
+
+      const owner = await getRepository(User).findOneOrFail({
+        where: { id: Number(req.params.id) },
+      });
+
+      if (!canModifyUser(owner, req.user)) {
+        return next({
+          status: 403,
+          message: "You do not have permission to modify this user's settings.",
+        });
       }
 
       await repository.delete(device.id);

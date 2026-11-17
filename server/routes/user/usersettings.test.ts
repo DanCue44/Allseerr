@@ -5,6 +5,7 @@ import JellyfinAPI from '@server/api/jellyfin';
 import { MediaServerType } from '@server/constants/server';
 import { UserType } from '@server/constants/user';
 import { getRepository } from '@server/datasource';
+import { NoBookEndsDevice } from '@server/entity/NoBookEndsDevice';
 import { User } from '@server/entity/User';
 import { Permission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
@@ -425,5 +426,66 @@ describe('POST /user/:id/settings/password', () => {
       where: { id: otherAdmin.id },
     });
     assert.ok(await user.passwordMatch('reset12345'));
+  });
+});
+
+describe("a manager and another admin's Allseerr settings", () => {
+  it("stops a manager from revoking an admin's keys or devices", async () => {
+    const { otherAdmin } = await seedManagerAndAdmin();
+    const device = await getRepository(NoBookEndsDevice).save(
+      new NoBookEndsDevice({ user: otherAdmin, keyHash: 'test-device-hash' })
+    );
+    const { agent } = await loginAs('demo@seerr.dev', 'test1234');
+
+    const apiKey = await agent.delete(
+      `/user/${otherAdmin.id}/settings/api-key`
+    );
+    const nobookends = await agent.delete(
+      `/user/${otherAdmin.id}/settings/nobookends`
+    );
+    const oneDevice = await agent.delete(
+      `/user/${otherAdmin.id}/settings/nobookends/devices/${device.id}`
+    );
+
+    assert.strictEqual(apiKey.status, 403);
+    assert.strictEqual(nobookends.status, 403);
+    assert.strictEqual(oneDevice.status, 403);
+    assert.ok(
+      await getRepository(NoBookEndsDevice).findOne({
+        where: { id: device.id },
+      })
+    );
+  });
+
+  it("stops a manager from making an admin's reading app passwords", async () => {
+    const { otherAdmin } = await seedManagerAndAdmin();
+    const { agent } = await loginAs('demo@seerr.dev', 'test1234');
+
+    const setup = await agent.post(
+      `/user/${otherAdmin.id}/settings/apps/kavita/setup`
+    );
+    const password = await agent.post(
+      `/user/${otherAdmin.id}/settings/apps/kavita/password`
+    );
+
+    assert.strictEqual(setup.status, 403);
+    assert.strictEqual(password.status, 403);
+  });
+
+  it("still lets a manager revoke a regular user's devices", async () => {
+    await seedManagerAndAdmin();
+    const regular = await getRepository(User).save(
+      new User({
+        email: 'regular@seerr.dev',
+        username: 'regular',
+        permissions: Permission.REQUEST,
+        userType: UserType.LOCAL,
+        avatar: '',
+      })
+    );
+    const { agent } = await loginAs('demo@seerr.dev', 'test1234');
+
+    const res = await agent.delete(`/user/${regular.id}/settings/nobookends`);
+    assert.strictEqual(res.status, 204);
   });
 });
