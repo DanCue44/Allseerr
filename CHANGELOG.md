@@ -2,6 +2,16 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.2 - 2026-11-17
+
+### Added
+
+- With Talearr, an audiobook request can ask for the unabridged or the abridged reading as the only one or by preference (taking the other when none is found), or for both. The Audiobook Versions setting offers the same choices for every request, or lets the requester choose in the request window.
+
+### Changed
+
+- Author pages are more compact: the photo sits beside the name, a strip shows how many works are in the library or requested, Request All Books and the watch button share one row, the biography starts at three lines, links scroll sideways in one row, and works can be filtered (all, in library, not owned, requested) and sorted (popular, newest, oldest). A name too long for one line scrolls instead of wrapping.
+
 ## 3.5.2.1 - 2026-11-17
 
 ### Changed
