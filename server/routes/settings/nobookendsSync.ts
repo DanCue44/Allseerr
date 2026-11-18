@@ -533,10 +533,16 @@ nobookendsSyncRoutes.post<
 
 /**
  * Whether this admin still has the notice about the NoBookEnds Sync page
- * to see. It is shown once, and is gone for good once closed.
+ * to see. It is shown once, and is gone for good once closed. A server that
+ * already uses NoBookEnds Sync has no need of it.
  */
 nobookendsSyncRoutes.get<never, { show: boolean }>('/notice', (req, res) => {
-  res.status(200).json({ show: !!req.user && !isNoticeDismissed(req.user.id) });
+  const sync = getSettings().nobookendsSync;
+  const inUse = !!sync.enabled && !!(sync.internalUrl || sync.url);
+
+  res.status(200).json({
+    show: !!req.user && !inUse && !isNoticeDismissed(req.user.id),
+  });
 });
 
 nobookendsSyncRoutes.post('/notice/dismiss', async (req, res, next) => {

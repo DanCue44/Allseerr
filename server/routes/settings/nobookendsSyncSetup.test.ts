@@ -209,6 +209,16 @@ describe('NoBookEnds Sync setup routes', () => {
     assert.deepStrictEqual(other.body, { show: true });
   });
 
+  it('keeps the notice from a server already using Sync', async () => {
+    Object.assign(getSettings().nobookendsSync, {
+      enabled: true,
+      internalUrl: 'http://nobookends-sync:8000',
+    });
+
+    const res = await request(app).get('/nobookends-sync/notice');
+    assert.deepStrictEqual(res.body, { show: false });
+  });
+
   it('reports Docker as unavailable without the socket', async () => {
     process.env.DOCKER_SOCKET = '/nonexistent/docker.sock';
     const res = await request(app).get('/nobookends-sync/setup');

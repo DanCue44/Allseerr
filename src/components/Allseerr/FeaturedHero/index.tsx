@@ -984,7 +984,7 @@ const SlideContent = ({
         <span className="truncate text-sm text-as-ink-muted">{slide.meta}</span>
       </div>
       <Link href={slide.href}>
-        <h2 className="line-clamp-2 max-w-3xl font-display text-3xl font-semibold leading-tight tracking-tight text-as-ink hover:underline lg:text-5xl">
+        <h2 className="line-clamp-2 max-w-3xl pb-[0.1em] font-display text-3xl font-semibold leading-tight tracking-tight text-as-ink hover:underline lg:text-5xl">
           {slide.title}
         </h2>
       </Link>
