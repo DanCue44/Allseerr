@@ -2,8 +2,8 @@ import Header from '@app/components/Common/Header';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import useComicsEnabled from '@app/hooks/useComicsEnabled';
-import useDiscover from '@app/hooks/useDiscover';
 import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
+import useSearchResults from '@app/hooks/useSearchResults';
 import useSettings from '@app/hooks/useSettings';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
@@ -52,7 +52,7 @@ const Search = () => {
     titles,
     fetchMore,
     error,
-  } = useDiscover<
+  } = useSearchResults<
     | MovieResult
     | TvResult
     | PersonResult
@@ -62,12 +62,8 @@ const Search = () => {
     | AuthorResult
     | ComicResult
   >(
-    `/api/v1/search`,
-    {
-      query: router.query.query,
-      ...(searchType !== 'all' ? { type: searchType } : {}),
-    },
-    { hideAvailable: false, hideBlocklisted: false, hideRequested: false }
+    typeof router.query.query === 'string' ? router.query.query : undefined,
+    searchType !== 'all' ? searchType : undefined
   );
 
   if (error) {

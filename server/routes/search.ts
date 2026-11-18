@@ -24,6 +24,8 @@ import { mapAlbumResult, mapArtistResult } from '@server/models/Music';
 import type {
   AlbumResult,
   ArtistResult,
+  AuthorResult,
+  BookResult,
   ComicResult,
 } from '@server/models/Search';
 import { mapSearchResults } from '@server/models/Search';
@@ -97,8 +99,10 @@ export const searchMusic = async ({
   };
 };
 
-// How long the combined search waits for Talearr's comics lookup
-const ALL_SEARCH_COMICS_BUDGET_MS = 8_000;
+// How long the combined search waits for each of music, books and comics. A
+// source slower than this is left out of that answer rather than holding the
+// page up; its lookup carries on and is cached, so the next search has it.
+const ALL_SEARCH_SOURCE_BUDGET_MS = 5_000;
 // Comics shown in the combined search, best matches first
 const ALL_SEARCH_COMICS_LIMIT = 10;
 
@@ -133,11 +137,60 @@ export const searchComicResults = async (
   return mapComicResults(limit ? results.slice(0, limit) : results);
 };
 
+type ExtraResult = AlbumResult | ArtistResult | BookResult | AuthorResult;
+
+/**
+ * Music, books and comics for the first page of the combined search, each
+ * asked at once and each within ALL_SEARCH_SOURCE_BUDGET_MS. Music joins when
+ * Lidarr can fulfil music requests, books when a book service can fulfil book
+ * requests and comics while Talearr's comics library is on.
+ */
+const searchExtras = async (
+  query: string,
+  shown: (mediaType: string) => boolean
+): Promise<{
+  results: (ExtraResult | ComicResult)[];
+  totalResults: number;
+}> => {
+  const settings = getSettings();
+  const budget = <T>(promise: Promise<T>): Promise<T | undefined> =>
+    withTimeout(promise, ALL_SEARCH_SOURCE_BUDGET_MS).catch(() => undefined);
+
+  const [musicResults, bookResults, comicResults] = await Promise.all([
+    shown('music') && settings.lidarr.length > 0
+      ? budget(searchMusic({ query }))
+      : undefined,
+    shown('book') && settings.bookService
+      ? budget(searchBooks({ query, bookLimit: 10, authorLimit: 3 }))
+      : undefined,
+    shown('comic')
+      ? budget(searchComicResults(query, { limit: ALL_SEARCH_COMICS_LIMIT }))
+      : undefined,
+  ]);
+
+  return {
+    results: [
+      ...(musicResults?.results ?? []),
+      ...(bookResults?.results ?? []),
+      ...(comicResults ?? []),
+    ],
+    totalResults:
+      (musicResults?.totalResults ?? 0) +
+      (bookResults?.results.length ?? 0) +
+      (comicResults?.length ?? 0),
+  };
+};
+
 searchRoutes.get('/', async (req, res, next) => {
   const queryString = req.query.query as string;
   const page = Number(req.query.page) || 1;
   const searchType = (req.query.type as string | undefined) ?? 'all';
   const searchProvider = findSearchProvider(queryString.toLowerCase());
+  // The combined search can be asked in two parts so a page can show movies,
+  // series and people at once and add music, books and comics when they
+  // arrive: "media" is TMDB alone and "extras" the other sources alone.
+  // Without it both come in one answer.
+  const sources = req.query.sources as string | undefined;
   let results: TmdbSearchMultiResponse;
   // Media types the user cannot request, while the admin hides them
   const hidden = getHiddenMediaTypes(
@@ -193,6 +246,27 @@ searchRoutes.get('/', async (req, res, next) => {
       });
     }
 
+    const wantsExtras = !searchProvider && page === 1 && sources !== 'media';
+
+    if (sources === 'extras') {
+      const extras = wantsExtras
+        ? await searchExtras(queryString, shown)
+        : { results: [], totalResults: 0 };
+
+      return res.status(200).json({
+        page: 1,
+        totalPages: 1,
+        totalResults: extras.totalResults,
+        results: rankCombinedResults(queryString, extras.results),
+      });
+    }
+
+    // Started before TMDB is asked, so the slower sources run alongside it
+    const noExtras = { results: [], totalResults: 0 };
+    const extrasSearch = wantsExtras
+      ? searchExtras(queryString, shown).catch(() => noExtras)
+      : Promise.resolve(noExtras);
+
     if (!shown('movie') && !shown('tv')) {
       // Neither movies nor series, so TMDB has nothing to offer
       results = { page: 1, total_pages: 1, total_results: 0, results: [] };
@@ -223,58 +297,18 @@ searchRoutes.get('/', async (req, res, next) => {
       }))
     );
 
-    // Comics join the first page when Talearr's comics library is on. The
-    // lookup asks AniList and Hardcover, so a slow one is left out rather
-    // than holding the page up.
-    const comicSearch =
-      !searchProvider && page === 1 && shown('comic')
-        ? withTimeout(
-            searchComicResults(queryString, {
-              limit: ALL_SEARCH_COMICS_LIMIT,
-            }),
-            ALL_SEARCH_COMICS_BUDGET_MS
-          ).catch(() => undefined)
-        : Promise.resolve(undefined);
-
-    // Music joins the first page when Lidarr can fulfil music requests, and
-    // books when a book service can fulfil book requests. All three sources
-    // are asked at once.
-    const [musicResults, bookResults, comicResults] = await Promise.all([
-      !searchProvider &&
-      page === 1 &&
-      shown('music') &&
-      getSettings().lidarr.length > 0
-        ? searchMusic({ query: queryString }).catch(() => undefined)
-        : undefined,
-      !searchProvider &&
-      page === 1 &&
-      shown('book') &&
-      getSettings().bookService
-        ? searchBooks({
-            query: queryString,
-            bookLimit: 10,
-            authorLimit: 3,
-          }).catch(() => undefined)
-        : undefined,
-      comicSearch,
-    ]);
+    const extras = await extrasSearch;
 
     return res.status(200).json({
       page: results.page,
       totalPages: results.total_pages,
-      totalResults:
-        results.total_results +
-        (musicResults?.totalResults ?? 0) +
-        (bookResults?.results.length ?? 0) +
-        (comicResults?.length ?? 0),
+      totalResults: results.total_results + extras.totalResults,
       // Close title matches first across kinds, see rankCombinedResults
       results: rankCombinedResults(queryString, [
         ...mapSearchResults(results.results, media).filter((result) =>
           shown(result.mediaType)
         ),
-        ...(musicResults?.results ?? []),
-        ...(bookResults?.results ?? []),
-        ...(comicResults ?? []),
+        ...extras.results,
       ]),
     });
   } catch (e) {

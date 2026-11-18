@@ -2,8 +2,8 @@ import { AmbientPageHeader, PillTabs } from '@app/components/Allseerr/ListPage';
 import ListView from '@app/components/Common/ListView';
 import PageTitle from '@app/components/Common/PageTitle';
 import useComicsEnabled from '@app/hooks/useComicsEnabled';
-import useDiscover from '@app/hooks/useDiscover';
 import useHiddenMediaTypes from '@app/hooks/useHiddenMediaTypes';
+import useSearchResults from '@app/hooks/useSearchResults';
 import useSettings from '@app/hooks/useSettings';
 import globalMessages from '@app/i18n/globalMessages';
 import ErrorPage from '@app/pages/_error';
@@ -69,8 +69,7 @@ type SearchResult =
 
 /**
  * Ambient search results: the query as the heading, type tabs as pills and
- * the results in the card grid. Uses the same search endpoint as the classic
- * page.
+ * the results in the card grid. Uses the same search as the classic page.
  */
 const AmbientSearch = () => {
   const intl = useIntl();
@@ -101,13 +100,9 @@ const AmbientSearch = () => {
     titles,
     fetchMore,
     error,
-  } = useDiscover<SearchResult>(
-    `/api/v1/search`,
-    {
-      query: router.query.query,
-      ...(apiType ? { type: apiType } : {}),
-    },
-    { hideAvailable: false, hideBlocklisted: false, hideRequested: false }
+  } = useSearchResults<SearchResult>(
+    typeof router.query.query === 'string' ? router.query.query : undefined,
+    apiType
   );
 
   const results = useMemo(() => {

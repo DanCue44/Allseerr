@@ -11182,6 +11182,16 @@ paths:
             enum: [all, music, book, comic]
             default: all
         - in: query
+          name: sources
+          description: >-
+            Splits the combined search (type all) in two. media answers
+            movies, series and people from TMDB alone; extras answers music,
+            books and comics alone, on the first page only. Without it both
+            come in one answer.
+          schema:
+            type: string
+            enum: [media, extras]
+        - in: query
           name: language
           schema:
             type: string

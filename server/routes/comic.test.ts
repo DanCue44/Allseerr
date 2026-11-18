@@ -29,6 +29,7 @@ import { User } from '@server/entity/User';
 import { UserAccessProfile } from '@server/entity/UserAccessProfile';
 import {
   resetComicsLibraryCache,
+  resetComicsLookupCache,
   resetComicsPreviewCache,
   resetComicsStatusCache,
   syncComicAvailability,
@@ -420,6 +421,7 @@ beforeEach(async () => {
   sendNotificationMock.resetCalls();
   resetComicsStatusCache();
   resetComicsLibraryCache();
+  resetComicsLookupCache();
   resetComicsPreviewCache();
   previewImpl = async () => ({ found: false, unsupported: true });
   previewCalls = [];
@@ -605,6 +607,65 @@ describe('GET /comic/search', () => {
     );
     assert.strictEqual(comics.status, 200);
     assert.strictEqual(comics.body.results.length, 2);
+  });
+
+  it('answers the combined search in two parts when asked', async () => {
+    const agent = await loginAs('demo@seerr.dev');
+
+    const media = await agent
+      .get('/search')
+      .query({ query: 'frieren', sources: 'media' });
+
+    assert.strictEqual(media.status, 200, media.body.message);
+    assert.ok(
+      !media.body.results.some(
+        (result: { mediaType: string }) => result.mediaType === 'comic'
+      )
+    );
+    assert.strictEqual(lookups.length, 0);
+
+    const extras = await agent
+      .get('/search')
+      .query({ query: 'frieren', sources: 'extras' });
+
+    assert.strictEqual(extras.status, 200, extras.body.message);
+    assert.strictEqual(extras.body.totalPages, 1);
+    assert.ok(
+      extras.body.results.some(
+        (result: { mediaType: string; id: string }) =>
+          result.mediaType === 'comic' && result.id === FRIEREN_ID
+      )
+    );
+  });
+
+  it('keeps no extras past the first page', async () => {
+    const agent = await loginAs('demo@seerr.dev');
+
+    const res = await agent
+      .get('/search')
+      .query({ query: 'frieren', sources: 'extras', page: 2 });
+
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body.results, []);
+    assert.strictEqual(lookups.length, 0);
+  });
+
+  it('asks Talearr once for a search typed again', async () => {
+    const agent = await loginAs('demo@seerr.dev');
+
+    await agent.get('/search').query({ query: 'frieren' });
+    const again = await agent.get('/search').query({ query: ' Frieren ' });
+
+    assert.strictEqual(again.status, 200);
+    assert.ok(
+      again.body.results.some(
+        (result: { mediaType: string }) => result.mediaType === 'comic'
+      )
+    );
+    assert.deepStrictEqual(lookups.map((lookup) => lookup.kind).sort(), [
+      'comic',
+      'manga',
+    ]);
   });
 
   it('leaves comics out of the combined search while they are off', async () => {

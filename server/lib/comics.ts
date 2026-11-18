@@ -2,6 +2,7 @@ import ChaptarrAPI from '@server/api/servarr/chaptarr';
 import type {
   TalearrComicDiscoverList,
   TalearrComicLibraryVolume,
+  TalearrComicLookupResponse,
   TalearrComicLookupResult,
   TalearrComicPreview,
   TalearrComicPreviewVolume,
@@ -614,6 +615,80 @@ export const pickComicRootFolder = (
   return [...candidates].sort((a, b) => rank(a) - rank(b))[0];
 };
 
+// How long a comics lookup answer is kept: Talearr asks AniList and
+// Hardcover, which take seconds and whose series change slowly. Whether a
+// series is in the library is read separately, so it is never stale here.
+const LOOKUP_TTL_MS = 15 * 60_000;
+// An answer with notices (a metadata source down or rate limited) is asked
+// again sooner
+const LOOKUP_NOTICE_TTL_MS = 60_000;
+// Lookups kept at most; the oldest is dropped first
+const LOOKUP_CACHE_SIZE = 200;
+
+const lookupCache = new Map<
+  string,
+  { until: number; answer: Promise<TalearrComicLookupResponse> }
+>();
+
+export const resetComicsLookupCache = (): void => {
+  lookupCache.clear();
+};
+
+/**
+ * One Talearr comics lookup, kept for a while so the same search typed again
+ * (or the page reloaded) does not wait on AniList and Hardcover again. A
+ * failed lookup is not kept.
+ */
+const cachedLookup = (
+  server: ChaptarrSettings,
+  query: string,
+  kind: ComicKind
+): Promise<TalearrComicLookupResponse> => {
+  const key = `${server.id}:${server.hostname}:${server.port}:${kind}:${query
+    .trim()
+    .toLowerCase()}`;
+  const cached = lookupCache.get(key);
+
+  if (cached && cached.until > Date.now()) {
+    return cached.answer;
+  }
+
+  const entry = {
+    until: Date.now() + LOOKUP_TTL_MS,
+    answer: Promise.resolve<TalearrComicLookupResponse>({
+      results: [],
+      notices: [],
+    }),
+  };
+
+  entry.answer = getComicsApi(server)
+    .lookup(query, kind)
+    .then((answer) => {
+      if (answer.notices.length > 0) {
+        entry.until = Date.now() + LOOKUP_NOTICE_TTL_MS;
+      }
+
+      return answer;
+    })
+    .catch((e) => {
+      lookupCache.delete(key);
+      throw e;
+    });
+
+  lookupCache.delete(key);
+  lookupCache.set(key, entry);
+
+  if (lookupCache.size > LOOKUP_CACHE_SIZE) {
+    const oldest = lookupCache.keys().next().value;
+
+    if (oldest !== undefined) {
+      lookupCache.delete(oldest);
+    }
+  }
+
+  return entry.answer;
+};
+
 /**
  * Searches Talearr for comic or manga series. Without a kind both are
  * searched and mixed. Talearr searches Hardcover the same way for both
@@ -634,11 +709,10 @@ export const searchComics = async ({
     return { results: [], notices: [] };
   }
 
-  const api = getComicsApi(server);
   const kinds: ComicKind[] = kind ? [kind] : ['manga', 'comic'];
   const answers = await Promise.all(
     kinds.map((each) =>
-      api.lookup(query, each).catch((e) => {
+      cachedLookup(server, query, each).catch((e) => {
         logger.debug('Talearr comics lookup failed', {
           label: 'Comics',
           kind: each,
