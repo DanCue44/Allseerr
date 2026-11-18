@@ -2,6 +2,12 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.3 - 2026-11-18
+
+### Changed
+
+- Search is faster. In the combined search, movies, series and people show as soon as they are found, and music, books and comics join the list when they arrive instead of holding up the page. A source that takes more than five seconds is left out of that search, and comic lookups are remembered for 15 minutes, so a search typed again answers almost at once.
+
 ## 3.5.2.2 - 2026-11-17
 
 ### Added
