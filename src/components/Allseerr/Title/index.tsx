@@ -20,6 +20,11 @@ const posterShapeClasses: Record<PosterShape, string> = {
   round: 'h-[140px] w-[140px] rounded-full lg:h-[250px] lg:w-[250px]',
 };
 
+// A smaller photo on phones for compact pages, where the name sits beside it
+const compactPosterClasses: Partial<Record<PosterShape, string>> = {
+  round: 'h-[104px] w-[104px] rounded-full lg:h-[250px] lg:w-[250px]',
+};
+
 /**
  * Backdrop across the top of a title page with the raised details sheet
  * overlapping it, poster lifted out of the sheet.
@@ -35,6 +40,8 @@ export const TitleHero = ({
   posterFallback,
   imageType = 'tmdb',
   blurBackdrop = false,
+  compact = false,
+  heading,
   badges,
   children,
 }: {
@@ -47,6 +54,10 @@ export const TitleHero = ({
   imageType?: 'tmdb' | 'music' | 'book';
   // Blur and enlarge the backdrop, for pages that only have a small cover
   blurBackdrop?: boolean;
+  // A shorter backdrop on phones, for pages with little to show in it
+  compact?: boolean;
+  // Title block beside the poster on phones and atop the details on desktop
+  heading?: ReactNode;
   // Status pills: beside the poster on phones, above the title on desktop
   badges?: ReactNode;
   children: ReactNode;
@@ -72,7 +83,11 @@ export const TitleHero = ({
 
   return (
     <>
-      <section className="relative h-[330px] overflow-hidden bg-as-tile lg:h-[600px]">
+      <section
+        className={`relative overflow-hidden bg-as-tile lg:h-[600px] ${
+          compact ? 'h-[250px]' : 'h-[330px]'
+        }`}
+      >
         {backdropSrc && (
           <CachedImage
             type={imageType}
@@ -102,7 +117,11 @@ export const TitleHero = ({
       <section className="relative -mt-[100px] flex flex-col gap-3 rounded-t-[26px] bg-as-surface px-4 pb-5 lg:mx-10 lg:-mt-[250px] lg:flex-row lg:gap-9 lg:rounded-[28px] lg:p-8 lg:shadow-[0_30px_60px_rgba(0,0,0,0.4)]">
         <div className="flex items-end gap-3.5 lg:block">
           <div
-            className={`relative -mt-14 flex-none overflow-hidden border-[3px] border-as-surface bg-as-tile lg:-mt-[100px] lg:border-4 ${posterShapeClasses[posterShape]}`}
+            className={`relative flex-none overflow-hidden border-[3px] border-as-surface bg-as-tile lg:-mt-[100px] lg:border-4 ${
+              compact
+                ? `-mt-12 ${compactPosterClasses[posterShape] ?? posterShapeClasses[posterShape]}`
+                : `-mt-14 ${posterShapeClasses[posterShape]}`
+            }`}
           >
             {posterSrc ? (
               <PosterLightbox
@@ -136,6 +155,11 @@ export const TitleHero = ({
               />
             )}
           </div>
+          {heading && (
+            <div className="mb-1 flex min-w-0 flex-1 flex-col gap-1 lg:hidden">
+              {heading}
+            </div>
+          )}
           {badges && (
             <div className="mb-1 flex flex-col items-start gap-1.5 lg:hidden">
               {badges}
@@ -143,6 +167,11 @@ export const TitleHero = ({
           )}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-3.5">
+          {heading && (
+            <div className="hidden min-w-0 flex-col gap-1 lg:flex">
+              {heading}
+            </div>
+          )}
           {badges && (
             <div className="hidden flex-wrap items-center gap-2.5 lg:flex">
               {badges}

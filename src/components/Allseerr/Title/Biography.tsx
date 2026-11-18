@@ -10,11 +10,23 @@ const messages = defineMessages('components.Allseerr.Biography', {
 // Longer texts start clamped to a few lines
 const CLAMP_LENGTH = 480;
 
+// A short clamp keeps the actions and works close on compact pages
+const SHORT_CLAMP_LENGTH = 200;
+
 /** Biography or description text in the details sheet, clamped when long. */
-const Biography = ({ title, text }: { title?: string; text: string }) => {
+const Biography = ({
+  title,
+  text,
+  short = false,
+}: {
+  title?: string;
+  text: string;
+  // Clamp to three lines instead of five
+  short?: boolean;
+}) => {
   const intl = useIntl();
   const [expanded, setExpanded] = useState(false);
-  const isLong = text.length > CLAMP_LENGTH;
+  const isLong = text.length > (short ? SHORT_CLAMP_LENGTH : CLAMP_LENGTH);
 
   return (
     <div className="flex max-w-[760px] flex-col gap-1.5">
@@ -25,7 +37,7 @@ const Biography = ({ title, text }: { title?: string; text: string }) => {
       )}
       <p
         className={`whitespace-pre-line leading-relaxed text-as-ink-soft ${
-          isLong && !expanded ? 'line-clamp-5' : ''
+          isLong && !expanded ? (short ? 'line-clamp-3' : 'line-clamp-5') : ''
         }`}
       >
         {text}
