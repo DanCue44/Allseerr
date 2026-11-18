@@ -18,7 +18,6 @@ import defineMessages from '@app/utils/defineMessages';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { BookOpenIcon } from '@heroicons/react/24/solid';
 import type { AudiobookVersion } from '@server/constants/audiobookVersion';
-import { DEFAULT_AUDIOBOOK_VERSION } from '@server/constants/audiobookVersion';
 import type { BookLanguage } from '@server/constants/bookLanguages';
 import { isBookLanguage } from '@server/constants/bookLanguages';
 import type { BookFormatChoice } from '@server/constants/media';
@@ -59,6 +58,15 @@ const messages = defineMessages('components.RequestModal.BookRequestModal', {
   versionboth: 'Both',
   versionbothtip:
     'The abridged reading is asked for as a recording of its own, when Talearr knows one.',
+  versionstrictness: 'Preferred or Only',
+  versionpreferred: 'Preferred',
+  versiononly: 'Only',
+  versionpreferredunabridgedtip:
+    'Takes the abridged reading when no unabridged release is found.',
+  versiononlyunabridgedtip: 'Never takes the abridged reading.',
+  versionpreferredabridgedtip:
+    'Takes the unabridged reading when no abridged release is found.',
+  versiononlyabridgedtip: 'Never takes the unabridged reading.',
 });
 
 interface BookRequestModalProps {
@@ -133,9 +141,19 @@ const BookRequestModal = ({
   // pick the readings of the audiobook
   const canChooseVersion =
     settings.currentSettings.audiobookVersions === 'requester';
-  const [audiobookVersion, setAudiobookVersion] = useState<AudiobookVersion>(
-    DEFAULT_AUDIOBOOK_VERSION
+  // The reading and, for one reading, whether it is only a preference
+  const [reading, setReading] = useState<'unabridged' | 'abridged' | 'both'>(
+    'unabridged'
   );
+  const [readingOnly, setReadingOnly] = useState(false);
+  const audiobookVersion: AudiobookVersion =
+    reading === 'both'
+      ? 'both'
+      : readingOnly
+        ? reading
+        : reading === 'unabridged'
+          ? 'preferUnabridged'
+          : 'preferAbridged';
 
   useEffect(() => {
     if (onUpdating) {
@@ -374,7 +392,10 @@ const BookRequestModal = ({
     },
   ];
 
-  const versionOptions: { value: AudiobookVersion; label: string }[] = [
+  const versionOptions: {
+    value: 'unabridged' | 'abridged' | 'both';
+    label: string;
+  }[] = [
     {
       value: 'unabridged',
       label: intl.formatMessage(messages.versionunabridged),
@@ -382,6 +403,27 @@ const BookRequestModal = ({
     { value: 'abridged', label: intl.formatMessage(messages.versionabridged) },
     { value: 'both', label: intl.formatMessage(messages.versionboth) },
   ];
+
+  const strictnessOptions: { only: boolean; label: string }[] = [
+    { only: false, label: intl.formatMessage(messages.versionpreferred) },
+    { only: true, label: intl.formatMessage(messages.versiononly) },
+  ];
+
+  const strictnessTip =
+    reading === 'unabridged'
+      ? readingOnly
+        ? messages.versiononlyunabridgedtip
+        : messages.versionpreferredunabridgedtip
+      : readingOnly
+        ? messages.versiononlyabridgedtip
+        : messages.versionpreferredabridgedtip;
+
+  const radioClass = (selected: boolean) =>
+    `rounded-md px-2 py-2 text-sm font-medium ring-1 transition duration-150 sm:px-3 ${
+      selected
+        ? 'bg-indigo-600 text-white ring-indigo-500'
+        : 'bg-gray-800 text-gray-300 ring-gray-700 hover:bg-gray-700'
+    } disabled:cursor-not-allowed disabled:opacity-50`;
 
   // Each format is its own request, so both formats need two from the quota
   const quotaExceeded =
@@ -490,23 +532,44 @@ const BookRequestModal = ({
                 key={option.value}
                 type="button"
                 role="radio"
-                aria-checked={audiobookVersion === option.value}
+                aria-checked={reading === option.value}
                 disabled={isUpdating}
-                onClick={() => setAudiobookVersion(option.value)}
-                className={`rounded-md px-2 py-2 text-sm font-medium ring-1 transition duration-150 sm:px-3 ${
-                  audiobookVersion === option.value
-                    ? 'bg-indigo-600 text-white ring-indigo-500'
-                    : 'bg-gray-800 text-gray-300 ring-gray-700 hover:bg-gray-700'
-                } disabled:cursor-not-allowed disabled:opacity-50`}
+                onClick={() => setReading(option.value)}
+                className={radioClass(reading === option.value)}
               >
                 {option.label}
               </button>
             ))}
           </div>
-          {audiobookVersion === 'both' && (
+          {reading === 'both' ? (
             <p className="mt-2 text-sm text-gray-400">
               {intl.formatMessage(messages.versionbothtip)}
             </p>
+          ) : (
+            <>
+              <div
+                className="mt-2 grid grid-cols-2 gap-2"
+                role="radiogroup"
+                aria-label={intl.formatMessage(messages.versionstrictness)}
+              >
+                {strictnessOptions.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={readingOnly === option.only}
+                    disabled={isUpdating}
+                    onClick={() => setReadingOnly(option.only)}
+                    className={radioClass(readingOnly === option.only)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-2 text-sm text-gray-400">
+                {intl.formatMessage(strictnessTip)}
+              </p>
+            </>
           )}
         </div>
       )}

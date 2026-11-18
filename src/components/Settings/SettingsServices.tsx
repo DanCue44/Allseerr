@@ -124,8 +124,10 @@ const messages = defineMessages('components.Settings', {
   audiobookVersionsTip:
     'Which readings of an audiobook Talearr is asked for when a request is approved. Both adds the unabridged reading and asks for the abridged one as a recording of its own.',
   audiobookVersionsBoth: 'Both',
-  audiobookVersionsUnabridged: 'Unabridged',
-  audiobookVersionsAbridged: 'Abridged',
+  audiobookVersionsUnabridged: 'Unabridged only',
+  audiobookVersionsPreferUnabridged: 'Unabridged preferred',
+  audiobookVersionsAbridged: 'Abridged only',
+  audiobookVersionsPreferAbridged: 'Abridged preferred',
   audiobookVersionsRequester: 'The requester chooses',
   audiobookVersionsSaved: 'Audiobook versions saved.',
   audiobookVersionsFailed:
@@ -1071,8 +1073,18 @@ const SettingsServices = () => {
                   <option value="both">
                     {intl.formatMessage(messages.audiobookVersionsBoth)}
                   </option>
+                  <option value="preferUnabridged">
+                    {intl.formatMessage(
+                      messages.audiobookVersionsPreferUnabridged
+                    )}
+                  </option>
                   <option value="unabridged">
                     {intl.formatMessage(messages.audiobookVersionsUnabridged)}
+                  </option>
+                  <option value="preferAbridged">
+                    {intl.formatMessage(
+                      messages.audiobookVersionsPreferAbridged
+                    )}
                   </option>
                   <option value="abridged">
                     {intl.formatMessage(messages.audiobookVersionsAbridged)}

@@ -639,7 +639,7 @@ describe('audiobook versions with Talearr', () => {
     assert.deepStrictEqual(await findRecordingRequests(), []);
   });
 
-  it('unabridged leaves the global policy and asks for no other recording', async () => {
+  it('unabridged sets the unabridged only policy and asks for no other recording', async () => {
     getSettings().main.audiobookVersions = 'unabridged';
     const agent = await loginAs('admin@seerr.dev');
 
@@ -647,9 +647,40 @@ describe('audiobook versions with Talearr', () => {
     await sentAudiobook();
     await settleTestBackgroundTasks();
 
-    assert.deepStrictEqual(policyCalls, []);
+    assert.deepStrictEqual(policyCalls, [[100, 'unabridgedOnly']]);
     assert.deepStrictEqual(recordingAdds, []);
     assert.deepStrictEqual(searchCalls, [[100]]);
+  });
+
+  it('unabridged preferred sets the prefer unabridged policy and asks for no other recording', async () => {
+    getSettings().main.audiobookVersions = 'preferUnabridged';
+    const agent = await loginAs('admin@seerr.dev');
+
+    await agent.post('/request').send(audiobookBody);
+    await sentAudiobook();
+    await settleTestBackgroundTasks();
+
+    assert.deepStrictEqual(policyCalls, [[100, 'preferUnabridged']]);
+    assert.deepStrictEqual(recordingAdds, []);
+  });
+
+  it('requester: abridged preferred sets the prefer abridged policy before the search', async () => {
+    getSettings().main.audiobookVersions = 'requester';
+    const agent = await loginAs('admin@seerr.dev');
+
+    const res = await agent
+      .post('/request')
+      .send({ ...audiobookBody, audiobookVersion: 'preferAbridged' });
+    assert.strictEqual(res.status, 201, res.body.message);
+    assert.strictEqual(res.body.audiobookVersion, 'preferAbridged');
+    await sentAudiobook();
+    await settleTestBackgroundTasks();
+
+    assert.deepStrictEqual(policyCalls, [[100, 'preferAbridged']]);
+    const policyAt = chaptarrEvents.indexOf('set policy 100 preferAbridged');
+    const searchAt = chaptarrEvents.indexOf('search 100');
+    assert.ok(policyAt >= 0 && policyAt < searchAt, chaptarrEvents.join(' | '));
+    assert.deepStrictEqual(recordingAdds, []);
   });
 
   it('abridged sets the abridged only policy before the search', async () => {

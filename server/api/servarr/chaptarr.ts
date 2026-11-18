@@ -200,7 +200,8 @@ export type TalearrAbridgedPolicy =
   | 'unabridgedOnly'
   | 'preferUnabridged'
   | 'any'
-  | 'abridgedOnly';
+  | 'abridgedOnly'
+  | 'preferAbridged';
 
 /**
  * Talearr's grab policy override for one book. Unsupported when the server
@@ -361,6 +362,7 @@ const ABRIDGED_POLICIES: TalearrAbridgedPolicy[] = [
   'preferUnabridged',
   'any',
   'abridgedOnly',
+  'preferAbridged',
 ];
 
 const parseAbridgedPolicy = (

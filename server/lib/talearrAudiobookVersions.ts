@@ -1,8 +1,10 @@
 import type ChaptarrAPI from '@server/api/servarr/chaptarr';
 import type { AudiobookVersion } from '@server/constants/audiobookVersion';
 import {
+  audiobookVersionPolicy,
   getAudiobookVersionsMode,
   resolveAudiobookVersion,
+  wantsAbridgedReading,
 } from '@server/constants/audiobookVersion';
 import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { ChaptarrSettings } from '@server/lib/settings';
@@ -49,11 +51,12 @@ export interface BookGrabPolicyOutcome {
 
 /**
  * Sets Talearr's grab policy of a book before it is searched for, so the
- * search finds the version asked for. Abridged only for the abridged
- * version; for the others an abridged only override left from an earlier
- * request is cleared, so the book follows Talearr's global policy, which
- * picks the unabridged reading by default. Without a per book policy the
- * abridged version falls back to the recordings route.
+ * search finds the version asked for: unabridged or abridged only, or one of
+ * them by preference. Both clears an override left from an earlier request,
+ * so the book follows Talearr's global policy (the unabridged reading by
+ * default) and the abridged reading is asked for as a recording of its own.
+ * Without a per book policy the abridged versions fall back to the
+ * recordings route.
  */
 export const applyBookGrabPolicy = async (
   chaptarr: ChaptarrAPI,
@@ -62,7 +65,7 @@ export const applyBookGrabPolicy = async (
   version: AudiobookVersion,
   requestId?: number
 ): Promise<BookGrabPolicyOutcome> => {
-  const fallback = { abridgedRecording: version !== 'unabridged' };
+  const fallback = { abridgedRecording: wantsAbridgedReading(version) };
 
   try {
     const current = await chaptarr.getTalearrBookGrabPolicy(bookId);
@@ -81,13 +84,9 @@ export const applyBookGrabPolicy = async (
       return fallback;
     }
 
-    const wanted = version === 'abridged' ? 'abridgedOnly' : null;
+    const wanted = audiobookVersionPolicy(version);
 
-    if (
-      version === 'abridged'
-        ? current.abridgedPolicy !== 'abridgedOnly'
-        : current.abridgedPolicy === 'abridgedOnly'
-    ) {
+    if ((current.abridgedPolicy ?? null) !== wanted) {
       const saved = await chaptarr.setTalearrBookGrabPolicy(bookId, wanted);
 
       if (!saved) {

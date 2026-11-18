@@ -1,16 +1,56 @@
 import { isTalearrService } from '@server/constants/bookService';
 
 /**
- * Which readings of an audiobook a request asks Talearr for: the
- * unabridged one, the abridged one, or both of them
+ * Which readings of an audiobook a request asks Talearr for: only the
+ * unabridged one, the unabridged one by preference (the abridged one when
+ * no unabridged release is found), the same two for the abridged reading,
+ * or both readings as recordings of their own
  */
-export type AudiobookVersion = 'unabridged' | 'abridged' | 'both';
+export type AudiobookVersion =
+  | 'unabridged'
+  | 'preferUnabridged'
+  | 'abridged'
+  | 'preferAbridged'
+  | 'both';
 
 export const AUDIOBOOK_VERSIONS: readonly AudiobookVersion[] = [
   'unabridged',
+  'preferUnabridged',
   'abridged',
+  'preferAbridged',
   'both',
 ];
+
+/**
+ * Talearr's per book grab policy for a version, null to follow its global
+ * policy (both: the abridged reading is asked for as a recording of its own)
+ */
+export const audiobookVersionPolicy = (
+  version: AudiobookVersion
+):
+  | 'unabridgedOnly'
+  | 'preferUnabridged'
+  | 'abridgedOnly'
+  | 'preferAbridged'
+  | null => {
+  switch (version) {
+    case 'unabridged':
+      return 'unabridgedOnly';
+    case 'preferUnabridged':
+      return 'preferUnabridged';
+    case 'abridged':
+      return 'abridgedOnly';
+    case 'preferAbridged':
+      return 'preferAbridged';
+    default:
+      return null;
+  }
+};
+
+// Whether the version wants the abridged reading, as the only, preferred or
+// second reading
+export const wantsAbridgedReading = (version: AudiobookVersion): boolean =>
+  version === 'abridged' || version === 'preferAbridged' || version === 'both';
 
 export const isAudiobookVersion = (value: unknown): value is AudiobookVersion =>
   typeof value === 'string' &&

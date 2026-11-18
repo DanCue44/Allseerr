@@ -13,6 +13,7 @@ import type {
 import SonarrAPI from '@server/api/servarr/sonarr';
 import TheMovieDb from '@server/api/themoviedb';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
+import { wantsAbridgedReading } from '@server/constants/audiobookVersion';
 import {
   getEffectiveBookLanguage,
   isBookLanguage,
@@ -1881,7 +1882,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
             'externalServiceIdAudio',
           ]);
 
-          if (audiobookVersion && audiobookVersion !== 'unabridged') {
+          if (audiobookVersion && wantsAbridgedReading(audiobookVersion)) {
             if (abridgedRecording && result.bookId) {
               await requestAbridgedRecording(entity, {
                 server: chaptarrSettings,
