@@ -2,6 +2,15 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.4 - 2026-11-19
+
+### Fixed
+
+- Book requests no longer fail when Chaptarr has not prepared the book yet ("Metadata for ... is not ready"). Allseerr goes on to add the book, and Chaptarr adds it or holds it until it is ready ([#5](https://github.com/DanCue44/Allseerr/issues/5)).
+- A refused request now says why, for example that the title is on a blocked streaming service, the request limit is reached or the rating is over the limit, instead of "Something went wrong while submitting the request."
+- The NoBookEnds Sync notice no longer shows on a server already using Sync.
+- Letters that dip below the line (g, p, y) are no longer cut off in the featured title on the home page.
+
 ## 3.5.2.3 - 2026-11-18
 
 ### Changed
