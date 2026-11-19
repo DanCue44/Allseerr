@@ -13,6 +13,7 @@ import {
   getInitialRecordingChoice,
 } from '@app/utils/bookRecordings';
 import defineMessages from '@app/utils/defineMessages';
+import { getRequestErrorMessage } from '@app/utils/requestErrorMessage';
 import { Transition } from '@headlessui/react';
 import { MediaRequestStatus } from '@server/constants/media';
 import type { MediaRequest } from '@server/entity/MediaRequest';
@@ -201,11 +202,14 @@ const RecordingRequestModal = ({
       );
       onComplete();
       promptReadingApp();
-    } catch {
-      addToast(intl.formatMessage(messages.requesterror), {
-        appearance: 'error',
-        autoDismiss: true,
-      });
+    } catch (e) {
+      addToast(
+        getRequestErrorMessage(e) ?? intl.formatMessage(messages.requesterror),
+        {
+          appearance: 'error',
+          autoDismiss: true,
+        }
+      );
     } finally {
       setIsUpdating(false);
     }

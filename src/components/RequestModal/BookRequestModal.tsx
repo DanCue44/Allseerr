@@ -15,6 +15,7 @@ import {
   isBookFormatRequestable,
 } from '@app/utils/bookStatus';
 import defineMessages from '@app/utils/defineMessages';
+import { getRequestErrorMessage } from '@app/utils/requestErrorMessage';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { BookOpenIcon } from '@heroicons/react/24/solid';
 import type { AudiobookVersion } from '@server/constants/audiobookVersion';
@@ -237,11 +238,14 @@ const BookRequestModal = ({
         </span>,
         { appearance: 'success', autoDismiss: true }
       );
-    } catch {
-      addToast(intl.formatMessage(messages.requesterror), {
-        appearance: 'error',
-        autoDismiss: true,
-      });
+    } catch (e) {
+      addToast(
+        getRequestErrorMessage(e) ?? intl.formatMessage(messages.requesterror),
+        {
+          appearance: 'error',
+          autoDismiss: true,
+        }
+      );
     } finally {
       setIsUpdating(false);
     }

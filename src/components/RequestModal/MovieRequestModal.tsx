@@ -7,6 +7,7 @@ import useToasts from '@app/hooks/useToasts';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
+import { getRequestErrorMessage } from '@app/utils/requestErrorMessage';
 import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
 import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { NonFunctionProperties } from '@server/interfaces/api/common';
@@ -125,11 +126,14 @@ const MovieRequestModal = ({
           { appearance: 'success', autoDismiss: true }
         );
       }
-    } catch {
-      addToast(intl.formatMessage(messages.requesterror), {
-        appearance: 'error',
-        autoDismiss: true,
-      });
+    } catch (e) {
+      addToast(
+        getRequestErrorMessage(e) ?? intl.formatMessage(messages.requesterror),
+        {
+          appearance: 'error',
+          autoDismiss: true,
+        }
+      );
     } finally {
       setIsUpdating(false);
     }

@@ -548,9 +548,33 @@ const findLibraryBook = async (
   foreignBookId: string,
   mediaType: ChaptarrMediaType
 ): Promise<ChaptarrBook | undefined> => {
-  const [result] = await chaptarr.lookupBooks(foreignBookId, mediaType);
+  let result: ChaptarrBook | undefined;
+
+  try {
+    [result] = await chaptarr.lookupBooks(foreignBookId, mediaType);
+  } catch (e) {
+    // Chaptarr answers 503 "Metadata for ... is not ready" for a work its
+    // metadata server has not prepared yet. Such a work is not in the
+    // library, and adding it still works.
+    if (!isMetadataNotReady(e)) {
+      throw e;
+    }
+
+    logger.debug('Chaptarr metadata for the work is not ready yet', {
+      label: 'Chaptarr',
+      foreignBookId,
+      mediaType,
+    });
+    return undefined;
+  }
 
   return result ? getLibraryBook(chaptarr, result, mediaType) : undefined;
+};
+
+const isMetadataNotReady = (e: unknown): boolean => {
+  const cause = (e as { cause?: { response?: { status?: number } } })?.cause;
+
+  return cause?.response?.status === 503;
 };
 
 /**

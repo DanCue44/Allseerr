@@ -414,6 +414,74 @@ describe('sendBookToChaptarr', () => {
     assert.deepStrictEqual(chaptarr.searched, [[100]]);
   });
 
+  it('adds a book whose Chaptarr metadata is not ready yet', async () => {
+    chaptarr.lookupResults['Pride and Prejudice'] = [book({})];
+    const lookupBooks = chaptarr.lookupBooks.bind(chaptarr);
+    chaptarr.lookupBooks = async (term, mediaType) => {
+      if (term === 'gr:3060926') {
+        chaptarr.lookups.push(`${term}|${mediaType}`);
+        throw Object.assign(
+          new Error(
+            '[Chaptarr] Failed to look up books: Request failed with status code 503'
+          ),
+          {
+            cause: {
+              response: {
+                status: 503,
+                data: { message: 'Metadata for gr:3060926 is not ready' },
+              },
+            },
+          }
+        );
+      }
+
+      return lookupBooks(term, mediaType);
+    };
+
+    const result = await sendBookToChaptarr(asApi(chaptarr), {
+      olId: WORK_ID,
+      mediaType: 'ebook',
+      add,
+    });
+
+    assert.ok(chaptarr.lookups.includes('gr:3060926|ebook'));
+    assert.deepStrictEqual(
+      chaptarr.added.map((added) => added.foreignBookId),
+      ['gr:3060926']
+    );
+    assert.deepStrictEqual(result, {
+      bookId: 100,
+      foreignBookId: 'gr:3060926',
+    });
+  });
+
+  it('still fails when the Chaptarr lookup fails for another reason', async () => {
+    chaptarr.lookupResults['Pride and Prejudice'] = [book({})];
+    const lookupBooks = chaptarr.lookupBooks.bind(chaptarr);
+    chaptarr.lookupBooks = async (term, mediaType) => {
+      if (term === 'gr:3060926') {
+        throw Object.assign(
+          new Error(
+            '[Chaptarr] Failed to look up books: Request failed with status code 500'
+          ),
+          { cause: { response: { status: 500 } } }
+        );
+      }
+
+      return lookupBooks(term, mediaType);
+    };
+
+    await assert.rejects(
+      sendBookToChaptarr(asApi(chaptarr), {
+        olId: WORK_ID,
+        mediaType: 'ebook',
+        add,
+      }),
+      /status code 500/
+    );
+    assert.deepStrictEqual(chaptarr.added, []);
+  });
+
   it('uses an existing entry when Chaptarr has the book twice', async () => {
     const author = {
       id: 7,

@@ -12,6 +12,7 @@ import useToasts from '@app/hooks/useToasts';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
+import { getRequestErrorMessage } from '@app/utils/requestErrorMessage';
 import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/solid';
 import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import {
@@ -351,11 +352,14 @@ const TvRequestModal = ({
           autoDismiss: true,
         });
       }
-    } catch {
-      addToast(intl.formatMessage(messages.requesterror), {
-        appearance: 'error',
-        autoDismiss: true,
-      });
+    } catch (e) {
+      addToast(
+        getRequestErrorMessage(e) ?? intl.formatMessage(messages.requesterror),
+        {
+          appearance: 'error',
+          autoDismiss: true,
+        }
+      );
     } finally {
       if (onUpdating) {
         onUpdating(false);
