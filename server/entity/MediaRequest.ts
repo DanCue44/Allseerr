@@ -1,4 +1,5 @@
 import MusicBrainz from '@server/api/musicbrainz';
+import type { MbReleaseGroup } from '@server/api/musicbrainz/interfaces';
 import OpenLibrary, { getOlId } from '@server/api/openlibrary';
 import TheMovieDb from '@server/api/themoviedb';
 import type {
@@ -68,6 +69,12 @@ import {
   getFutureSeasonNumbers,
   getTmdbSeasonInfo,
 } from '@server/lib/episodeRequests';
+import type { GenreBlockType } from '@server/lib/genreBlock';
+import {
+  findBlockedGenres,
+  getEffectiveBlockedGenres,
+  parseGenreList,
+} from '@server/lib/genreBlock';
 import { getMusicNotificationDetails } from '@server/lib/musicNotifications';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import overrideRules, {
@@ -123,6 +130,7 @@ export class NoSeasonsAvailableError extends Error {}
 export class BlocklistedMediaError extends Error {}
 export class WatchProviderBlockedError extends Error {}
 export class ContentRatingRestrictedError extends Error {}
+export class GenreBlockedError extends Error {}
 export class InvalidBookLanguageError extends Error {}
 export class InvalidRecordingRequestError extends Error {}
 export class InvalidAudiobookVersionError extends Error {}
@@ -371,6 +379,15 @@ export class MediaRequest {
         `This title is rated ${rating} and exceeds the content rating limit of ${ratingLimit}.`
       );
     }
+
+    MediaRequest.checkBlockedGenres(
+      requestBody.mediaType === MediaType.MOVIE ? 'movie' : 'tv',
+      tmdbMedia.genres,
+      user,
+      requestUser,
+      options,
+      { tmdbId: tmdbMedia.id }
+    );
 
     let media = await mediaRepository.findOne({
       where: {
@@ -803,10 +820,24 @@ export class MediaRequest {
       MediaType.MUSIC
     );
 
-    // Makes sure the release group exists before anything is saved
-    const releaseGroup = options.skipMetadataLookup
-      ? { id: mbId }
-      : await new MusicBrainz().getAlbum({ releaseGroupId: mbId });
+    // Makes sure the release group exists before anything is saved. A bulk
+    // request looks it up only when its genres have to be checked.
+    const releaseGroup: Pick<MbReleaseGroup, 'id' | 'genres' | 'tags'> =
+      options.skipMetadataLookup &&
+      !MediaRequest.hasBlockedGenres('music', user, requestUser, options)
+        ? { id: mbId }
+        : await new MusicBrainz().getAlbum({ releaseGroupId: mbId });
+
+    MediaRequest.checkBlockedGenres(
+      'music',
+      [...(releaseGroup.genres ?? []), ...(releaseGroup.tags ?? [])].map(
+        (genre) => genre.name
+      ),
+      user,
+      requestUser,
+      options,
+      { mbId }
+    );
 
     let media = await mediaRepository.findOne({
       where: { mbId: releaseGroup.id, mediaType: MediaType.MUSIC },
@@ -920,6 +951,74 @@ export class MediaRequest {
 
     await requestRepository.save(request);
     return request;
+  }
+
+  /**
+   * Whether a genre block can refuse this request: the person it is for has
+   * blocked genres of this type, and it is not a manager requesting by hand.
+   */
+  private static hasBlockedGenres(
+    type: GenreBlockType,
+    user: User,
+    requestUser: User,
+    options: MediaRequestOptions
+  ): boolean {
+    if (
+      !options.isAutoRequest &&
+      user.hasPermission(Permission.MANAGE_REQUESTS)
+    ) {
+      return false;
+    }
+
+    return (
+      parseGenreList(
+        getEffectiveBlockedGenres(
+          requestUser.blockedGenres,
+          getSettings().main.blockedGenres
+        )[type]
+      ).length > 0
+    );
+  }
+
+  /**
+   * Refuses a title in a genre blocked for the person a request is for.
+   * Managers may request it by hand, but never through an auto-request
+   * such as watchlist sync.
+   */
+  private static checkBlockedGenres(
+    type: GenreBlockType,
+    genres: { id?: number; name: string }[] | string[] | undefined,
+    user: User,
+    requestUser: User,
+    options: MediaRequestOptions,
+    logDetails: Record<string, unknown>
+  ): void {
+    if (!MediaRequest.hasBlockedGenres(type, user, requestUser, options)) {
+      return;
+    }
+
+    const blocked = findBlockedGenres(
+      type,
+      genres,
+      getEffectiveBlockedGenres(
+        requestUser.blockedGenres,
+        getSettings().main.blockedGenres
+      )
+    );
+
+    if (blocked.length > 0) {
+      logger.warn('Request for media blocked due to its genre', {
+        ...logDetails,
+        mediaType: type,
+        genres: blocked,
+        userId: requestUser.id,
+        label: 'Media Request',
+      });
+
+      throw new GenreBlockedError(
+        `This title is in a blocked genre (${blocked.join(', ')}) and cannot be requested.`
+      );
+    }
   }
 
   /**
@@ -1038,10 +1137,22 @@ export class MediaRequest {
 
     // Makes sure the work exists before anything is saved. A merged work is
     // requested as the work it was merged into.
-    const work = options.skipMetadataLookup
-      ? null
-      : await new OpenLibrary().getWork(String(requestBody.mediaId));
+    // A bulk request looks it up only when its genres have to be checked.
+    const work =
+      options.skipMetadataLookup &&
+      !MediaRequest.hasBlockedGenres('book', user, requestUser, options)
+        ? null
+        : await new OpenLibrary().getWork(String(requestBody.mediaId));
     const olId = work ? getOlId(work.key) : String(requestBody.mediaId);
+
+    MediaRequest.checkBlockedGenres(
+      'book',
+      work?.subjects,
+      user,
+      requestUser,
+      options,
+      { olId }
+    );
 
     // A person with an age limit cannot request a book written for adults,
     // and their requests wait for someone who manages requests

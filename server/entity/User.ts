@@ -188,6 +188,11 @@ export class User {
   @Column({ type: 'varchar', nullable: true })
   public tvRatingLimit?: string | null;
 
+  // The user's own blocked genres as JSON (see genreBlock), or null to
+  // follow the server's list
+  @Column({ type: 'text', nullable: true })
+  public blockedGenres?: string | null;
+
   @OneToOne(() => UserSettings, (settings) => settings.user, {
     cascade: true,
     eager: true,

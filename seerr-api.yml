@@ -93,6 +93,22 @@ servers:
 
 components:
   schemas:
+    BlockedGenres:
+      type: object
+      description: Genres that cannot be requested, each a comma separated list. Movies and series take TMDB genre IDs; music (MusicBrainz genres and tags) and books (OpenLibrary subjects) take names, matched as whole words.
+      properties:
+        movie:
+          type: string
+          example: '27,10749'
+        tv:
+          type: string
+          example: '16'
+        music:
+          type: string
+          example: 'christmas'
+        book:
+          type: string
+          example: 'horror'
     Blocklist:
       type: object
       properties:
@@ -434,6 +450,12 @@ components:
           nullable: true
           description: 'Highest US TV rating the user may request (TV-Y, TV-Y7, TV-G, TV-PG, TV-14 or TV-MA). Null means no limit. Only users with the `MANAGE_USERS` permission can change it.'
           example: 'TV-PG'
+        blockedGenres:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/BlockedGenres'
+          description: "The user's own blocked genres. Null follows the server's list. Only users with the `MANAGE_USERS` permission can change it."
         globalMovieQuotaDays:
           type: number
           nullable: true
@@ -531,6 +553,8 @@ components:
           type: boolean
           example: false
           description: Keeps the media types a user cannot request out of their navigation and search. Admins and users with Manage Requests see everything.
+        blockedGenres:
+          $ref: '#/components/schemas/BlockedGenres'
         selfRemoval:
           type: boolean
           example: false

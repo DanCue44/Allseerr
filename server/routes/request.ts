@@ -15,6 +15,7 @@ import {
   BlocklistedMediaError,
   ContentRatingRestrictedError,
   DuplicateMediaRequestError,
+  GenreBlockedError,
   InvalidAudiobookVersionError,
   InvalidBookLanguageError,
   InvalidComicRequestError,
@@ -438,6 +439,7 @@ requestRoutes.post<never, MediaRequest, MediaRequestBody>(
         case BlocklistedMediaError:
         case WatchProviderBlockedError:
         case ContentRatingRestrictedError:
+        case GenreBlockedError:
           return next({ status: 403, message: error.message });
         default:
           return next({ status: 500, message: error.message });

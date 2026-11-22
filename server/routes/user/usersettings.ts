@@ -18,6 +18,10 @@ import {
   parseRatingLimit,
 } from '@server/lib/contentRatingLimit';
 import {
+  normalizeBlockedGenres,
+  parseUserBlockedGenres,
+} from '@server/lib/genreBlock';
+import {
   getNoBookEndsAllseerrUrl,
   getNoBookEndsConnectTarget,
   isNoBookEndsAvailable,
@@ -90,6 +94,7 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         bookQuotaDays: user.bookQuotaDays,
         movieRatingLimit: user.movieRatingLimit,
         tvRatingLimit: user.tvRatingLimit,
+        blockedGenres: parseUserBlockedGenres(user.blockedGenres),
         globalMovieQuotaDays: defaultQuotas.movie.quotaDays,
         globalMovieQuotaLimit: defaultQuotas.movie.quotaLimit,
         globalTvQuotaDays: defaultQuotas.tv.quotaDays,
@@ -187,6 +192,23 @@ userSettingsRoutes.post<
       user.tvRatingLimit = parseRatingLimit(TV_RATINGS, req.body.tvRatingLimit);
     }
 
+    // So can a user's own blocked genres; null follows the server's list
+    if (
+      req.user?.hasPermission(Permission.MANAGE_USERS) &&
+      req.body.blockedGenres !== undefined
+    ) {
+      const blockedGenres =
+        req.body.blockedGenres === null
+          ? null
+          : normalizeBlockedGenres(req.body.blockedGenres);
+
+      if (req.body.blockedGenres !== null && !blockedGenres) {
+        return next({ status: 400, message: 'Invalid blocked genres.' });
+      }
+
+      user.blockedGenres = blockedGenres ? JSON.stringify(blockedGenres) : null;
+    }
+
     // An empty or invalid color falls back to the server accent
     const accentColor = normalizeHexColor(req.body.accentColor) ?? null;
 
@@ -246,6 +268,7 @@ userSettingsRoutes.post<
       hideWatched: savedUser.settings?.hideWatched,
       movieRatingLimit: savedUser.movieRatingLimit,
       tvRatingLimit: savedUser.tvRatingLimit,
+      blockedGenres: parseUserBlockedGenres(savedUser.blockedGenres),
       email: savedUser.email,
     });
   } catch (e) {

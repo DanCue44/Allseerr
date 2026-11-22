@@ -14,6 +14,11 @@ import {
   USER_ACCESS_APPS,
   defaultReadingAppChoices,
 } from '@server/constants/userAccess';
+import type { BlockedGenres } from '@server/lib/genreBlock';
+import {
+  emptyBlockedGenres,
+  normalizeBlockedGenres,
+} from '@server/lib/genreBlock';
 import { Permission } from '@server/lib/permissions';
 import { runMigrations } from '@server/lib/settings/migrator';
 import type { AvailableLocale } from '@server/types/languages';
@@ -410,6 +415,9 @@ export interface MainSettings {
   blocklistedTags: string;
   blocklistedTagsLimit: number;
   blockedWatchProviders: string;
+  // Genres that cannot be requested, per media type, unless a user has
+  // their own list
+  blockedGenres: BlockedGenres;
   mediaServerType: number;
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
@@ -519,6 +527,7 @@ interface FullPublicSettings extends PublicSettings {
   discoverRegion: string;
   streamingRegion: string;
   blockedWatchProviders: string;
+  blockedGenres: BlockedGenres;
   musicEnabled: boolean;
   subtitlesEnabled: boolean;
   audiobookshelfEnabled: boolean;
@@ -795,6 +804,7 @@ class Settings {
         blocklistedTags: '',
         blocklistedTagsLimit: 50,
         blockedWatchProviders: '',
+        blockedGenres: emptyBlockedGenres(),
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
         allowCurrentSeasonRequests: false,
@@ -1263,6 +1273,9 @@ class Settings {
       discoverRegion: this.data.main.discoverRegion,
       streamingRegion: this.data.main.streamingRegion,
       blockedWatchProviders: this.data.main.blockedWatchProviders,
+      blockedGenres:
+        normalizeBlockedGenres(this.data.main.blockedGenres ?? {}) ??
+        emptyBlockedGenres(),
       musicEnabled: this.data.lidarr.length > 0,
       subtitlesEnabled: !!(
         this.data.bazarr?.hostname &&

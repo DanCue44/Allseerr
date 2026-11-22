@@ -1,3 +1,4 @@
+import BlockedGenresFields from '@app/components/BlockedGenresFields';
 import BlocklistedTagsSelector from '@app/components/BlocklistedTagsSelector';
 import Button from '@app/components/Common/Button';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
@@ -61,6 +62,9 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   blockedWatchProviders: 'Block Requests for Streaming Services',
   blockedWatchProvidersTip:
     'Titles included with a subscription to these services in the streaming region cannot be requested. Users with Manage Requests can still request them by hand.',
+  blockedGenres: 'Block Requests by Genre',
+  blockedGenresTip:
+    'Titles in these genres cannot be requested. A user can have their own list instead, set on their General settings. Users with Manage Requests can still request them by hand.',
   blocklistedTags: 'Blocklist Content with Tags',
   blocklistedTagsTip:
     'Automatically add content with tags to the blocklist using the "Process Blocklisted Tags" job',
@@ -246,6 +250,12 @@ const SettingsMain = () => {
             originalLanguage: data?.originalLanguage,
             streamingRegion: data?.streamingRegion || 'US',
             blockedWatchProviders: data?.blockedWatchProviders ?? '',
+            blockedGenres: {
+              movie: data?.blockedGenres?.movie ?? '',
+              tv: data?.blockedGenres?.tv ?? '',
+              music: data?.blockedGenres?.music ?? '',
+              book: data?.blockedGenres?.book ?? '',
+            },
             blocklistRegion: data?.blocklistRegion || '',
             blocklistLanguage: data?.blocklistLanguage || '',
             blocklistedTags: data?.blocklistedTags,
@@ -277,6 +287,7 @@ const SettingsMain = () => {
                 discoverRegion: values.discoverRegion,
                 streamingRegion: values.streamingRegion,
                 blockedWatchProviders: values.blockedWatchProviders,
+                blockedGenres: values.blockedGenres,
                 originalLanguage: values.originalLanguage,
                 blocklistRegion: values.blocklistRegion,
                 blocklistLanguage: values.blocklistLanguage,
@@ -580,6 +591,27 @@ const SettingsMain = () => {
                       />
                     </div>
                   </div>
+                </div>
+                <div
+                  role="group"
+                  aria-labelledby="blocked-genres-label"
+                  className="form-group"
+                >
+                  <div className="form-row">
+                    <span id="blocked-genres-label" className="group-label">
+                      {intl.formatMessage(messages.blockedGenres)}
+                      <span className="label-tip">
+                        {intl.formatMessage(messages.blockedGenresTip)}
+                      </span>
+                    </span>
+                  </div>
+                  <BlockedGenresFields
+                    id="blockedGenres"
+                    value={values.blockedGenres}
+                    onChange={(blockedGenres) =>
+                      setFieldValue('blockedGenres', blockedGenres)
+                    }
+                  />
                 </div>
                 <div className="form-row">
                   <label htmlFor="blocklistRegion" className="text-label">

@@ -6,6 +6,7 @@ import {
   BlocklistedMediaError,
   ContentRatingRestrictedError,
   DuplicateMediaRequestError,
+  GenreBlockedError,
   MediaRequest,
   NoSeasonsAvailableError,
   QuotaRestrictedError,
@@ -197,6 +198,7 @@ class WatchlistSync {
           case BlocklistedMediaError:
           case WatchProviderBlockedError:
           case ContentRatingRestrictedError:
+          case GenreBlockedError:
             break;
           default:
             logger.error('Failed to create media request from watchlist', {

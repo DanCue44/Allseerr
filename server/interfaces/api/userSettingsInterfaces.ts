@@ -1,3 +1,4 @@
+import type { BlockedGenres } from '@server/lib/genreBlock';
 import type { NotificationAgentKey } from '@server/lib/settings';
 
 export interface UserSettingsGeneralResponse {
@@ -20,6 +21,8 @@ export interface UserSettingsGeneralResponse {
   bookQuotaDays?: number;
   movieRatingLimit?: string | null;
   tvRatingLimit?: string | null;
+  // The user's own blocked genres, null to follow the server's list
+  blockedGenres?: BlockedGenres | null;
   globalMovieQuotaDays?: number;
   globalMovieQuotaLimit?: number;
   globalTvQuotaLimit?: number;

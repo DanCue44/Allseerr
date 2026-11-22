@@ -281,6 +281,7 @@ CoreApp.getInitialProps = async (initialProps) => {
     discoverRegion: '',
     streamingRegion: '',
     blockedWatchProviders: '',
+    blockedGenres: { movie: '', tv: '', music: '', book: '' },
     musicEnabled: false,
     subtitlesEnabled: false,
     audiobookshelfEnabled: false,

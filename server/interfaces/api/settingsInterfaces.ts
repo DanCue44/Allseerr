@@ -5,6 +5,7 @@ import type {
 import type { AudiobookVersionsMode } from '@server/constants/audiobookVersion';
 import type { BookLanguage } from '@server/constants/bookLanguages';
 import type { BookFormatChoice } from '@server/constants/media';
+import type { BlockedGenres } from '@server/lib/genreBlock';
 import type {
   DockerStatus,
   InstallState,
@@ -56,6 +57,7 @@ export interface PublicSettingsResponse {
   discoverRegion: string;
   streamingRegion: string;
   blockedWatchProviders: string;
+  blockedGenres: BlockedGenres;
   musicEnabled: boolean;
   // Whether Bazarr is set up, so subtitles can be checked and requested
   subtitlesEnabled: boolean;

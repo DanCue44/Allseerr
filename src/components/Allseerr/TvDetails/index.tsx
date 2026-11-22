@@ -830,6 +830,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             is4kShowComplete={is4kComplete}
             watchProviders={data?.watchProviders}
             contentRating={getTvContentRating(data.contentRatings)}
+            genres={data.genres}
             ambient
           />
           {data?.mediaInfo?.status !== MediaStatus.BLOCKLISTED &&
