@@ -1,4 +1,5 @@
 import TautulliAPI from '@server/api/tautulli';
+import { isTracearrConfigured } from '@server/api/tracearr';
 import { MediaStatus, MediaType } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
@@ -40,6 +41,7 @@ import {
   isBazarrConfigured,
   searchMediaSubtitles,
 } from '@server/lib/subtitles';
+import { getTracearrMediaWatchData } from '@server/lib/tracearrWatchData';
 import watchedSync, { WatchedError } from '@server/lib/watchedsync';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
@@ -409,11 +411,17 @@ mediaRoutes.get<{ id: string }, MediaWatchDataResponse>(
   isAuthenticated(Permission.ADMIN),
   async (req, res, next) => {
     const settings = getSettings().tautulli;
+    const tracearrSettings = getSettings().tracearr;
+    const hasTautulli = !!(
+      settings.hostname &&
+      settings.port &&
+      settings.apiKey
+    );
 
-    if (!settings.hostname || !settings.port || !settings.apiKey) {
+    if (!hasTautulli && !isTracearrConfigured(tracearrSettings)) {
       return next({
         status: 404,
-        message: 'Tautulli API not configured.',
+        message: 'No watch history source configured.',
       });
     }
 
@@ -423,6 +431,22 @@ mediaRoutes.get<{ id: string }, MediaWatchDataResponse>(
 
     if (!media) {
       return next({ status: 404, message: 'Media does not exist.' });
+    }
+
+    // Tautulli stays first when both are set up
+    if (!hasTautulli) {
+      try {
+        return res
+          .status(200)
+          .json(await getTracearrMediaWatchData(tracearrSettings, media));
+      } catch (e) {
+        logger.error('Something went wrong fetching watch data from Tracearr', {
+          label: 'Tracearr API',
+          errorMessage: e.message,
+          mediaId: req.params.id,
+        });
+        return next({ status: 500, message: 'Failed to fetch watch data.' });
+      }
     }
 
     try {

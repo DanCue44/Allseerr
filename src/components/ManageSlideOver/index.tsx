@@ -132,7 +132,12 @@ const ManageSlideOver = ({
   const { addToast } = useToasts();
   const settings = useSettings();
   const { data: watchData } = useSWR<MediaWatchDataResponse>(
-    settings.currentSettings.mediaServerType === MediaServerType.PLEX &&
+    // Tautulli covers Plex; Tracearr also covers Jellyfin and Emby
+    [
+      MediaServerType.PLEX,
+      MediaServerType.JELLYFIN,
+      MediaServerType.EMBY,
+    ].includes(settings.currentSettings.mediaServerType) &&
       data.mediaInfo &&
       hasPermission(Permission.ADMIN)
       ? `/api/v1/media/${data.mediaInfo.id}/watch_data`
