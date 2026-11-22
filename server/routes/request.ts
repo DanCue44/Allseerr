@@ -36,6 +36,10 @@ import type {
   RequestResultsResponse,
 } from '@server/interfaces/api/requestInterfaces';
 import {
+  applyAdvancedRequestOptions,
+  getAdvancedRequestOptions,
+} from '@server/lib/advancedRequestOptions';
+import {
   BulkRequestError,
   requestAuthorCatalog,
   requestDiscography,
@@ -689,6 +693,14 @@ requestRoutes.put<{ requestId: string }>(
           });
         }
 
+        // The request options the editor may change; the rest are kept
+        const editorOptions = req.user
+          ? getAdvancedRequestOptions(
+              req.user.permissions,
+              req.user.advancedRequestOptions
+            )
+          : 0;
+
         const previousOwnerId = request.requestedBy.id;
         let requestUser = request.requestedBy;
 
@@ -727,10 +739,7 @@ requestRoutes.put<{ requestId: string }>(
               }
             }
 
-            request.serverId = req.body.serverId;
-            request.profileId = req.body.profileId;
-            request.rootFolder = req.body.rootFolder;
-            request.tags = req.body.tags;
+            applyAdvancedRequestOptions(request, req.body, editorOptions);
             request.requestedBy = requestUser as User;
 
             await requestRepository.save(request);
@@ -746,10 +755,7 @@ requestRoutes.put<{ requestId: string }>(
               }
             }
 
-            request.serverId = req.body.serverId;
-            request.profileId = req.body.profileId;
-            request.rootFolder = req.body.rootFolder;
-            request.tags = req.body.tags;
+            applyAdvancedRequestOptions(request, req.body, editorOptions);
             request.requestedBy = requestUser as User;
 
             await requestRepository.save(request);
@@ -802,18 +808,9 @@ requestRoutes.put<{ requestId: string }>(
             await requestRepository.save(request);
           } else if (request.type === MediaType.TV) {
             const mediaRepository = getRepository(Media);
-            if (
-              req.user?.hasPermission(
-                [Permission.MANAGE_REQUESTS, Permission.REQUEST_ADVANCED],
-                { type: 'or' }
-              )
-            ) {
-              request.serverId = req.body.serverId;
-              request.profileId = req.body.profileId;
-              request.rootFolder = req.body.rootFolder;
-              request.languageProfileId = req.body.languageProfileId;
-              request.tags = req.body.tags;
-            }
+            applyAdvancedRequestOptions(request, req.body, editorOptions, {
+              languageProfile: true,
+            });
             request.requestedBy = requestUser as User;
 
             const body = req.body as MediaRequestBody;

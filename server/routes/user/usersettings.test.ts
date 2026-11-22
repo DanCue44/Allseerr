@@ -280,6 +280,30 @@ describe('blocked genres', () => {
   });
 });
 
+describe('advanced request options', () => {
+  it('lets an admin narrow and widen the options of a user', async () => {
+    const { userId } = await loginAs('demo@seerr.dev', 'test1234');
+    const { agent: admin } = await loginAs('admin@seerr.dev', 'test1234');
+    const permissions = Permission.REQUEST | Permission.REQUEST_ADVANCED;
+
+    const narrowed = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions, advancedRequestOptions: 2 });
+    assert.strictEqual(narrowed.status, 200);
+    assert.strictEqual(narrowed.body.advancedRequestOptions, 2);
+
+    const kept = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions });
+    assert.strictEqual(kept.body.advancedRequestOptions, 2);
+
+    const widened = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions, advancedRequestOptions: 15 });
+    assert.strictEqual(widened.body.advancedRequestOptions, null);
+  });
+});
+
 describe('book language', () => {
   it('lets a user pick their book language and go back to the default', async () => {
     const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');

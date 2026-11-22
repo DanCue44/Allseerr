@@ -193,6 +193,11 @@ export class User {
   @Column({ type: 'text', nullable: true })
   public blockedGenres?: string | null;
 
+  // With Advanced Requests, the request options the user may choose (see
+  // advancedRequestOptions); null means all of them
+  @Column({ type: 'integer', nullable: true })
+  public advancedRequestOptions?: number | null;
+
   @OneToOne(() => UserSettings, (settings) => settings.user, {
     cascade: true,
     eager: true,

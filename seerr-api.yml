@@ -11123,6 +11123,11 @@ paths:
                   permissions:
                     type: number
                     example: 2
+                  advancedRequestOptions:
+                    type: number
+                    nullable: true
+                    example: 6
+                    description: With Advanced Requests, the request options the user may choose as bits (1 server, 2 quality and language profile, 4 root folder, 8 tags). Null means all of them.
     post:
       summary: Update permission settings for a user
       description: Updates and returns permission settings for a specific user. Requires `MANAGE_USERS` permission if editing other users.
@@ -11143,6 +11148,11 @@ paths:
               properties:
                 permissions:
                   type: number
+                advancedRequestOptions:
+                  type: number
+                  nullable: true
+                  example: 6
+                  description: With Advanced Requests, the request options the user may choose as bits (1 server, 2 quality and language profile, 4 root folder, 8 tags). Null means all of them.
               required:
                 - permissions
       responses:

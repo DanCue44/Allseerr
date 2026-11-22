@@ -12,6 +12,7 @@ import type {
   UserSettingsGeneralResponse,
   UserSettingsNotificationsResponse,
 } from '@server/interfaces/api/userSettingsInterfaces';
+import { normalizeAdvancedRequestOptions } from '@server/lib/advancedRequestOptions';
 import {
   MOVIE_RATINGS,
   TV_RATINGS,
@@ -892,7 +893,10 @@ userSettingsRoutes.post<{ id: string }, UserSettingsNotificationsResponse>(
   }
 );
 
-userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
+userSettingsRoutes.get<
+  { id: string },
+  { permissions?: number; advancedRequestOptions?: number | null }
+>(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
   async (req, res, next) => {
@@ -907,7 +911,10 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
         return next({ status: 404, message: 'User not found.' });
       }
 
-      return res.status(200).json({ permissions: user.permissions });
+      return res.status(200).json({
+        permissions: user.permissions,
+        advancedRequestOptions: user.advancedRequestOptions ?? null,
+      });
     } catch (e) {
       next({ status: 500, message: e.message });
     }
@@ -916,8 +923,8 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
 
 userSettingsRoutes.post<
   { id: string },
-  { permissions?: number },
-  { permissions: number }
+  { permissions?: number; advancedRequestOptions?: number | null },
+  { permissions: number; advancedRequestOptions?: number | null }
 >(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
@@ -956,9 +963,19 @@ userSettingsRoutes.post<
       }
       user.permissions = req.body.permissions;
 
+      // Left out keeps the stored options, null gives every option
+      if (req.body.advancedRequestOptions !== undefined) {
+        user.advancedRequestOptions = normalizeAdvancedRequestOptions(
+          req.body.advancedRequestOptions
+        );
+      }
+
       await userRepository.save(user);
 
-      return res.status(200).json({ permissions: user.permissions });
+      return res.status(200).json({
+        permissions: user.permissions,
+        advancedRequestOptions: user.advancedRequestOptions ?? null,
+      });
     } catch (e) {
       next({ status: 500, message: e.message });
     }

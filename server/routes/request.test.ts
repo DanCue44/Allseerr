@@ -21,6 +21,7 @@ import OverrideRule from '@server/entity/OverrideRule';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
 import { User } from '@server/entity/User';
+import { AdvancedRequestOption } from '@server/lib/advancedRequestOptions';
 import { Notification } from '@server/lib/notifications';
 import { Permission } from '@server/lib/permissions';
 import type { RadarrSettings, SonarrSettings } from '@server/lib/settings';
@@ -373,6 +374,7 @@ async function seedUser(
     bookQuotaLimit?: number;
     permissions?: number;
     blockedGenres?: string | null;
+    advancedRequestOptions?: number | null;
   } = {}
 ) {
   const userRepo = getRepository(User);
@@ -1984,6 +1986,69 @@ describe('POST /request, advanced options', () => {
       ...movieOptions,
       serverId: null,
       languageProfileId: null,
+    });
+  });
+});
+
+describe('POST and PUT /request, narrowed advanced options', () => {
+  it('keeps only the options an admin left the user', async () => {
+    configureRadarr([{ id: 1, isDefault: true, is4k: false }, { id: 2 }]);
+    getSettings().sonarr = [];
+    await seedUser('demo@seerr.dev', {
+      permissions: Permission.REQUEST | Permission.REQUEST_ADVANCED,
+      advancedRequestOptions:
+        AdvancedRequestOption.PROFILE | AdvancedRequestOption.TAGS,
+    });
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.post('/request').send({
+      mediaType: MediaType.MOVIE,
+      mediaId: 88030,
+      ...movieOptions,
+    });
+
+    assert.strictEqual(res.status, 201);
+
+    const saved = await getRepository(MediaRequest).findOneOrFail({
+      where: { id: res.body.id },
+    });
+    assert.deepStrictEqual(storedOptions(saved), {
+      ...noOptions,
+      profileId: movieOptions.profileId,
+      tags: movieOptions.tags,
+    });
+  });
+
+  it('changes only the allowed options on an edit', async () => {
+    const requestRepo = getRepository(MediaRequest);
+    await seedUser('demo@seerr.dev', {
+      permissions: Permission.REQUEST | Permission.REQUEST_ADVANCED,
+      advancedRequestOptions: AdvancedRequestOption.ROOT_FOLDER,
+    });
+    const mediaRequest = await seedRequest();
+    const stored = {
+      serverId: 1,
+      profileId: 5,
+      rootFolder: '/stored',
+      languageProfileId: null,
+      tags: [6],
+    };
+    await requestRepo.save(Object.assign(mediaRequest, stored));
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.put(`/request/${mediaRequest.id}`).send({
+      mediaType: MediaType.MOVIE,
+      ...movieOptions,
+    });
+
+    assert.strictEqual(res.status, 200);
+
+    const saved = await requestRepo.findOneOrFail({
+      where: { id: mediaRequest.id },
+    });
+    assert.deepStrictEqual(storedOptions(saved), {
+      ...stored,
+      rootFolder: movieOptions.rootFolder,
     });
   });
 });

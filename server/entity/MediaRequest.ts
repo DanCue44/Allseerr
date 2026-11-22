@@ -33,6 +33,11 @@ import {
 import { getRepository } from '@server/datasource';
 import type { MediaRequestBody } from '@server/interfaces/api/requestInterfaces';
 import {
+  AdvancedRequestOption,
+  getAdvancedRequestOptions,
+  hasAdvancedRequestOption,
+} from '@server/lib/advancedRequestOptions';
+import {
   getBookFormatName,
   getBookNotificationDetails,
 } from '@server/lib/bookNotifications';
@@ -480,13 +485,18 @@ export class MediaRequest {
       }
     }
 
-    const isAdvanced = user.hasPermission(
-      [Permission.MANAGE_REQUESTS, Permission.REQUEST_ADVANCED],
-      { type: 'or' }
+    const advancedOptions = getAdvancedRequestOptions(
+      user.permissions,
+      user.advancedRequestOptions
     );
+    const isAdvanced = advancedOptions !== 0;
+    const canChoose = (option: AdvancedRequestOption) =>
+      hasAdvancedRequestOption(advancedOptions, option);
 
     const requestsServer =
-      isAdvanced && requestBody.serverId != null && requestBody.serverId >= 0;
+      canChoose(AdvancedRequestOption.SERVER) &&
+      requestBody.serverId != null &&
+      requestBody.serverId >= 0;
 
     // An unknown serverId, or one for the other 4K type, falls back to the default server
     const requestedServiceId =
@@ -504,12 +514,22 @@ export class MediaRequest {
     const useRequestedOptions =
       isAdvanced && (!requestsServer || requestedServiceId !== undefined);
 
-    let rootFolder = useRequestedOptions ? requestBody.rootFolder : undefined;
-    let profileId = useRequestedOptions ? requestBody.profileId : undefined;
-    let tags = useRequestedOptions ? requestBody.tags : undefined;
-    const languageProfileId = useRequestedOptions
-      ? requestBody.languageProfileId
-      : undefined;
+    let rootFolder =
+      useRequestedOptions && canChoose(AdvancedRequestOption.ROOT_FOLDER)
+        ? requestBody.rootFolder
+        : undefined;
+    let profileId =
+      useRequestedOptions && canChoose(AdvancedRequestOption.PROFILE)
+        ? requestBody.profileId
+        : undefined;
+    let tags =
+      useRequestedOptions && canChoose(AdvancedRequestOption.TAGS)
+        ? requestBody.tags
+        : undefined;
+    const languageProfileId =
+      useRequestedOptions && canChoose(AdvancedRequestOption.PROFILE)
+        ? requestBody.languageProfileId
+        : undefined;
 
     const ruleResult = await overrideRules({
       mediaType: requestBody.mediaType,
@@ -888,21 +908,34 @@ export class MediaRequest {
       );
     }
 
-    let rootFolder = requestBody.rootFolder;
-    let profileId = requestBody.profileId;
-    let tags = requestBody.tags;
+    // Only the options the user may choose are kept, as for movies
+    const advancedOptions = getAdvancedRequestOptions(
+      user.permissions,
+      user.advancedRequestOptions
+    );
+    const isAdvanced = advancedOptions !== 0;
+    const canChoose = (option: AdvancedRequestOption) =>
+      hasAdvancedRequestOption(advancedOptions, option);
+    const serverId = canChoose(AdvancedRequestOption.SERVER)
+      ? requestBody.serverId
+      : undefined;
+    let rootFolder = canChoose(AdvancedRequestOption.ROOT_FOLDER)
+      ? requestBody.rootFolder
+      : undefined;
+    let profileId = canChoose(AdvancedRequestOption.PROFILE)
+      ? requestBody.profileId
+      : undefined;
+    let tags = canChoose(AdvancedRequestOption.TAGS)
+      ? requestBody.tags
+      : undefined;
 
     const ruleResult = await overrideRules({
       mediaType: MediaType.MUSIC,
       is4k: false,
       requestUser,
       tags,
-      serviceId: requestBody.serverId ?? undefined,
+      serviceId: serverId ?? undefined,
     });
-    const isAdvanced = user.hasPermission(
-      [Permission.MANAGE_REQUESTS, Permission.REQUEST_ADVANCED],
-      { type: 'or' }
-    );
     // Advanced users pick these in the modal, so we don't want to override them if they are set
     if (ruleResult.rootFolder && (!isAdvanced || !rootFolder)) {
       rootFolder = ruleResult.rootFolder;
@@ -926,7 +959,7 @@ export class MediaRequest {
         mediaType: MediaType.MUSIC,
         is4k: false,
         requestUser,
-        serviceId: requestBody.serverId ?? undefined,
+        serviceId: serverId ?? undefined,
       }));
 
     await mediaRepository.save(media);
@@ -940,7 +973,7 @@ export class MediaRequest {
         : MediaRequestStatus.PENDING,
       modifiedBy: hasAutoApprovePermission ? user : undefined,
       is4k: false,
-      serverId: requestBody.serverId,
+      serverId,
       profileId,
       rootFolder,
       tags,
