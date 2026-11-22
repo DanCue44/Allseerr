@@ -31,6 +31,7 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { isNotFound } from '@app/utils/requestNotFound';
 import {
   ArrowPathIcon,
   CheckIcon,
@@ -708,6 +709,17 @@ const RequestItem = ({ request, revalidateList }: RequestItemProps) => {
                 >
                   {intl.formatMessage(globalMessages.failed)}
                 </Badge>
+              ) : isNotFound(requestData) ? (
+                <>
+                  <Badge badgeType="warning">
+                    {intl.formatMessage(globalMessages.notFound)}
+                  </Badge>
+                  {requestData.notFoundReason && (
+                    <span className="ml-2 truncate text-gray-300">
+                      {requestData.notFoundReason}
+                    </span>
+                  )}
+                </>
               ) : requestData.status === MediaRequestStatus.PENDING &&
                 getRequestMediaStatus(requestData) === MediaStatus.DELETED ? (
                 <Badge

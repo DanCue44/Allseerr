@@ -23,7 +23,10 @@ import { parseBlockedWatchProviders } from '@app/utils/watchProviderBlock';
 import { ArrowDownOnSquareIcon, BeakerIcon } from '@heroicons/react/24/outline';
 import { ArrowPathIcon } from '@heroicons/react/24/solid';
 import type { UserSettingsGeneralResponse } from '@server/interfaces/api/userSettingsInterfaces';
-import type { MainSettings } from '@server/lib/settings';
+import type {
+  MainSettings,
+  RequestNotFoundMediaType,
+} from '@server/lib/settings';
 import type { AvailableLocale } from '@server/types/languages';
 import { DEFAULT_ACCENT_COLOR } from '@server/utils/accentColor';
 import axios from 'axios';
@@ -98,6 +101,20 @@ const messages = defineMessages('components.Settings.SettingsMain', {
     'Only affects series requested with Request Current Season. When the next season starts, the older seasons that request downloaded are deleted after this many days, and admins get a notice with a Keep button first. Seasons that were already in your library are never deleted unless an admin approves it, and nothing else in Sonarr is touched. 0 deletes them right away',
   validationCurrentSeasonRolloverDelayDays:
     'You must provide a whole number of days, 0 or more',
+  requestNotFound: 'Mark Requests Not Found',
+  requestNotFoundTip:
+    'Marks an approved request as Not Found when nothing has turned up after the days below, and tells the requester why. The request still completes if the file arrives later. Downloads stuck in the queue are left to the Download Needs Attention alert',
+  requestNotFoundDays: 'Days Before a Request Is Not Found',
+  requestNotFoundDaysTip:
+    'Counted from when the request was approved or last changed. 0 leaves that media type out',
+  requestNotFoundMovies: 'Movies',
+  requestNotFoundSeries: 'Series',
+  requestNotFoundMusic: 'Music',
+  requestNotFoundBooks: 'Books',
+  requestNotFoundComics: 'Comics',
+  requestNotFoundUnmonitor: 'Stop Searching for Requests Not Found',
+  requestNotFoundUnmonitorTip:
+    'Also unmonitors the title in Radarr, Sonarr, Lidarr or Talearr, so it is no longer searched for. Comics keep being searched for',
   enableSpecialEpisodes: 'Allow Special Episodes Requests',
   defaultBookFormat: 'Default Book Format',
   defaultBookFormatTip: 'Format preselected when requesting a book',
@@ -118,6 +135,22 @@ const messages = defineMessages('components.Settings.SettingsMain', {
   versionCheckTip: 'Automatically check for new versions on GitHub.',
   validationUrl: 'You must provide a valid URL',
 });
+
+const REQUEST_NOT_FOUND_TYPES: RequestNotFoundMediaType[] = [
+  'movie',
+  'tv',
+  'music',
+  'book',
+  'comic',
+];
+
+const REQUEST_NOT_FOUND_LABELS = {
+  movie: messages.requestNotFoundMovies,
+  tv: messages.requestNotFoundSeries,
+  music: messages.requestNotFoundMusic,
+  book: messages.requestNotFoundBooks,
+  comic: messages.requestNotFoundComics,
+};
 
 const SettingsMain = () => {
   const { addToast } = useToasts();
@@ -254,6 +287,14 @@ const SettingsMain = () => {
             allowCurrentSeasonRequests: data?.allowCurrentSeasonRequests,
             currentSeasonRolloverDelayDays:
               data?.currentSeasonRolloverDelayDays ?? 3,
+            requestNotFoundEnabled: !!data?.requestNotFound?.enabled,
+            requestNotFoundUnmonitor: !!data?.requestNotFound?.unmonitor,
+            requestNotFoundDays: Object.fromEntries(
+              REQUEST_NOT_FOUND_TYPES.map((type) => [
+                type,
+                data?.requestNotFound?.days?.[type] ?? 30,
+              ])
+            ) as Record<RequestNotFoundMediaType, number>,
             enableSpecialEpisodes: data?.enableSpecialEpisodes,
             defaultBookFormat: data?.defaultBookFormat ?? 'both',
             bookLanguage: data?.bookLanguage ?? 'en',
@@ -287,6 +328,19 @@ const SettingsMain = () => {
                 currentSeasonRolloverDelayDays: Number(
                   values.currentSeasonRolloverDelayDays
                 ),
+                requestNotFound: {
+                  enabled: values.requestNotFoundEnabled,
+                  unmonitor: values.requestNotFoundUnmonitor,
+                  days: Object.fromEntries(
+                    REQUEST_NOT_FOUND_TYPES.map((type) => [
+                      type,
+                      Math.max(
+                        0,
+                        Math.floor(Number(values.requestNotFoundDays[type]))
+                      ) || 0,
+                    ])
+                  ),
+                },
                 enableSpecialEpisodes: values.enableSpecialEpisodes,
                 defaultBookFormat: values.defaultBookFormat,
                 bookLanguage: values.bookLanguage,
@@ -812,6 +866,95 @@ const SettingsMain = () => {
                       )}
                   </div>
                 </div>
+                <div className="form-row">
+                  <label
+                    htmlFor="requestNotFoundEnabled"
+                    className="checkbox-label"
+                  >
+                    <span className="mr-2">
+                      {intl.formatMessage(messages.requestNotFound)}
+                    </span>
+                    <span className="label-tip">
+                      {intl.formatMessage(messages.requestNotFoundTip)}
+                    </span>
+                  </label>
+                  <div className="form-input-area">
+                    <Field
+                      type="checkbox"
+                      id="requestNotFoundEnabled"
+                      name="requestNotFoundEnabled"
+                      onChange={() => {
+                        setFieldValue(
+                          'requestNotFoundEnabled',
+                          !values.requestNotFoundEnabled
+                        );
+                      }}
+                    />
+                  </div>
+                </div>
+                {values.requestNotFoundEnabled && (
+                  <>
+                    <div className="form-row">
+                      <span className="text-label">
+                        <span className="mr-2">
+                          {intl.formatMessage(messages.requestNotFoundDays)}
+                        </span>
+                        <span className="label-tip">
+                          {intl.formatMessage(messages.requestNotFoundDaysTip)}
+                        </span>
+                      </span>
+                      <div className="form-input-area flex flex-wrap gap-4">
+                        {REQUEST_NOT_FOUND_TYPES.map((type) => (
+                          <label
+                            key={`request-not-found-${type}`}
+                            htmlFor={`requestNotFoundDays.${type}`}
+                            className="flex flex-col gap-1 text-sm"
+                          >
+                            {intl.formatMessage(REQUEST_NOT_FOUND_LABELS[type])}
+                            <Field
+                              id={`requestNotFoundDays.${type}`}
+                              name={`requestNotFoundDays.${type}`}
+                              type="text"
+                              inputMode="numeric"
+                              className="short"
+                              placeholder={30}
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="form-row">
+                      <label
+                        htmlFor="requestNotFoundUnmonitor"
+                        className="checkbox-label"
+                      >
+                        <span className="mr-2">
+                          {intl.formatMessage(
+                            messages.requestNotFoundUnmonitor
+                          )}
+                        </span>
+                        <span className="label-tip">
+                          {intl.formatMessage(
+                            messages.requestNotFoundUnmonitorTip
+                          )}
+                        </span>
+                      </label>
+                      <div className="form-input-area">
+                        <Field
+                          type="checkbox"
+                          id="requestNotFoundUnmonitor"
+                          name="requestNotFoundUnmonitor"
+                          onChange={() => {
+                            setFieldValue(
+                              'requestNotFoundUnmonitor',
+                              !values.requestNotFoundUnmonitor
+                            );
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
                 <div className="form-row">
                   <label
                     htmlFor="enableSpecialEpisodes"

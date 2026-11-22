@@ -31,6 +31,7 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { isNotFound } from '@app/utils/requestNotFound';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
   ArrowPathIcon,
@@ -1066,6 +1067,14 @@ const RequestCard = ({
           onChange={revalidateList}
         />
       ),
+    });
+  }
+  if (isNotFound(requestData)) {
+    details.push({
+      key: 'notFound',
+      label: intl.formatMessage(globalMessages.notFound),
+      value: requestData.notFoundReason ?? '',
+      title: requestData.notFoundReason ?? undefined,
     });
   }
   if (

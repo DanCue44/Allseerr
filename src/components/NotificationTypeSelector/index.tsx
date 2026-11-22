@@ -44,6 +44,11 @@ const messages = defineMessages('components.NotificationTypeSelector', {
     'Send notifications when media requests are declined.',
   usermediadeclinedDescription:
     'Get notified when your media requests are declined.',
+  medianotfound: 'Request Not Found',
+  medianotfoundDescription:
+    'Send notifications when an approved request has found nothing after the number of days set in Settings.',
+  usermedianotfoundDescription:
+    'Get notified when nothing has been found for your request after a while.',
   issuecreated: 'Issue Reported',
   issuecreatedDescription: 'Send notifications when issues are reported.',
   userissuecreatedDescription: 'Get notified when other users report issues.',
@@ -170,6 +175,8 @@ export enum Notification {
   ACCESS_REQUESTED = 2097152,
   ACCESS_GRANTED = 4194304,
   APP_USERNAME_CHANGED = 8388608,
+  // An approved request that found nothing for a while
+  MEDIA_NOT_FOUND = 16777216,
 }
 
 export const ALL_NOTIFICATIONS = Object.values(Notification)
@@ -328,6 +335,19 @@ const NotificationTypeSelector = ({
         value: Notification.MEDIA_DECLINED,
         hasNotifyUser: true,
         hidden: allRequestsAutoApproved,
+      },
+      {
+        id: 'media-not-found',
+        name: intl.formatMessage(messages.medianotfound),
+        description: intl.formatMessage(
+          user
+            ? messages.usermedianotfoundDescription
+            : messages.medianotfoundDescription
+        ),
+        value: Notification.MEDIA_NOT_FOUND,
+        hasNotifyUser: true,
+        // Only once the check is turned on in Settings
+        hidden: !settings.currentSettings.requestNotFoundEnabled,
       },
       {
         id: 'media-available',

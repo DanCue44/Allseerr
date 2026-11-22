@@ -78,6 +78,9 @@ class PushbulletAgent
         case Notification.MEDIA_DECLINED:
           status = intl.formatMessage(globalMessages.declined);
           break;
+        case Notification.MEDIA_NOT_FOUND:
+          status = intl.formatMessage(globalMessages.notFound);
+          break;
         case Notification.MEDIA_FAILED:
           status = intl.formatMessage(globalMessages.failed);
           break;

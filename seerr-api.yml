@@ -587,6 +587,41 @@ components:
           minimum: 0
           example: 3
           description: Days admins are notified before older seasons of a current season request are deleted.
+        requestNotFound:
+          type: object
+          description: Marks approved requests that found nothing for a number of days as not found, and tells the requester. Off by default.
+          properties:
+            enabled:
+              type: boolean
+              example: false
+            unmonitor:
+              type: boolean
+              example: false
+              description: Also unmonitor the title in its arr, so it is no longer searched for.
+            days:
+              type: object
+              description: Days per media type before a request is not found. 0 leaves the media type out.
+              properties:
+                movie:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                tv:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                music:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                book:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                comic:
+                  type: integer
+                  minimum: 0
+                  example: 30
         localLogin:
           type: boolean
           example: true
@@ -3411,6 +3446,17 @@ components:
           type: boolean
           example: false
           description: Books only. True for an audiobook request, false for an ebook request.
+        notFoundAt:
+          type: string
+          nullable: true
+          readOnly: true
+          example: '2020-10-12T10:00:27.000Z'
+          description: When the Request Not Found check marked this approved request as not found. The request stays approved.
+        notFoundReason:
+          type: string
+          nullable: true
+          readOnly: true
+          example: Nothing was found in 30 days. It is still being looked for.
         language:
           type: string
           nullable: true

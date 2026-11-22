@@ -35,6 +35,7 @@ const defaultSettings: PublicSettingsResponse = {
   partialRequestsEnabled: true,
   allowCurrentSeasonRequests: false,
   hideUnrequestable: false,
+  requestNotFoundEnabled: false,
   defaultBookFormat: 'both',
   bookLanguage: 'en',
   enableSpecialEpisodes: false,

@@ -8,6 +8,7 @@ const globalMessages = defineMessages('notifications.common', {
   available: 'Available',
   declined: 'Declined',
   failed: 'Failed',
+  notFound: 'Not Found',
   commentFrom: 'Comment from {userName}',
   reportedBy: 'Reported By',
   issueType: 'Issue Type',

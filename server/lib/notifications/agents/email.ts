@@ -60,6 +60,10 @@ const messages = defineMessages('notifications.agents.email', {
   declinedRequest: 'Your request for the following {mediaType} was declined:',
   declinedRequest4k:
     'Your request for the following {mediaType} in 4K was declined:',
+  notFoundRequest:
+    'Nothing has been found yet for your request for the following {mediaType}:',
+  notFoundRequest4k:
+    'Nothing has been found yet for your request for the following {mediaType} in 4K:',
   failedRequest:
     'A request for the following {mediaType} failed to be added to {service}:',
   failedRequest4k:
@@ -119,6 +123,11 @@ const getRequestStatus = (
     case Notification.MEDIA_DECLINED:
       return {
         label: intl.formatMessage(globalMessages.declined),
+        tone: 'red',
+      };
+    case Notification.MEDIA_NOT_FOUND:
+      return {
+        label: intl.formatMessage(globalMessages.notFound),
         tone: 'red',
       };
     case Notification.MEDIA_FAILED:
@@ -325,6 +334,12 @@ class EmailAgent
         case Notification.MEDIA_DECLINED:
           body = intl.formatMessage(
             is4k ? messages.declinedRequest4k : messages.declinedRequest,
+            { mediaType }
+          );
+          break;
+        case Notification.MEDIA_NOT_FOUND:
+          body = intl.formatMessage(
+            is4k ? messages.notFoundRequest4k : messages.notFoundRequest,
             { mediaType }
           );
           break;

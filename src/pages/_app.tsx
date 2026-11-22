@@ -290,6 +290,7 @@ CoreApp.getInitialProps = async (initialProps) => {
     partialRequestsEnabled: true,
     allowCurrentSeasonRequests: false,
     hideUnrequestable: false,
+    requestNotFoundEnabled: false,
     defaultBookFormat: 'both',
     bookLanguage: 'en',
     enableSpecialEpisodes: false,

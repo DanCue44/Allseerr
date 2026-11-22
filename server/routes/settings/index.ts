@@ -145,6 +145,22 @@ settingsRoutes.post('/main', async (req, res, next) => {
     return next({ status: 400, message: 'Unknown audiobook versions.' });
   }
 
+  if (body.requestNotFound !== undefined) {
+    const days = body.requestNotFound?.days ?? {};
+
+    if (
+      typeof body.requestNotFound !== 'object' ||
+      Object.values(days).some(
+        (value) => !Number.isInteger(value) || (value as number) < 0
+      )
+    ) {
+      return next({
+        status: 400,
+        message: 'Request Not Found days must be whole numbers, 0 or more.',
+      });
+    }
+  }
+
   settings.main = merge(settings.main, body);
   await settings.save();
 

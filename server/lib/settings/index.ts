@@ -371,6 +371,28 @@ export interface MetadataSettings {
   anime: MetadataProviderType;
 }
 
+export type RequestNotFoundMediaType =
+  | 'movie'
+  | 'tv'
+  | 'music'
+  | 'book'
+  | 'comic';
+
+export interface RequestNotFoundSettings {
+  enabled: boolean;
+  // Days an approved request may find nothing before it is marked not
+  // found, per media type. 0 leaves that media type out.
+  days: Record<RequestNotFoundMediaType, number>;
+  // Also tell the arr (or Talearr) to stop searching for it
+  unmonitor: boolean;
+}
+
+export const DEFAULT_REQUEST_NOT_FOUND: RequestNotFoundSettings = {
+  enabled: false,
+  days: { movie: 30, tv: 30, music: 30, book: 30, comic: 30 },
+  unmonitor: false,
+};
+
 export interface ProxySettings {
   enabled: boolean;
   hostname: string;
@@ -426,6 +448,8 @@ export interface MainSettings {
   // Google Books API key, used to check whether books have ebook editions
   googleBooksApiKey: string;
   currentSeasonRolloverDelayDays: number;
+  // Approved requests that found nothing for a while are marked not found
+  requestNotFound?: RequestNotFoundSettings;
   enableSpecialEpisodes: boolean;
   locale: string;
   youtubeUrl: string;
@@ -528,6 +552,7 @@ interface FullPublicSettings extends PublicSettings {
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
   hideUnrequestable: boolean;
+  requestNotFoundEnabled: boolean;
   defaultBookFormat: BookFormatChoice;
   bookLanguage: BookLanguage;
   // Talearr only, the Audiobook Versions setting in effect
@@ -714,7 +739,8 @@ export type JobId =
   | 'recently-added-newsletter'
   | 'followed-releases'
   | 'user-access-sync'
-  | 'nobookends-directory';
+  | 'nobookends-directory'
+  | 'request-not-found';
 
 export interface AllSettings {
   clientId: string;
@@ -799,6 +825,10 @@ class Settings {
         audiobookVersions: 'both',
         googleBooksApiKey: '',
         currentSeasonRolloverDelayDays: 3,
+        requestNotFound: {
+          ...DEFAULT_REQUEST_NOT_FOUND,
+          days: { ...DEFAULT_REQUEST_NOT_FOUND.days },
+        },
         enableSpecialEpisodes: false,
         locale: 'en',
         youtubeUrl: '',
@@ -1039,6 +1069,9 @@ class Settings {
         },
         'nobookends-directory': {
           schedule: '0 40 4 * * *',
+        },
+        'request-not-found': {
+          schedule: '0 20 7 * * *',
         },
       },
       newsletter: {},
@@ -1282,6 +1315,7 @@ class Settings {
       allowCurrentSeasonRequests:
         this.data.main.allowCurrentSeasonRequests ?? false,
       hideUnrequestable: this.data.main.hideUnrequestable ?? false,
+      requestNotFoundEnabled: !!this.data.main.requestNotFound?.enabled,
       defaultBookFormat: this.data.main.defaultBookFormat ?? 'both',
       bookLanguage: getEffectiveBookLanguage(
         undefined,
