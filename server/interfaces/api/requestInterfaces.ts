@@ -15,6 +15,9 @@ export interface RequestResultsResponse extends PaginatedResponse {
   results: (NonFunctionProperties<MediaRequest> & {
     profileName?: string;
     canRemove?: boolean;
+    // "Notify me too": how many users asked to be told, and whether the
+    // user asking is one of them
+    interest?: { count: number; interested: boolean };
   })[];
   serviceErrors: {
     radarr: { id: number; name: string }[];
@@ -113,4 +116,12 @@ export interface BulkRequestResponse {
   // Discography requests only: whether Lidarr was asked to monitor new
   // releases of the artist
   monitorNewReleases?: boolean;
+}
+
+export interface RequestInterestResponse {
+  results: {
+    requestId: number;
+    count: number;
+    interested: boolean;
+  }[];
 }

@@ -49,6 +49,7 @@ import WatchedBadge from '@app/components/Common/WatchedBadge';
 import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
 import RequestModal from '@app/components/RequestModal';
@@ -868,6 +869,12 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             mediaType="tv"
             title={data.name}
             className={pillIcon}
+          />
+          <NotifyMeButton
+            media={data?.mediaInfo}
+            title={data.name}
+            className={pillSecondaryCollapse}
+            ambient
           />
           <RemovalRequestButton
             media={data?.mediaInfo}

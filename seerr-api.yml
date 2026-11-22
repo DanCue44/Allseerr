@@ -3363,6 +3363,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WatchProviders'
+    RequestInterest:
+      type: object
+      properties:
+        requestId:
+          type: number
+          example: 1
+        count:
+          type: number
+          example: 2
+        interested:
+          type: boolean
+          example: true
     MediaRequest:
       type: object
       properties:
@@ -13014,6 +13026,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkRequestResponse'
+  /request/interest:
+    get:
+      summary: Notify me too for a title
+      description: |
+        Returns the requests of a title still on their way (pending or approved), with how many users asked to be told when each becomes available and whether the current user is one of them.
+      tags:
+        - request
+      parameters:
+        - in: query
+          name: mediaId
+          required: true
+          schema:
+            type: number
+            example: 1
+      responses:
+        '200':
+          description: Interest returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequestInterest'
   /request/count:
     get:
       summary: Gets request counts
@@ -13174,6 +13212,47 @@ paths:
       responses:
         '204':
           description: Succesfully removed request
+  /request/{requestId}/interest:
+    post:
+      summary: Ask to be told when a request is available
+      description: |
+        Adds the current user to someone else's pending or approved request, so they get the same availability notification as the requester. It is not a request of their own and does not use their quota. Requires the permission to make the same request.
+      tags:
+        - request
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema:
+            type: string
+            example: '1'
+      responses:
+        '200':
+          description: Interest added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestInterest'
+        '403':
+          description: The user cannot make this kind of request
+        '404':
+          description: Request not found
+        '409':
+          description: The request is the user's own, or no longer in progress
+    delete:
+      summary: Stop being told about a request
+      tags:
+        - request
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema:
+            type: string
+            example: '1'
+      responses:
+        '204':
+          description: Interest removed
   /request/{requestId}/retry:
     post:
       summary: Retry failed request

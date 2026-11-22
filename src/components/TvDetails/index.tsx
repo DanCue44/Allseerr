@@ -22,6 +22,7 @@ import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
 import MediaSlider from '@app/components/MediaSlider';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import PersonCard from '@app/components/PersonCard';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
@@ -725,6 +726,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             watchProviders={data?.watchProviders}
             contentRating={getTvContentRating(data.contentRatings)}
           />
+          <NotifyMeButton media={data?.mediaInfo} title={data.name} />
           <RemovalRequestButton media={data?.mediaInfo} title={data.name} />
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             data.mediaInfo?.status === MediaStatus.PARTIALLY_AVAILABLE ||

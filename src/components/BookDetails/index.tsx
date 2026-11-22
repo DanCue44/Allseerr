@@ -13,6 +13,7 @@ import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import BookManageSlideOver from '@app/components/ManageSlideOver/BookManageSlideOver';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestModal from '@app/components/RequestModal';
 import StatusBadge from '@app/components/StatusBadge';
@@ -421,6 +422,11 @@ const BookDetails = ({ book }: BookDetailsProps) => {
             title={data.title}
             media={data.mediaInfo}
             onUpdate={() => revalidate()}
+          />
+          <NotifyMeButton
+            media={data.mediaInfo}
+            title={data.title}
+            className="ml-2 first:ml-0"
           />
           <RemovalRequestButton
             media={data.mediaInfo}

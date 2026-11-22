@@ -54,6 +54,8 @@ import {
 import { addBookToLazyLibrarian } from '@server/lib/lazyLibrarianRequests';
 import { getMusicNotificationDetails } from '@server/lib/musicNotifications';
 import notificationManager, { Notification } from '@server/lib/notifications';
+import type { NotificationPayload } from '@server/lib/notifications/agents/agent';
+import { notifyInterestedUsers } from '@server/lib/requestInterest';
 import { getDefaultChaptarr, getSettings } from '@server/lib/settings';
 import {
   applyBookGrabPolicy,
@@ -144,7 +146,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         movieId: entity.media.tmdbId,
       });
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: `${entity.is4k ? '4K ' : ''}Movie Request Now Available`,
         notifyAdmin: false,
         notifySystem: true,
@@ -160,7 +162,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         media: latestMedia,
         image: `https://image.tmdb.org/t/p/w600_and_h900_bestv2${movie.poster_path}`,
         request: entity,
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
 
       if (!entity.is4k) {
         await notifyWatchlistUsers(latestMedia, MediaType.MOVIE, {
@@ -237,7 +249,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     try {
       const tv = await tmdb.getTvShow({ tvId: entity.media.tmdbId });
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: `${entity.is4k ? '4K ' : ''}Series Request Now Available`,
         subject: `${tv.name}${
           tv.first_air_date ? ` (${tv.first_air_date.slice(0, 4)})` : ''
@@ -259,7 +271,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
           },
         ],
         request: entity,
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
 
       // Watchlist users only hear about the series once whole seasons are in
       if (!entity.is4k && !isPartialSeriesRequest(entity)) {
@@ -319,7 +341,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     try {
       const album = await getMusicNotificationDetails(latestMedia.mbId);
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: 'Album Request Now Available',
         notifyAdmin: false,
         notifySystem: true,
@@ -329,7 +351,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         media: latestMedia,
         image: album.image,
         request: entity,
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
 
       await notifyWatchlistUsers(latestMedia, MediaType.MUSIC, {
         event: 'Album Now Available',
@@ -379,7 +411,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     try {
       const book = await getBookNotificationDetails(latestMedia.olId);
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: `${getBookFormatName(entity.isAudiobook)} Request Now Available`,
         notifyAdmin: false,
         notifySystem: true,
@@ -392,7 +424,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         extra: [
           { name: 'Format', value: getBookFormatName(entity.isAudiobook) },
         ],
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
 
       // Watchlist users hear about the book once, in whichever format lands
       // first
@@ -435,7 +477,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
       const comic = await getComicNotificationDetails(latestMedia.comicId);
       const kindName = latestMedia.comicKind === 'manga' ? 'Manga' : 'Comic';
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: `${kindName} Request Now Available`,
         notifyAdmin: false,
         notifySystem: true,
@@ -445,7 +487,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
         media: latestMedia,
         image: comic.image,
         request: entity,
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
     } catch (e) {
       logger.error('Something went wrong sending media notification(s)', {
         label: 'Notifications',
@@ -463,7 +515,7 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
     try {
       const book = await getBookNotificationDetails(media.olId as string);
 
-      notificationManager.sendNotification(Notification.MEDIA_AVAILABLE, {
+      const availablePayload: NotificationPayload = {
         event: `${getBookFormatName(true, entity.recording)} Request Now Available`,
         notifyAdmin: false,
         notifySystem: true,
@@ -480,7 +532,17 @@ export class MediaRequestSubscriber implements EntitySubscriberInterface<MediaRe
             value: describeBookRecording(entity) as string,
           },
         ],
-      });
+      };
+
+      notificationManager.sendNotification(
+        Notification.MEDIA_AVAILABLE,
+        availablePayload
+      );
+      await notifyInterestedUsers(
+        entity,
+        availablePayload.media as Media,
+        availablePayload
+      );
     } catch (e) {
       logger.error('Something went wrong sending media notification(s)', {
         label: 'Notifications',

@@ -33,6 +33,7 @@ import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import BookManageSlideOver from '@app/components/ManageSlideOver/BookManageSlideOver';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestModal from '@app/components/RequestModal';
 import WatchlistButton from '@app/components/WatchlistButton';
@@ -539,6 +540,12 @@ const BookDetails = ({ book }: BookDetailsProps) => {
             title={data.title}
             media={data.mediaInfo}
             onUpdate={() => revalidate()}
+            ambient
+          />
+          <NotifyMeButton
+            media={data.mediaInfo}
+            title={data.title}
+            className={pillSecondaryCollapse}
             ambient
           />
           <RemovalRequestButton

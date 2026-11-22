@@ -20,6 +20,7 @@ import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
 import MediaSlider from '@app/components/MediaSlider';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import PersonCard from '@app/components/PersonCard';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
@@ -664,6 +665,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             contentRating={getMovieCertification(data.releases)}
             onUpdate={() => revalidate()}
           />
+          <NotifyMeButton media={data.mediaInfo} title={data.title} />
           <RemovalRequestButton media={data.mediaInfo} title={data.title} />
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||
             (settings.currentSettings.movie4kEnabled &&

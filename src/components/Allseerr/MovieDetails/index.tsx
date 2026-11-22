@@ -46,6 +46,7 @@ import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestButton from '@app/components/RequestButton';
 import WatchedButton from '@app/components/WatchedButton';
@@ -816,6 +817,12 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             mediaType="movie"
             title={data.title}
             className={pillIcon}
+          />
+          <NotifyMeButton
+            media={data.mediaInfo}
+            title={data.title}
+            className={pillSecondaryCollapse}
+            ambient
           />
           <RemovalRequestButton
             media={data.mediaInfo}
