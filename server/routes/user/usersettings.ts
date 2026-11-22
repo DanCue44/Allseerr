@@ -88,6 +88,8 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         musicQuotaDays: user.musicQuotaDays,
         bookQuotaLimit: user.bookQuotaLimit,
         bookQuotaDays: user.bookQuotaDays,
+        unwatchedQuotaLimit: user.unwatchedQuotaLimit,
+        unwatchedQuotaDays: user.unwatchedQuotaDays,
         movieRatingLimit: user.movieRatingLimit,
         tvRatingLimit: user.tvRatingLimit,
         globalMovieQuotaDays: defaultQuotas.movie.quotaDays,
@@ -98,6 +100,8 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         globalMusicQuotaLimit: defaultQuotas.music?.quotaLimit,
         globalBookQuotaDays: defaultQuotas.book?.quotaDays,
         globalBookQuotaLimit: defaultQuotas.book?.quotaLimit,
+        globalUnwatchedQuotaDays: defaultQuotas.unwatched?.quotaDays,
+        globalUnwatchedQuotaLimit: defaultQuotas.unwatched?.quotaLimit,
         watchlistSyncMovies: user.settings?.watchlistSyncMovies,
         watchlistSyncTv: user.settings?.watchlistSyncTv,
         hideWatched: user.settings?.hideWatched,
@@ -166,6 +170,8 @@ userSettingsRoutes.post<
       user.musicQuotaLimit = req.body.musicQuotaLimit;
       user.bookQuotaDays = req.body.bookQuotaDays;
       user.bookQuotaLimit = req.body.bookQuotaLimit;
+      user.unwatchedQuotaDays = req.body.unwatchedQuotaDays;
+      user.unwatchedQuotaLimit = req.body.unwatchedQuotaLimit;
     }
 
     // Rating limits can only be changed by users with the MANAGE_USERS

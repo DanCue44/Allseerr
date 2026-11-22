@@ -3,6 +3,7 @@ import Button from '@app/components/Common/Button';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import SensitiveInput from '@app/components/Common/SensitiveInput';
 import LibraryItem from '@app/components/Settings/LibraryItem';
+import SettingsTracearr from '@app/components/Settings/SettingsTracearr';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
 import globalMessages from '@app/i18n/globalMessages';
@@ -676,6 +677,7 @@ const SettingsJellyfin: React.FC<SettingsJellyfinProps> = ({
           );
         }}
       </Formik>
+      {!isSetupSettings && <SettingsTracearr />}
     </>
   );
 };

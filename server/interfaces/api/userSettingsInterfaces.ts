@@ -18,6 +18,8 @@ export interface UserSettingsGeneralResponse {
   musicQuotaDays?: number;
   bookQuotaLimit?: number;
   bookQuotaDays?: number;
+  unwatchedQuotaLimit?: number | null;
+  unwatchedQuotaDays?: number | null;
   movieRatingLimit?: string | null;
   tvRatingLimit?: string | null;
   globalMovieQuotaDays?: number;
@@ -28,6 +30,8 @@ export interface UserSettingsGeneralResponse {
   globalMusicQuotaDays?: number;
   globalBookQuotaLimit?: number;
   globalBookQuotaDays?: number;
+  globalUnwatchedQuotaLimit?: number;
+  globalUnwatchedQuotaDays?: number;
   watchlistSyncMovies?: boolean;
   watchlistSyncTv?: boolean;
   hideWatched?: boolean;

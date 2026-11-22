@@ -4,6 +4,9 @@ import RemovalRequest from '@server/entity/RemovalRequest';
 import type {
   RemovalRequestBody,
   RemovalRequestResultsResponse,
+  WatchedCleanupActionBody,
+  WatchedCleanupActionResponse,
+  WatchedCleanupResponse,
 } from '@server/interfaces/api/removalInterfaces';
 import { NoRemovalServiceError } from '@server/lib/mediaRemoval';
 import { Permission } from '@server/lib/permissions';
@@ -15,6 +18,11 @@ import {
   createRemovalRequest,
   declineRemovalRequest,
 } from '@server/lib/removalRequests';
+import {
+  WatchedCleanupDisabledError,
+  actOnCleanupSuggestions,
+  getCleanupSuggestions,
+} from '@server/lib/watchedCleanup';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
 import { Router } from 'express';
@@ -100,6 +108,60 @@ removalRoutes.get(
     }
   }
 );
+
+// Requested titles every requester has watched, for the admin to clear out.
+// Listing and acting are admin only, and nothing is removed without a click.
+removalRoutes.get<never, WatchedCleanupResponse>(
+  '/suggestions',
+  isAuthenticated(Permission.ADMIN),
+  async (_req, res, next) => {
+    try {
+      return res.status(200).json({ results: await getCleanupSuggestions() });
+    } catch (e) {
+      if (e instanceof WatchedCleanupDisabledError) {
+        return next({ status: 403, message: e.message });
+      }
+      logger.error('Failed to list watched cleanup suggestions', {
+        label: 'Watched Cleanup',
+        errorMessage: e.message,
+      });
+      next({ status: 500, message: e.message });
+    }
+  }
+);
+
+removalRoutes.post<
+  never,
+  WatchedCleanupActionResponse,
+  WatchedCleanupActionBody
+>('/suggestions', isAuthenticated(Permission.ADMIN), async (req, res, next) => {
+  try {
+    if (!req.user) {
+      return next({ status: 401, message: 'You must be logged in.' });
+    }
+
+    const { items, action } = req.body ?? {};
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return next({ status: 400, message: 'Choose at least one title.' });
+    }
+    if (action !== 'request' && action !== 'remove') {
+      return next({
+        status: 400,
+        message: 'Action must be request or remove.',
+      });
+    }
+
+    return res.status(200).json({
+      results: await actOnCleanupSuggestions(items, action, req.user),
+    });
+  } catch (e) {
+    if (e instanceof WatchedCleanupDisabledError) {
+      return next({ status: 403, message: e.message });
+    }
+    next({ status: 500, message: e.message });
+  }
+});
 
 removalRoutes.post<never, RemovalRequest, RemovalRequestBody>(
   '/',

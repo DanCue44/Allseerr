@@ -65,6 +65,9 @@ const messages = defineMessages(
     seriesrequestlimit: 'Series Request Limit',
     musicrequestlimit: 'Music Request Limit',
     bookrequestlimit: 'Book Request Limit',
+    unwatchedrequestlimit: 'Unwatched Request Limit',
+    unwatchedrequestlimitTip:
+      'Hold new movie and series requests while more than this many of their requested titles have been available this long and are still unwatched',
     enableOverride: 'Override Global Limit',
     movieratinglimit: 'Movie Rating Limit',
     movieratinglimitTip: 'Highest US movie certification this user can request',
@@ -104,6 +107,7 @@ const UserGeneralSettings = () => {
   const [tvQuotaEnabled, setTvQuotaEnabled] = useState(false);
   const [musicQuotaEnabled, setMusicQuotaEnabled] = useState(false);
   const [bookQuotaEnabled, setBookQuotaEnabled] = useState(false);
+  const [unwatchedQuotaEnabled, setUnwatchedQuotaEnabled] = useState(false);
   const router = useRouter();
   const {
     user,
@@ -162,6 +166,10 @@ const UserGeneralSettings = () => {
     setBookQuotaEnabled(
       data?.bookQuotaLimit != undefined && data?.bookQuotaDays != undefined
     );
+    setUnwatchedQuotaEnabled(
+      data?.unwatchedQuotaLimit != undefined &&
+        data?.unwatchedQuotaDays != undefined
+    );
   }, [data]);
 
   if (!data && !error) {
@@ -201,6 +209,8 @@ const UserGeneralSettings = () => {
           musicQuotaDays: data?.musicQuotaDays,
           bookQuotaLimit: data?.bookQuotaLimit,
           bookQuotaDays: data?.bookQuotaDays,
+          unwatchedQuotaLimit: data?.unwatchedQuotaLimit ?? undefined,
+          unwatchedQuotaDays: data?.unwatchedQuotaDays ?? undefined,
           movieRatingLimit: data?.movieRatingLimit ?? '',
           tvRatingLimit: data?.tvRatingLimit ?? '',
           watchlistSyncMovies: data?.watchlistSyncMovies,
@@ -233,6 +243,12 @@ const UserGeneralSettings = () => {
               musicQuotaDays: musicQuotaEnabled ? values.musicQuotaDays : null,
               bookQuotaLimit: bookQuotaEnabled ? values.bookQuotaLimit : null,
               bookQuotaDays: bookQuotaEnabled ? values.bookQuotaDays : null,
+              unwatchedQuotaLimit: unwatchedQuotaEnabled
+                ? values.unwatchedQuotaLimit
+                : null,
+              unwatchedQuotaDays: unwatchedQuotaEnabled
+                ? values.unwatchedQuotaDays
+                : null,
               ...(currentHasPermission(Permission.MANAGE_USERS)
                 ? {
                     movieRatingLimit: values.movieRatingLimit || null,
@@ -711,6 +727,58 @@ const UserGeneralSettings = () => {
                               limitOverride={
                                 !bookQuotaEnabled
                                   ? data?.globalBookQuotaLimit
+                                  : undefined
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {user?.userType !== UserType.LOCAL && (
+                      <div className="form-row">
+                        <label
+                          htmlFor="unwatchedQuotaLimit"
+                          className="text-label"
+                        >
+                          <span>
+                            {intl.formatMessage(messages.unwatchedrequestlimit)}
+                          </span>
+                          <span className="label-tip">
+                            {intl.formatMessage(
+                              messages.unwatchedrequestlimitTip
+                            )}
+                          </span>
+                        </label>
+                        <div className="form-input-area">
+                          <div className="flex flex-col">
+                            <div className="mb-4 flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={unwatchedQuotaEnabled}
+                                onChange={() =>
+                                  setUnwatchedQuotaEnabled((s) => !s)
+                                }
+                              />
+                              <span className="ml-2 text-gray-300">
+                                {intl.formatMessage(messages.enableOverride)}
+                              </span>
+                            </div>
+                            <QuotaSelector
+                              isDisabled={!unwatchedQuotaEnabled}
+                              dayFieldName="unwatchedQuotaDays"
+                              limitFieldName="unwatchedQuotaLimit"
+                              mediaType="unwatched"
+                              onChange={setFieldValue}
+                              defaultDays={values.unwatchedQuotaDays ?? 14}
+                              defaultLimit={values.unwatchedQuotaLimit}
+                              dayOverride={
+                                !unwatchedQuotaEnabled
+                                  ? (data?.globalUnwatchedQuotaDays ?? 14)
+                                  : undefined
+                              }
+                              limitOverride={
+                                !unwatchedQuotaEnabled
+                                  ? (data?.globalUnwatchedQuotaLimit ?? 0)
                                   : undefined
                               }
                             />

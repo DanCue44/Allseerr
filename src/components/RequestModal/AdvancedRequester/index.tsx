@@ -76,6 +76,7 @@ interface AdvancedRequesterProps {
     movie: { limit?: number };
     tv: { limit?: number };
     music?: { limit?: number };
+    unwatched?: { restricted: boolean };
   };
   onChange: (overrides: RequestOverrides) => void;
 }
@@ -128,13 +129,18 @@ const AdvancedRequester = ({
   const [ignoreQuota, setIgnoreQuota] = useState<boolean>(
     defaultOverrides?.ignoreQuota ?? false
   );
-  const isIgnoreQuotaVisible =
-    currentHasPermission([Permission.MANAGE_REQUESTS]) &&
-    ((type === 'movie'
+  const typeQuotaLimit =
+    (type === 'movie'
       ? quota?.movie.limit
       : type === 'music'
         ? quota?.music?.limit
-        : quota?.tv.limit) ?? 0) > 0;
+        : quota?.tv.limit) ?? 0;
+  // The unwatched limit holds movie and series requests only
+  const unwatchedHeld =
+    (type === 'movie' || type === 'tv') && !!quota?.unwatched?.restricted;
+  const isIgnoreQuotaVisible =
+    currentHasPermission([Permission.MANAGE_REQUESTS]) &&
+    (typeQuotaLimit > 0 || unwatchedHeld);
 
   const { data: serverData, isValidating } =
     useSWR<ServiceCommonServerWithDetails>(

@@ -6,6 +6,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import SensitiveInput from '@app/components/Common/SensitiveInput';
 import LibraryItem from '@app/components/Settings/LibraryItem';
 import SettingsBadge from '@app/components/Settings/SettingsBadge';
+import SettingsTracearr from '@app/components/Settings/SettingsTracearr';
 import useToasts from '@app/hooks/useToasts';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
@@ -1142,6 +1143,7 @@ const SettingsPlex = ({ isSetupSettings }: SettingsPlexProps) => {
               );
             }}
           </Formik>
+          <SettingsTracearr />
         </>
       )}
     </>

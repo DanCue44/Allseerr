@@ -81,6 +81,7 @@ import {
   isActiveRecordingRequest,
   isSameRecording,
 } from '@server/lib/talearrRecordings';
+import { unwatchedRefusal } from '@server/lib/unwatchedQuota';
 import type { AgeLimit } from '@server/lib/userAccess/ageLimits';
 import {
   canRequestComic,
@@ -306,6 +307,14 @@ export class MediaRequest {
       ) {
         throw new QuotaRestrictedError('Series Quota exceeded.');
       }
+    }
+
+    // A manager may bypass the unwatched limit the same way as a quota
+    if (
+      quotas.unwatched?.restricted &&
+      !(requestBody.ignoreQuota === true && canBypassQuota)
+    ) {
+      throw new QuotaRestrictedError(await unwatchedRefusal(quotas.unwatched));
     }
 
     const tmdbMedia =

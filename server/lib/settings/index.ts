@@ -81,6 +81,13 @@ export interface TautulliSettings {
   externalUrl?: string;
 }
 
+// Tracearr, an optional watch history source next to Tautulli that also
+// covers Jellyfin and Emby. Off until both fields are set.
+export interface TracearrSettings {
+  url?: string;
+  apiKey?: string;
+}
+
 export interface BazarrSettings {
   hostname?: string;
   port?: number;
@@ -395,6 +402,16 @@ export interface MainSettings {
     tv: Quota;
     music: Quota;
     book: Quota;
+    // Off unless a limit is set: new movie and series requests are held
+    // while more than quotaLimit of the user's requested titles have been
+    // available and unwatched for quotaDays days
+    unwatched?: Quota;
+  };
+  // Admin list of requested titles every requester has watched; off by
+  // default, and it never removes anything by itself
+  watchedCleanup?: {
+    enabled: boolean;
+    days: number;
   };
   hideAvailable: boolean;
   hideBlocklisted: boolean;
@@ -777,6 +794,7 @@ export interface AllSettings {
   plex: PlexSettings;
   jellyfin: JellyfinSettings;
   tautulli: TautulliSettings;
+  tracearr: TracearrSettings;
   bazarr: BazarrSettings;
   lazylibrarian: LazyLibrarianSettings;
   audiobookshelf: AudiobookshelfSettings;
@@ -826,6 +844,11 @@ class Settings {
           tv: {},
           music: {},
           book: {},
+          unwatched: {},
+        },
+        watchedCleanup: {
+          enabled: false,
+          days: 0,
         },
         hideAvailable: false,
         hideBlocklisted: false,
@@ -875,6 +898,7 @@ class Settings {
         apiKey: '',
       },
       tautulli: {},
+      tracearr: {},
       bazarr: {},
       lazylibrarian: {},
       audiobookshelf: {},
@@ -1152,6 +1176,14 @@ class Settings {
 
   set tautulli(data: TautulliSettings) {
     this.data.tautulli = mergeSettings(this.data.tautulli, data);
+  }
+
+  get tracearr(): TracearrSettings {
+    return this.data.tracearr ?? {};
+  }
+
+  set tracearr(data: TracearrSettings) {
+    this.data.tracearr = data;
   }
 
   get bazarr(): BazarrSettings {

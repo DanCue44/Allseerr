@@ -5,6 +5,7 @@ import Modal from '@app/components/Common/Modal';
 import type { RequestOverrides } from '@app/components/RequestModal/AdvancedRequester';
 import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
+import UnwatchedQuotaNotice from '@app/components/RequestModal/UnwatchedQuotaNotice';
 import useToasts from '@app/hooks/useToasts';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
@@ -290,7 +291,10 @@ const CollectionRequestModal = ({
                 }
               )
       }
-      okDisabled={selectedParts.length === 0}
+      okDisabled={
+        selectedParts.length === 0 ||
+        (!!quota?.unwatched?.restricted && !requestOverrides?.ignoreQuota)
+      }
       okButtonType={'primary'}
       backdrop={`https://image.tmdb.org/t/p/w1920_and_h800_multi_faces/${data?.backdropPath}`}
     >
@@ -301,6 +305,16 @@ const CollectionRequestModal = ({
             type="info"
           />
         </div>
+      )}
+      {quota?.unwatched?.restricted && (
+        <UnwatchedQuotaNotice
+          quota={quota.unwatched}
+          userOverride={
+            requestOverrides?.user && requestOverrides.user.id !== user?.id
+              ? requestOverrides?.user?.id
+              : undefined
+          }
+        />
       )}
       {(quota?.movie.limit ?? 0) > 0 && (
         <QuotaDisplay

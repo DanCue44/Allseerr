@@ -1,6 +1,7 @@
 import JellyfinAPI from '@server/api/jellyfin';
 import PlexTvAPI from '@server/api/plextv';
 import TautulliAPI from '@server/api/tautulli';
+import { isTracearrConfigured } from '@server/api/tracearr';
 import { MediaType } from '@server/constants/media';
 import { MediaServerType } from '@server/constants/server';
 import { UserType } from '@server/constants/user';
@@ -19,6 +20,11 @@ import type {
 } from '@server/interfaces/api/userInterfaces';
 import { Permission, hasPermission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
+import {
+  TracearrUserNotFoundError,
+  getTracearrUserWatchData,
+} from '@server/lib/tracearrWatchData';
+import { nameUnwatchedTitles } from '@server/lib/unwatchedQuota';
 import { grantPlexDefaults } from '@server/lib/userAccess/plexDefaults';
 import {
   getPlexUserWatchlist,
@@ -865,6 +871,13 @@ router.get<{ id: string }, QuotaResponse>(
 
       const quotas = await user.getQuota();
 
+      // The request window lists the titles waiting to be watched
+      if (quotas.unwatched) {
+        quotas.unwatched.titles = quotas.unwatched.restricted
+          ? await nameUnwatchedTitles(quotas.unwatched.titles)
+          : [];
+      }
+
       return res.status(200).json(quotas);
     } catch (e) {
       next({ status: 404, message: e.message });
@@ -879,10 +892,36 @@ router.get<{ id: string }, UserWatchDataResponse>(
     const settings = getSettings().tautulli;
 
     if (!settings.hostname || !settings.port || !settings.apiKey) {
-      return next({
-        status: 404,
-        message: 'Tautulli API not configured.',
-      });
+      // Tracearr is the other watch history source, and covers Jellyfin
+      // and Emby as well as Plex
+      const tracearrSettings = getSettings().tracearr;
+
+      if (!isTracearrConfigured(tracearrSettings)) {
+        return next({
+          status: 404,
+          message: 'No watch history source configured.',
+        });
+      }
+
+      try {
+        const user = await getRepository(User).findOneOrFail({
+          where: { id: Number(req.params.id) },
+          select: { id: true, plexId: true, jellyfinUserId: true },
+        });
+
+        return res
+          .status(200)
+          .json(await getTracearrUserWatchData(tracearrSettings, user));
+      } catch (e) {
+        if (e instanceof TracearrUserNotFoundError) {
+          return next({ status: 404, message: e.message });
+        }
+        logger.error('Something went wrong fetching watch data from Tracearr', {
+          label: 'Tracearr API',
+          errorMessage: e.message,
+        });
+        return next({ status: 500, message: 'Failed to fetch watch data.' });
+      }
     }
 
     try {

@@ -6,6 +6,7 @@ import LazyLibrarianAPI from '@server/api/lazylibrarian';
 import PlexAPI, { plexStatusProbe } from '@server/api/plexapi';
 import PlexTvAPI from '@server/api/plextv';
 import TautulliAPI from '@server/api/tautulli';
+import TracearrAPI, { isTracearrConfigured } from '@server/api/tracearr';
 import { isAudiobookVersionsMode } from '@server/constants/audiobookVersion';
 import { isBookLanguage } from '@server/constants/bookLanguages';
 import { isBookService } from '@server/constants/bookService';
@@ -45,7 +46,12 @@ import scanHealth, {
   SCAN_SERVICE_PATHS,
   scanServiceName,
 } from '@server/lib/scanners/scanHealth';
-import type { JobId, Library, MainSettings } from '@server/lib/settings';
+import type {
+  JobId,
+  Library,
+  MainSettings,
+  TracearrSettings,
+} from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
 import { isAuthenticated } from '@server/middleware/auth';
@@ -776,6 +782,72 @@ settingsRoutes.post('/lazylibrarian/test', async (req, res, next) => {
     next({ status: 500, message: 'Failed to connect to LazyLibrarian' });
   }
 });
+
+settingsRoutes.get('/tracearr', (_req, res) => {
+  res.status(200).json(getSettings().tracearr);
+});
+
+const cleanTracearrSettings = (body: TracearrSettings): TracearrSettings => ({
+  url: body.url?.trim().replace(/\/+$/, '') || undefined,
+  apiKey: body.apiKey?.trim() || undefined,
+});
+
+// Checks a Tracearr URL and key without saving them
+settingsRoutes.post<never, { version: string }, TracearrSettings>(
+  '/tracearr/test',
+  async (req, res, next) => {
+    const tracearr = cleanTracearrSettings(req.body ?? {});
+
+    if (!isTracearrConfigured(tracearr)) {
+      return next({ status: 400, message: 'URL and API key are required.' });
+    }
+
+    try {
+      const result = await new TracearrAPI(tracearr).getServers();
+
+      return res.status(200).json({ version: result.tracearr_version });
+    } catch (e) {
+      logger.error('Something went wrong testing the Tracearr connection', {
+        label: 'Tracearr API',
+        errorMessage: e.message,
+      });
+      return next({ status: 500, message: 'Unable to connect to Tracearr.' });
+    }
+  }
+);
+
+settingsRoutes.post<never, TracearrSettings, TracearrSettings>(
+  '/tracearr',
+  async (req, res, next) => {
+    const settings = getSettings();
+    const tracearr = cleanTracearrSettings(req.body ?? {});
+
+    // Both empty turns Tracearr off; anything else must connect first
+    if (tracearr.url || tracearr.apiKey) {
+      if (!isTracearrConfigured(tracearr)) {
+        return next({
+          status: 400,
+          message: 'URL and API key are required.',
+        });
+      }
+
+      try {
+        await new TracearrAPI(tracearr).getServers();
+      } catch (e) {
+        logger.error('Something went wrong testing the Tracearr connection', {
+          label: 'Tracearr API',
+          errorMessage: e.message,
+        });
+        return next({ status: 500, message: 'Unable to connect to Tracearr.' });
+      }
+    }
+
+    settings.tracearr = tracearr;
+    await settings.save();
+
+    return res.status(200).json(settings.tracearr);
+  }
+);
 
 settingsRoutes.get('/tautulli', (_req, res) => {
   const settings = getSettings();
