@@ -43,6 +43,13 @@ const messages = defineMessages('components.Settings.SettingsUsers', {
   unwatchedRequestLimitLabel: 'Global Unwatched Request Limit',
   unwatchedRequestLimitTip:
     'Hold new movie and series requests while more than this many of the titles a user requested have been available this long and are still unwatched. Applies only to users signed in with {mediaServerName}, whose watch history Allseerr reads.',
+  watchedCleanup: 'Watched Cleanup Suggestions',
+  watchedCleanupTip:
+    'List requested movies and series that every requester has watched, so you can create removal requests or remove them from the Removal Requests page. Nothing is removed without your choice.',
+  watchedCleanupDays: 'Watched At Least',
+  watchedCleanupDaysTip:
+    'Only suggest titles the last requester finished at least this many days ago (0 for any time)',
+  days: 'days',
   hideUnrequestable: "Hide What Users Can't Request",
   hideUnrequestableTip:
     'Leave movies, series, music or books out of the navigation and search of users who cannot request them. Admins and users with Manage Requests see everything.',
@@ -130,6 +137,8 @@ const SettingsUsers = () => {
             unwatchedQuotaDays: data?.defaultQuotas.unwatched?.quotaDays ?? 14,
             defaultPermissions: data?.defaultPermissions ?? 0,
             hideUnrequestable: data?.hideUnrequestable ?? false,
+            watchedCleanupEnabled: data?.watchedCleanup?.enabled ?? false,
+            watchedCleanupDays: data?.watchedCleanup?.days ?? 0,
           }}
           validationSchema={schema}
           enableReinitialize
@@ -163,6 +172,10 @@ const SettingsUsers = () => {
                 },
                 defaultPermissions: values.defaultPermissions,
                 hideUnrequestable: values.hideUnrequestable,
+                watchedCleanup: {
+                  enabled: values.watchedCleanupEnabled,
+                  days: Math.max(0, Number(values.watchedCleanupDays) || 0),
+                },
               });
               mutate('/api/v1/settings/public');
 
@@ -360,6 +373,61 @@ const SettingsUsers = () => {
                       />
                     </div>
                   </div>
+                )}
+                {mediaServerFormatValues.mediaServerName && (
+                  <>
+                    <div className="form-row">
+                      <label
+                        htmlFor="watchedCleanupEnabled"
+                        className="checkbox-label"
+                      >
+                        {intl.formatMessage(messages.watchedCleanup)}
+                        <span className="label-tip">
+                          {intl.formatMessage(messages.watchedCleanupTip)}
+                        </span>
+                      </label>
+                      <div className="form-input-area">
+                        <Field
+                          type="checkbox"
+                          id="watchedCleanupEnabled"
+                          name="watchedCleanupEnabled"
+                          onChange={() => {
+                            setFieldValue(
+                              'watchedCleanupEnabled',
+                              !values.watchedCleanupEnabled
+                            );
+                          }}
+                        />
+                      </div>
+                    </div>
+                    {values.watchedCleanupEnabled && (
+                      <div className="form-row">
+                        <label
+                          htmlFor="watchedCleanupDays"
+                          className="text-label"
+                        >
+                          {intl.formatMessage(messages.watchedCleanupDays)}
+                          <span className="label-tip">
+                            {intl.formatMessage(messages.watchedCleanupDaysTip)}
+                          </span>
+                        </label>
+                        <div className="form-input-area">
+                          <div className="flex items-center">
+                            <Field
+                              type="number"
+                              min={0}
+                              id="watchedCleanupDays"
+                              name="watchedCleanupDays"
+                              className="short"
+                            />
+                            <span className="ml-2 text-gray-300">
+                              {intl.formatMessage(messages.days)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div className="form-row">
                   <label htmlFor="hideUnrequestable" className="checkbox-label">

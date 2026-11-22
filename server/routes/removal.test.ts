@@ -611,3 +611,45 @@ describe('removal requests for music and books', () => {
     assert.strictEqual(stored.status, RemovalRequestStatus.FAILED);
   });
 });
+
+describe('/removal/suggestions', () => {
+  it('is for admins only', async () => {
+    getSettings().main.watchedCleanup = { enabled: true, days: 0 };
+    const demo = await loginAs('demo@seerr.dev');
+
+    assert.strictEqual((await demo.get('/removal/suggestions')).status, 403);
+    assert.strictEqual(
+      (
+        await demo
+          .post('/removal/suggestions')
+          .send({ action: 'remove', items: [{ mediaId: 1 }] })
+      ).status,
+      403
+    );
+    getSettings().main.watchedCleanup = { enabled: false, days: 0 };
+  });
+
+  it('answers 403 while turned off and lists when on', async () => {
+    const admin = await loginAs('admin@seerr.dev');
+
+    getSettings().main.watchedCleanup = { enabled: false, days: 0 };
+    assert.strictEqual((await admin.get('/removal/suggestions')).status, 403);
+
+    getSettings().main.watchedCleanup = { enabled: true, days: 0 };
+    const res = await admin.get('/removal/suggestions');
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body.results, []);
+    getSettings().main.watchedCleanup = { enabled: false, days: 0 };
+  });
+
+  it('checks the action', async () => {
+    getSettings().main.watchedCleanup = { enabled: true, days: 0 };
+    const admin = await loginAs('admin@seerr.dev');
+
+    const res = await admin
+      .post('/removal/suggestions')
+      .send({ action: 'delete', items: [{ mediaId: 1 }] });
+    assert.strictEqual(res.status, 400);
+    getSettings().main.watchedCleanup = { enabled: false, days: 0 };
+  });
+});

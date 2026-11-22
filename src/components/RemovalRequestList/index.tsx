@@ -3,6 +3,7 @@ import Header from '@app/components/Common/Header';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import RemovalRequestItem from '@app/components/RemovalRequestList/RemovalRequestItem';
+import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
 import defineMessages from '@app/utils/defineMessages';
 import {
@@ -11,6 +12,7 @@ import {
   FunnelIcon,
 } from '@heroicons/react/24/solid';
 import type { RemovalRequestResultsResponse } from '@server/interfaces/api/removalInterfaces';
+import type { MainSettings } from '@server/lib/settings';
 import Link from 'next/link';
 import { useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -22,6 +24,7 @@ const messages = defineMessages('components.RemovalRequestList', {
   noremovals: 'No removal requests.',
   failed: 'Removal Failed',
   removed: 'Removed',
+  watchedCleanup: 'Watched Cleanup',
 });
 
 type Filter = 'pending' | 'all' | 'approved' | 'declined' | 'failed';
@@ -39,6 +42,13 @@ const RemovalRequestList = () => {
     }&filter=${currentFilter}`
   );
 
+  const { hasPermission } = useUser();
+  const isAdmin = hasPermission(Permission.ADMIN);
+  // Only admins can read the main settings, and only they see the cleanup
+  const { data: mainSettings } = useSWR<MainSettings>(
+    isAdmin ? '/api/v1/settings/main' : null
+  );
+
   const hasNextPage = data ? data.pageInfo.pages > pageIndex + 1 : false;
   const hasPrevPage = pageIndex > 0;
 
@@ -48,9 +58,19 @@ const RemovalRequestList = () => {
       <div className="mb-4 flex flex-col justify-between lg:flex-row lg:items-end">
         <Header
           subtext={
-            <Link href="/requests" className="hover:underline">
-              {intl.formatMessage(messages.mediarequests)}
-            </Link>
+            <>
+              <Link href="/requests" className="hover:underline">
+                {intl.formatMessage(messages.mediarequests)}
+              </Link>
+              {isAdmin && mainSettings?.watchedCleanup?.enabled && (
+                <>
+                  {' · '}
+                  <Link href="/requests/cleanup" className="hover:underline">
+                    {intl.formatMessage(messages.watchedCleanup)}
+                  </Link>
+                </>
+              )}
+            </>
           }
         >
           {intl.formatMessage(messages.removalrequests)}

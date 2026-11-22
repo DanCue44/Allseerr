@@ -400,6 +400,12 @@ export interface MainSettings {
     // available and unwatched for quotaDays days
     unwatched?: Quota;
   };
+  // Admin list of requested titles every requester has watched; off by
+  // default, and it never removes anything by itself
+  watchedCleanup?: {
+    enabled: boolean;
+    days: number;
+  };
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
@@ -780,6 +786,10 @@ class Settings {
           music: {},
           book: {},
           unwatched: {},
+        },
+        watchedCleanup: {
+          enabled: false,
+          days: 0,
         },
         hideAvailable: false,
         hideBlocklisted: false,
