@@ -2,6 +2,25 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.5 - 2026-11-22
+
+### Added
+
+- Sign in with your own OpenID Connect provider (Authentik, Authelia, Keycloak, Pocket ID and others), set up under Settings > Users. Off by default; matching existing users by email is on and creating new users is off.
+- Add as many webhooks as you like, each with its own URL, headers, payload and notification types. Your existing webhook stays as the first one.
+- Notify Me Too: on a title someone else already requested, ask to be told when it becomes available, without using a request.
+- A new setting (off by default) marks approved requests that found nothing after a set number of days as Not Found and tells the requester why. Another option can also stop the search in the arr or Talearr.
+- A new Settings > Users option (off by default) lets people remove a title only they requested without waiting for an admin, unless someone else has watched it.
+- Requests can be blocked by genre for movies, series, music and books, with an optional list per user.
+- Unwatched Request Limit (off by default): holds new movie and series requests while a user has too many requested titles sitting available and unwatched, and the request window lists them.
+- Watched Cleanup page for admins (off by default): lists requested titles everyone who asked for them has watched, so you can create removal requests or remove them in one step.
+- Tracearr can provide watch history for profiles and media pages, including on Jellyfin and Emby servers.
+
+### Changed
+
+- Advanced Requests can be narrowed per user to the server, quality profile, root folder and tags. Users who have it today keep all of them.
+- Music requests from users without Advanced Requests no longer accept a server, profile, folder or tags sent through the API, as movie and series requests already did.
+
 ## 3.5.2.4 - 2026-11-19
 
 ### Fixed
