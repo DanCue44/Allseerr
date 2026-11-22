@@ -531,6 +531,14 @@ components:
           type: boolean
           example: false
           description: Keeps the media types a user cannot request out of their navigation and search. Admins and users with Manage Requests see everything.
+        selfRemoval:
+          type: boolean
+          example: false
+          description: A removal request from the only person who requested a title (every request on it that is not declined is theirs) is approved at once and the title is removed from its service. Off by default.
+        selfRemovalUnwatchedOnly:
+          type: boolean
+          example: true
+          description: With selfRemoval on, movies and series someone else has watched on the media server still wait for an admin.
         defaultBookFormat:
           type: string
           enum: [ebook, audiobook, both]

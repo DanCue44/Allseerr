@@ -415,6 +415,10 @@ export interface MainSettings {
   allowCurrentSeasonRequests: boolean;
   // Media types a user cannot request leave their navigation and search
   hideUnrequestable: boolean;
+  // Users may remove media only they requested without waiting for approval
+  selfRemoval: boolean;
+  // ...unless someone else has watched it on the media server
+  selfRemovalUnwatchedOnly: boolean;
   defaultBookFormat: BookFormatChoice;
   // Language books are requested in, unless a user picks their own
   bookLanguage: BookLanguage;
@@ -528,6 +532,7 @@ interface FullPublicSettings extends PublicSettings {
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
   hideUnrequestable: boolean;
+  selfRemoval: boolean;
   defaultBookFormat: BookFormatChoice;
   bookLanguage: BookLanguage;
   // Talearr only, the Audiobook Versions setting in effect
@@ -794,6 +799,8 @@ class Settings {
         partialRequestsEnabled: true,
         allowCurrentSeasonRequests: false,
         hideUnrequestable: false,
+        selfRemoval: false,
+        selfRemovalUnwatchedOnly: true,
         defaultBookFormat: 'both',
         bookLanguage: 'en',
         audiobookVersions: 'both',
@@ -1282,6 +1289,7 @@ class Settings {
       allowCurrentSeasonRequests:
         this.data.main.allowCurrentSeasonRequests ?? false,
       hideUnrequestable: this.data.main.hideUnrequestable ?? false,
+      selfRemoval: this.data.main.selfRemoval ?? false,
       defaultBookFormat: this.data.main.defaultBookFormat ?? 'both',
       bookLanguage: getEffectiveBookLanguage(
         undefined,

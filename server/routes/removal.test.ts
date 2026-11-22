@@ -13,16 +13,21 @@ import LidarrAPI from '@server/api/servarr/lidarr';
 import TheMovieDb from '@server/api/themoviedb';
 import type { TmdbMovieDetails } from '@server/api/themoviedb/interfaces';
 import {
+  MediaRequestStatus,
   MediaStatus,
   MediaType,
   RemovalRequestStatus,
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import { MediaRequest } from '@server/entity/MediaRequest';
 import RemovalRequest from '@server/entity/RemovalRequest';
+import { User } from '@server/entity/User';
+import WatchedItem from '@server/entity/WatchedItem';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import type { NotificationPayload } from '@server/lib/notifications/agents/agent';
 import { getMediaPath } from '@server/lib/notifications/agents/agent';
+import { isOnlyRequester } from '@server/lib/removalRequests';
 import type { ChaptarrSettings, LidarrSettings } from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import { checkUser, isAuthenticated } from '@server/middleware/auth';
@@ -609,5 +614,176 @@ describe('removal requests for music and books', () => {
       where: { id: created.body.id },
     });
     assert.strictEqual(stored.status, RemovalRequestStatus.FAILED);
+  });
+});
+
+const findUser = (email: string) =>
+  getRepository(User).findOneOrFail({ where: { email } });
+
+// Saved as completed so nothing is sent to a service
+async function seedRequest(media: Media, email: string) {
+  return getRepository(MediaRequest).save(
+    new MediaRequest({
+      type: media.mediaType,
+      status: MediaRequestStatus.COMPLETED,
+      media,
+      requestedBy: await findUser(email),
+      is4k: false,
+    })
+  );
+}
+
+describe('removing media only the user requested', () => {
+  const withSelfRemoval = async (
+    run: () => Promise<void>,
+    unwatchedOnly = true
+  ) => {
+    getSettings().main.selfRemoval = true;
+    getSettings().main.selfRemovalUnwatchedOnly = unwatchedOnly;
+    try {
+      await run();
+    } finally {
+      getSettings().main.selfRemoval = false;
+      getSettings().main.selfRemovalUnwatchedOnly = true;
+    }
+  };
+
+  it('removes an album at once for its only requester', () =>
+    withSelfRemoval(async () => {
+      setLidarr();
+      removeAlbumFilesMock.resetCalls();
+      const media = await seedAlbum();
+      await seedRequest(media, 'demo@seerr.dev');
+      const demo = await loginAs('demo@seerr.dev');
+
+      const res = await demo.post('/removal').send({ mediaId: media.id });
+
+      assert.strictEqual(res.status, 201);
+      assert.strictEqual(res.body.status, RemovalRequestStatus.APPROVED);
+      assert.strictEqual(removeAlbumFilesMock.callCount(), 1);
+      const stored = await getRepository(Media).findOneOrFail({
+        where: { id: media.id },
+      });
+      assert.strictEqual(stored.status, MediaStatus.DELETED);
+    }));
+
+  it('waits for an admin when someone else requested it too', () =>
+    withSelfRemoval(async () => {
+      setLidarr();
+      removeAlbumFilesMock.resetCalls();
+      const media = await seedAlbum();
+      await seedRequest(media, 'demo@seerr.dev');
+      await seedRequest(media, 'admin@seerr.dev');
+      const demo = await loginAs('demo@seerr.dev');
+
+      const res = await demo.post('/removal').send({ mediaId: media.id });
+
+      assert.strictEqual(res.body.status, RemovalRequestStatus.PENDING);
+      assert.strictEqual(removeAlbumFilesMock.callCount(), 0);
+    }));
+
+  it('waits for an admin when the setting is off', async () => {
+    setLidarr();
+    removeAlbumFilesMock.resetCalls();
+    const media = await seedAlbum();
+    await seedRequest(media, 'demo@seerr.dev');
+    const demo = await loginAs('demo@seerr.dev');
+
+    const res = await demo.post('/removal').send({ mediaId: media.id });
+
+    assert.strictEqual(res.body.status, RemovalRequestStatus.PENDING);
+    assert.strictEqual(removeAlbumFilesMock.callCount(), 0);
+  });
+
+  it('waits for an admin when no one requested it', () =>
+    withSelfRemoval(async () => {
+      setLidarr();
+      const media = await seedAlbum();
+      const demo = await loginAs('demo@seerr.dev');
+
+      const res = await demo.post('/removal').send({ mediaId: media.id });
+
+      assert.strictEqual(res.body.status, RemovalRequestStatus.PENDING);
+    }));
+
+  it('waits for an admin when someone else watched the movie', () =>
+    withSelfRemoval(async () => {
+      const media = await seedMedia();
+      await seedRequest(media, 'demo@seerr.dev');
+      await getRepository(WatchedItem).save(
+        new WatchedItem({
+          user: await findUser('admin@seerr.dev'),
+          mediaType: MediaType.MOVIE,
+          tmdbId: 4242,
+          viewCount: 1,
+        })
+      );
+      const demo = await loginAs('demo@seerr.dev');
+
+      const res = await demo.post('/removal').send({ mediaId: media.id });
+
+      assert.strictEqual(res.body.status, RemovalRequestStatus.PENDING);
+    }));
+
+  it('keeps a failed removal for an admin when the service cannot remove it', () =>
+    withSelfRemoval(async () => {
+      getSettings().radarr = [];
+      const media = await seedMedia();
+      await seedRequest(media, 'demo@seerr.dev');
+      const demo = await loginAs('demo@seerr.dev');
+
+      const res = await demo.post('/removal').send({ mediaId: media.id });
+
+      assert.strictEqual(res.status, 201);
+      assert.strictEqual(res.body.status, RemovalRequestStatus.FAILED);
+    }, false));
+});
+
+describe('isOnlyRequester', () => {
+  const user = (id: number) => ({ id }) as User;
+  const book = (isAudiobook: boolean, id: number) => ({
+    status: MediaRequestStatus.COMPLETED,
+    is4k: false,
+    isAudiobook,
+    requestedBy: user(id),
+  });
+
+  it('needs a request of the user for each book format removed', () => {
+    const requests = [book(false, 1)];
+    const options = { mediaType: MediaType.BOOK, is4k: false };
+
+    assert.ok(
+      isOnlyRequester(requests, 1, { ...options, bookFormat: 'ebook' })
+    );
+    assert.ok(
+      !isOnlyRequester(requests, 1, { ...options, bookFormat: 'both' })
+    );
+    assert.ok(
+      !isOnlyRequester([...requests, book(true, 2)], 1, {
+        ...options,
+        bookFormat: 'both',
+      })
+    );
+    assert.ok(
+      isOnlyRequester([...requests, book(true, 1)], 1, {
+        ...options,
+        bookFormat: 'both',
+      })
+    );
+  });
+
+  it('ignores declined requests and the other 4K type', () => {
+    const requests = [
+      { ...book(false, 1), is4k: false },
+      { ...book(false, 2), is4k: true },
+      { ...book(false, 3), status: MediaRequestStatus.DECLINED },
+    ];
+
+    assert.ok(
+      isOnlyRequester(requests, 1, { mediaType: MediaType.MOVIE, is4k: false })
+    );
+    assert.ok(
+      !isOnlyRequester(requests, 1, { mediaType: MediaType.MOVIE, is4k: true })
+    );
   });
 });
