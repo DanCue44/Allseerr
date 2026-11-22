@@ -15,9 +15,14 @@ import SlackAgent from '@server/lib/notifications/agents/slack';
 import TelegramAgent from '@server/lib/notifications/agents/telegram';
 import WebhookAgent from '@server/lib/notifications/agents/webhook';
 import WebPushAgent from '@server/lib/notifications/agents/webpush';
+import type {
+  NotificationAgentWebhook,
+  WebhookInstance,
+} from '@server/lib/settings';
 import { getSettings } from '@server/lib/settings';
 import type { AvailableLocale } from '@server/types/languages';
 import { Router } from 'express';
+import { omit } from 'lodash';
 import { rescheduleJob } from 'node-schedule';
 
 const notificationRoutes = Router();
@@ -317,52 +322,97 @@ notificationRoutes.post('/webpush/test', async (req, res, next) => {
   }
 });
 
-notificationRoutes.get('/webhook', (_req, res) => {
-  const settings = getSettings();
+type WebhookBody = {
+  name?: string;
+  enabled?: boolean;
+  embedPoster?: boolean;
+  types?: number;
+  options?: {
+    webhookUrl?: string;
+    jsonPayload?: string;
+    authHeader?: string;
+    customHeaders?: { key: string; value: string }[];
+    supportVariables?: boolean;
+  };
+};
 
-  const webhookSettings = settings.notifications.agents.webhook;
+/**
+ * Webhook settings as stored, from a request body. The payload comes in as
+ * JSON text and is stored base64 encoded; it throws when it is not JSON.
+ */
+const webhookFromBody = (body: WebhookBody): NotificationAgentWebhook => {
+  JSON.parse(body.options?.jsonPayload ?? '');
 
-  const response: typeof webhookSettings = {
-    enabled: webhookSettings.enabled,
-    embedPoster: webhookSettings.embedPoster,
-    types: webhookSettings.types,
+  return {
+    enabled: !!body.enabled,
+    embedPoster: !!body.embedPoster,
+    types: body.types,
     options: {
-      ...webhookSettings.options,
-      jsonPayload: JSON.parse(
-        Buffer.from(webhookSettings.options.jsonPayload, 'base64').toString(
-          'utf8'
-        )
-      ),
-      customHeaders: webhookSettings.options.customHeaders ?? [],
-      supportVariables: webhookSettings.options.supportVariables ?? false,
+      jsonPayload: Buffer.from(
+        JSON.stringify(body.options?.jsonPayload)
+      ).toString('base64'),
+      webhookUrl: body.options?.webhookUrl ?? '',
+      authHeader: body.options?.authHeader,
+      customHeaders: body.options?.customHeaders ?? [],
+      supportVariables: body.options?.supportVariables ?? false,
     },
   };
+};
 
-  res.status(200).json(response);
+/**
+ * Webhook settings as the settings page reads them, with the payload as
+ * JSON text
+ */
+const webhookResponse = <T extends NotificationAgentWebhook>(
+  webhook: T
+): T => ({
+  ...webhook,
+  options: {
+    ...webhook.options,
+    jsonPayload: JSON.parse(
+      Buffer.from(webhook.options.jsonPayload, 'base64').toString('utf8')
+    ),
+    customHeaders: webhook.options.customHeaders ?? [],
+    supportVariables: webhook.options.supportVariables ?? false,
+  },
+});
+
+// The first webhook keeps living in agents.webhook, so it has id 0
+const FIRST_WEBHOOK_ID = 0;
+
+const listWebhooks = (): WebhookInstance[] => {
+  const { agents, webhooks } = getSettings().notifications;
+
+  return [
+    {
+      ...agents.webhook,
+      id: FIRST_WEBHOOK_ID,
+      name: agents.webhook.name || 'Webhook',
+    },
+    ...(webhooks ?? []),
+  ];
+};
+
+notificationRoutes.get('/webhook', (_req, res) => {
+  const settings = getSettings();
+  // The first webhook's name is only part of the list of webhooks
+  res
+    .status(200)
+    .json(webhookResponse(omit(settings.notifications.agents.webhook, 'name')));
 });
 
 notificationRoutes.post('/webhook', async (req, res, next) => {
   const settings = getSettings();
   try {
-    JSON.parse(req.body.options.jsonPayload);
+    const name = settings.notifications.agents.webhook.name;
 
     settings.notifications.agents.webhook = {
-      enabled: req.body.enabled,
-      embedPoster: req.body.embedPoster,
-      types: req.body.types,
-      options: {
-        jsonPayload: Buffer.from(
-          JSON.stringify(req.body.options.jsonPayload)
-        ).toString('base64'),
-        webhookUrl: req.body.options.webhookUrl,
-        authHeader: req.body.options.authHeader,
-        customHeaders: req.body.options.customHeaders ?? [],
-        supportVariables: req.body.options.supportVariables ?? false,
-      },
+      ...webhookFromBody(req.body),
+      ...(name ? { name } : {}),
     };
     await settings.save();
 
-    res.status(200).json(settings.notifications.agents.webhook);
+    res.status(200).json(omit(settings.notifications.agents.webhook, 'name'));
   } catch (e) {
     next({ status: 500, message: e.message });
   }
@@ -377,24 +427,10 @@ notificationRoutes.post('/webhook/test', async (req, res, next) => {
   }
 
   try {
-    JSON.parse(req.body.options.jsonPayload);
-
-    const testBody = {
+    const webhookAgent = new WebhookAgent({
+      ...webhookFromBody(req.body),
       enabled: req.body.enabled,
-      embedPoster: req.body.embedPoster,
-      types: req.body.types,
-      options: {
-        jsonPayload: Buffer.from(
-          JSON.stringify(req.body.options.jsonPayload)
-        ).toString('base64'),
-        webhookUrl: req.body.options.webhookUrl,
-        authHeader: req.body.options.authHeader,
-        customHeaders: req.body.options.customHeaders ?? [],
-        supportVariables: req.body.options.supportVariables ?? false,
-      },
-    };
-
-    const webhookAgent = new WebhookAgent(testBody);
+    });
     if (await sendTestNotification(webhookAgent, req.user)) {
       return res.status(204).send();
     } else {
@@ -407,6 +443,112 @@ notificationRoutes.post('/webhook/test', async (req, res, next) => {
     next({ status: 500, message: e.message });
   }
 });
+
+notificationRoutes.get('/webhooks', (_req, res) => {
+  res.status(200).json(listWebhooks().map(webhookResponse));
+});
+
+notificationRoutes.post('/webhooks', async (req, res, next) => {
+  const settings = getSettings();
+
+  try {
+    const webhooks = settings.notifications.webhooks ?? [];
+    const id =
+      Math.max(FIRST_WEBHOOK_ID, ...webhooks.map((webhook) => webhook.id)) + 1;
+    const webhook: WebhookInstance = {
+      ...webhookFromBody(req.body),
+      id,
+      name: req.body.name?.trim() || `Webhook ${webhooks.length + 2}`,
+    };
+
+    settings.notifications.webhooks = [...webhooks, webhook];
+    await settings.save();
+
+    res.status(201).json(webhookResponse(webhook));
+  } catch (e) {
+    next({ status: 400, message: e.message });
+  }
+});
+
+notificationRoutes.get<{ id: string }>('/webhooks/:id', (req, res, next) => {
+  const webhook = listWebhooks().find(
+    (webhook) => webhook.id === Number(req.params.id)
+  );
+
+  if (!webhook) {
+    return next({ status: 404, message: 'Webhook not found.' });
+  }
+
+  res.status(200).json(webhookResponse(webhook));
+});
+
+notificationRoutes.post<{ id: string }>(
+  '/webhooks/:id',
+  async (req, res, next) => {
+    const settings = getSettings();
+    const id = Number(req.params.id);
+
+    try {
+      const updated = webhookFromBody(req.body);
+      const name: string | undefined = req.body.name?.trim() || undefined;
+
+      if (id === FIRST_WEBHOOK_ID) {
+        settings.notifications.agents.webhook = {
+          ...updated,
+          ...(name ? { name } : {}),
+        };
+      } else {
+        const webhooks = settings.notifications.webhooks ?? [];
+        const current = webhooks.find((webhook) => webhook.id === id);
+
+        if (!current) {
+          return next({ status: 404, message: 'Webhook not found.' });
+        }
+
+        settings.notifications.webhooks = webhooks.map((webhook) =>
+          webhook.id === id
+            ? { ...updated, id, name: name ?? current.name }
+            : webhook
+        );
+      }
+
+      await settings.save();
+
+      const webhook = listWebhooks().find((webhook) => webhook.id === id);
+      res.status(200).json(webhook && webhookResponse(webhook));
+    } catch (e) {
+      next({ status: 400, message: e.message });
+    }
+  }
+);
+
+notificationRoutes.delete<{ id: string }>(
+  '/webhooks/:id',
+  async (req, res, next) => {
+    const settings = getSettings();
+    const id = Number(req.params.id);
+
+    if (id === FIRST_WEBHOOK_ID) {
+      return next({
+        status: 400,
+        message: 'The first webhook can be turned off but not removed.',
+      });
+    }
+
+    const webhooks = settings.notifications.webhooks ?? [];
+
+    if (!webhooks.some((webhook) => webhook.id === id)) {
+      return next({ status: 404, message: 'Webhook not found.' });
+    }
+
+    settings.notifications.webhooks = webhooks.filter(
+      (webhook) => webhook.id !== id
+    );
+    await settings.save();
+
+    res.status(204).send();
+  }
+);
 
 notificationRoutes.get('/gotify', (_req, res) => {
   const settings = getSettings();

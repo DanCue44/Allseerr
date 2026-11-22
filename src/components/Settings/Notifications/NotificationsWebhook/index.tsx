@@ -1,4 +1,5 @@
 import Button from '@app/components/Common/Button';
+import ConfirmButton from '@app/components/Common/ConfirmButton';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import NotificationTypeSelector from '@app/components/NotificationTypeSelector';
 import SettingsBadge from '@app/components/Settings/SettingsBadge';
@@ -16,6 +17,7 @@ import {
   ArrowPathIcon,
   QuestionMarkCircleIcon,
 } from '@heroicons/react/24/solid';
+import type { WebhookInstance } from '@server/lib/settings';
 import axios from 'axios';
 import { Field, Form, Formik } from 'formik';
 import dynamic from 'next/dynamic';
@@ -110,18 +112,134 @@ const messages = defineMessages(
     templatevariablehelp: 'Template Variable Help',
     validationWebhookUrl: 'You must provide a valid URL',
     validationTypes: 'You must select at least one notification type',
+    webhookName: 'Name',
+    webhookNameTip: 'Tells this webhook apart from the others',
+    addWebhook: 'Add Webhook',
+    addWebhookFailed: 'Could not add a webhook.',
+    removeWebhook: 'Remove Webhook',
+    removeWebhookConfirm: 'Are you sure?',
+    removeWebhookFailed: 'Could not remove the webhook.',
+    webhooksDescription:
+      'Each webhook has its own URL, headers, JSON payload and notification types.',
   }
 );
 
+// A webhook as the settings page reads it, with the payload as JSON text
+type WebhookData = Omit<WebhookInstance, 'options'> & {
+  options: WebhookInstance['options'] & {
+    customHeaders: { key: string; value: string }[];
+  };
+};
+
 const NotificationsWebhook = () => {
   const intl = useIntl();
-  const { addToast, removeToast } = useToasts();
-  const [isTesting, setIsTesting] = useState(false);
+  const { addToast } = useToasts();
+  const [selectedId, setSelectedId] = useState(0);
+  const [isAdding, setIsAdding] = useState(false);
   const {
     data,
     error,
     mutate: revalidate,
-  } = useSWR('/api/v1/settings/notifications/webhook');
+  } = useSWR<WebhookData[]>('/api/v1/settings/notifications/webhooks');
+
+  if (!data && !error) {
+    return <LoadingSpinner />;
+  }
+
+  const webhooks = data ?? [];
+  const selected =
+    webhooks.find((webhook) => webhook.id === selectedId) ?? webhooks[0];
+
+  const addWebhook = async () => {
+    setIsAdding(true);
+    try {
+      const response = await axios.post<WebhookData>(
+        '/api/v1/settings/notifications/webhooks',
+        {
+          enabled: false,
+          types: 0,
+          options: {
+            webhookUrl: '',
+            jsonPayload: JSON.stringify(defaultPayload, undefined, '    '),
+          },
+        }
+      );
+      await revalidate();
+      setSelectedId(response.data.id);
+    } catch {
+      addToast(intl.formatMessage(messages.addWebhookFailed), {
+        appearance: 'error',
+        autoDismiss: true,
+      });
+    } finally {
+      setIsAdding(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="mb-4 mt-6">
+        <p className="description">
+          {intl.formatMessage(messages.webhooksDescription)}
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {webhooks.map((webhook) => (
+            <Button
+              key={webhook.id}
+              buttonSize="sm"
+              buttonType={webhook.id === selected?.id ? 'primary' : 'default'}
+              onClick={(e) => {
+                e.preventDefault();
+                setSelectedId(webhook.id);
+              }}
+              data-testid={`webhook-instance-${webhook.id}`}
+            >
+              <span>{webhook.name}</span>
+            </Button>
+          ))}
+          <Button
+            buttonSize="sm"
+            buttonType="ghost"
+            disabled={isAdding}
+            onClick={(e) => {
+              e.preventDefault();
+              addWebhook();
+            }}
+          >
+            <PlusIcon />
+            <span>{intl.formatMessage(messages.addWebhook)}</span>
+          </Button>
+        </div>
+      </div>
+      {selected && (
+        <WebhookForm
+          key={selected.id}
+          webhook={selected}
+          onSaved={() => revalidate()}
+          onRemoved={async () => {
+            await revalidate();
+            setSelectedId(0);
+          }}
+        />
+      )}
+    </>
+  );
+};
+
+interface WebhookFormProps {
+  webhook: WebhookData;
+  onSaved: () => void;
+  onRemoved: () => void;
+}
+
+const WebhookForm = ({
+  webhook: data,
+  onSaved,
+  onRemoved,
+}: WebhookFormProps) => {
+  const intl = useIntl();
+  const { addToast, removeToast } = useToasts();
+  const [isTesting, setIsTesting] = useState(false);
 
   const NotificationsWebhookSchema = Yup.object().shape({
     webhookUrl: Yup.string()
@@ -206,15 +324,24 @@ const NotificationsWebhook = () => {
       ),
   });
 
-  if (!data && !error) {
-    return <LoadingSpinner />;
-  }
+  const removeWebhook = async () => {
+    try {
+      await axios.delete(`/api/v1/settings/notifications/webhooks/${data.id}`);
+      onRemoved();
+    } catch {
+      addToast(intl.formatMessage(messages.removeWebhookFailed), {
+        appearance: 'error',
+        autoDismiss: true,
+      });
+    }
+  };
 
   return (
     <Formik
       initialValues={{
+        name: data.name,
         enabled: data.enabled,
-        types: data.types,
+        types: data.types ?? 0,
         webhookUrl: data.options.webhookUrl,
         jsonPayload: data.options.jsonPayload,
         authHeader: data.options.authHeader,
@@ -224,25 +351,29 @@ const NotificationsWebhook = () => {
       validationSchema={NotificationsWebhookSchema}
       onSubmit={async (values) => {
         try {
-          await axios.post('/api/v1/settings/notifications/webhook', {
-            enabled: values.enabled,
-            types: values.types,
-            options: {
-              webhookUrl: values.webhookUrl,
-              jsonPayload: values.jsonPayload,
-              authHeader: values.authHeader,
-              customHeaders: (values.customHeaders ?? [])
-                .map((h: { key: string; value: string }) => ({
-                  key: h.key?.trim() ?? '',
-                  value: h.value?.trim() ?? '',
-                }))
-                .filter(
-                  (h: { key: string; value: string }) =>
-                    h.key.length > 0 && h.value.length > 0
-                ),
-              supportVariables: values.supportVariables,
-            },
-          });
+          await axios.post(
+            `/api/v1/settings/notifications/webhooks/${data.id}`,
+            {
+              name: values.name,
+              enabled: values.enabled,
+              types: values.types,
+              options: {
+                webhookUrl: values.webhookUrl,
+                jsonPayload: values.jsonPayload,
+                authHeader: values.authHeader,
+                customHeaders: (values.customHeaders ?? [])
+                  .map((h: { key: string; value: string }) => ({
+                    key: h.key?.trim() ?? '',
+                    value: h.value?.trim() ?? '',
+                  }))
+                  .filter(
+                    (h: { key: string; value: string }) =>
+                      h.key.length > 0 && h.value.length > 0
+                  ),
+                supportVariables: values.supportVariables,
+              },
+            }
+          );
           addToast(intl.formatMessage(messages.webhooksettingssaved), {
             appearance: 'success',
             autoDismiss: true,
@@ -253,7 +384,7 @@ const NotificationsWebhook = () => {
             autoDismiss: true,
           });
         } finally {
-          revalidate();
+          onSaved();
         }
       }}
     >
@@ -333,6 +464,19 @@ const NotificationsWebhook = () => {
 
         return (
           <Form className="section">
+            <div className="form-row">
+              <label htmlFor="name" className="text-label">
+                {intl.formatMessage(messages.webhookName)}
+                <span className="label-tip">
+                  {intl.formatMessage(messages.webhookNameTip)}
+                </span>
+              </label>
+              <div className="form-input-area">
+                <div className="form-input-field">
+                  <Field id="name" name="name" type="text" />
+                </div>
+              </div>
+            </div>
             <div className="form-row">
               <label htmlFor="enabled" className="checkbox-label">
                 {intl.formatMessage(messages.agentenabled)}
@@ -571,6 +715,19 @@ const NotificationsWebhook = () => {
             />
             <div className="actions">
               <div className="flex justify-end">
+                {data.id !== 0 && (
+                  <span className="mr-auto inline-flex rounded-md shadow-sm">
+                    <ConfirmButton
+                      onClick={removeWebhook}
+                      confirmText={intl.formatMessage(
+                        messages.removeWebhookConfirm
+                      )}
+                    >
+                      <TrashIcon />
+                      <span>{intl.formatMessage(messages.removeWebhook)}</span>
+                    </ConfirmButton>
+                  </span>
+                )}
                 <span className="ml-3 inline-flex rounded-md shadow-sm">
                   <Button
                     buttonType="warning"

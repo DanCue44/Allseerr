@@ -262,4 +262,31 @@ class WebhookAgent
   }
 }
 
+/**
+ * Sends to the webhooks after the first, each with its own settings. They
+ * are read on every notification, so added webhooks work without a restart.
+ */
+export class ExtraWebhooksAgent implements NotificationAgent {
+  private agents(): WebhookAgent[] {
+    return (getSettings().notifications.webhooks ?? [])
+      .map((webhook) => new WebhookAgent(webhook))
+      .filter((agent) => agent.shouldSend());
+  }
+
+  public shouldSend(): boolean {
+    return this.agents().length > 0;
+  }
+
+  public async send(
+    type: Notification,
+    payload: NotificationPayload
+  ): Promise<boolean> {
+    const results = await Promise.all(
+      this.agents().map((agent) => agent.send(type, payload))
+    );
+
+    return results.every(Boolean);
+  }
+}
+
 export default WebhookAgent;

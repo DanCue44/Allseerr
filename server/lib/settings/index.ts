@@ -659,6 +659,8 @@ export interface NotificationAgentPushover extends NotificationAgentConfig {
 }
 
 export interface NotificationAgentWebhook extends NotificationAgentConfig {
+  // Shown in the list of webhooks
+  name?: string;
   options: {
     webhookUrl: string;
     jsonPayload: string;
@@ -718,8 +720,17 @@ interface NotificationAgents {
   webpush: NotificationAgentConfig;
 }
 
+// A webhook after the first, each with its own address, headers, payload
+// and notification types
+export interface WebhookInstance extends NotificationAgentWebhook {
+  id: number;
+  name: string;
+}
+
 interface NotificationSettings {
   agents: NotificationAgents;
+  // Webhooks after the first one, which stays in agents.webhook
+  webhooks?: WebhookInstance[];
 }
 
 interface JobSettings {

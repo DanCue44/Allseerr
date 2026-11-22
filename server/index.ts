@@ -19,7 +19,9 @@ import PushbulletAgent from '@server/lib/notifications/agents/pushbullet';
 import PushoverAgent from '@server/lib/notifications/agents/pushover';
 import SlackAgent from '@server/lib/notifications/agents/slack';
 import TelegramAgent from '@server/lib/notifications/agents/telegram';
-import WebhookAgent from '@server/lib/notifications/agents/webhook';
+import WebhookAgent, {
+  ExtraWebhooksAgent,
+} from '@server/lib/notifications/agents/webhook';
 import WebPushAgent from '@server/lib/notifications/agents/webpush';
 import { OIDC_PATH, oidcMiddleware } from '@server/lib/oidc/provider';
 import checkOverseerrMerge from '@server/lib/overseerrMerge';
@@ -154,6 +156,7 @@ app
       new SlackAgent(),
       new TelegramAgent(),
       new WebhookAgent(),
+      new ExtraWebhooksAgent(),
       new WebPushAgent(),
     ]);
 

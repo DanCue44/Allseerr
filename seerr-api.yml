@@ -4088,6 +4088,18 @@ components:
             supportVariables:
               type: boolean
               example: false
+    WebhookInstance:
+      allOf:
+        - $ref: '#/components/schemas/WebhookSettings'
+        - type: object
+          properties:
+            id:
+              type: integer
+              readOnly: true
+              example: 1
+            name:
+              type: string
+              example: Home Assistant
     TelegramSettings:
       type: object
       properties:
@@ -8824,6 +8836,93 @@ paths:
       responses:
         '204':
           description: Test notification attempted
+  /settings/notifications/webhooks:
+    get:
+      summary: Get all webhooks
+      description: Returns every webhook. The first, with id 0, is the one `/settings/notifications/webhook` reads and writes; it can be turned off but not removed.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: The webhooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/WebhookInstance'
+    post:
+      summary: Add a webhook
+      description: Adds a webhook with its own address, headers, payload and notification types.
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookInstance'
+      responses:
+        '201':
+          description: The new webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInstance'
+        '400':
+          description: The JSON payload is not valid
+  /settings/notifications/webhooks/{webhookId}:
+    parameters:
+      - in: path
+        name: webhookId
+        required: true
+        schema:
+          type: integer
+    get:
+      summary: Get a webhook
+      tags:
+        - settings
+      responses:
+        '200':
+          description: The webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInstance'
+        '404':
+          description: No such webhook
+    post:
+      summary: Update a webhook
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookInstance'
+      responses:
+        '200':
+          description: The updated webhook
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookInstance'
+        '400':
+          description: The JSON payload is not valid
+        '404':
+          description: No such webhook
+    delete:
+      summary: Remove a webhook
+      tags:
+        - settings
+      responses:
+        '204':
+          description: Removed
+        '400':
+          description: The first webhook cannot be removed
+        '404':
+          description: No such webhook
   /settings/discover:
     get:
       summary: Get all discover sliders
