@@ -80,6 +80,7 @@
     "node-schedule": "2.1.1",
     "nodemailer": "10.2.1",
     "oidc-provider": "9.12.2",
+    "openid-client": "6.8.9",
     "openpgp": "6.3.0",
     "pg": "8.23.0",
     "pug": "3.0.4",

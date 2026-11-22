@@ -55,6 +55,7 @@ import movieRoutes from './movie';
 import musicRoutes from './music';
 import nobookendsRoutes, { nobookendsDirectoryCheck } from './nobookends';
 import oidcRoutes from './oidc';
+import oidcLoginRoutes from './oidcLogin';
 import personRoutes from './person';
 import removalRoutes from './removal';
 import requestRoutes from './request';
@@ -205,6 +206,7 @@ router.use('/service', isAuthenticated(), serviceRoutes);
 router.use('/issue', isAuthenticated(), issueRoutes);
 router.use('/issueComment', isAuthenticated(), issueCommentRoutes);
 router.use('/auth/oidc', oidcRoutes);
+router.use('/auth/oidc-login', oidcLoginRoutes);
 router.use('/auth', authRoutes);
 router.use('/overrideRule', isAuthenticated(), overrideRuleRoutes);
 

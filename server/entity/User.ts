@@ -59,6 +59,7 @@ export class User {
     'plexToken',
     'apiKeyHash',
     'nobookendsKeyHash',
+    'oidcSubject',
     'settings',
   ];
 
@@ -136,6 +137,12 @@ export class User {
 
   @DbAwareColumn({ type: 'datetime', nullable: true })
   public nobookendsKeyCreatedAt?: Date | null;
+
+  // Who the outside OpenID Connect provider says this is, as the issuer and
+  // the subject joined by a space, once they have signed in with it
+  @Index()
+  @Column({ type: 'varchar', nullable: true, select: false })
+  public oidcSubject?: string | null;
 
   @Column({ type: 'integer', default: 0 })
   public permissions = 0;

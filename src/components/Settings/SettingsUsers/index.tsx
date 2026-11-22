@@ -5,6 +5,7 @@ import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
 import PermissionEdit from '@app/components/PermissionEdit';
 import QuotaSelector from '@app/components/QuotaSelector';
+import OidcLoginSettings from '@app/components/Settings/SettingsUsers/OidcLoginSettings';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
 import globalMessages from '@app/i18n/globalMessages';
@@ -397,6 +398,7 @@ const SettingsUsers = () => {
           }}
         </Formik>
       </div>
+      <OidcLoginSettings />
     </>
   );
 };

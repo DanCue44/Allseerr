@@ -14,6 +14,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import LanguagePicker from '@app/components/Layout/LanguagePicker';
 import JellyfinLogin from '@app/components/Login/JellyfinLogin';
 import LocalLogin from '@app/components/Login/LocalLogin';
+import OidcLoginButton from '@app/components/Login/OidcLoginButton';
 import PlexLoginButton from '@app/components/Login/PlexLoginButton';
 import useBranding from '@app/hooks/useBranding';
 import useInterfaceStyle from '@app/hooks/useInterfaceStyle';
@@ -43,7 +44,31 @@ const messages = defineMessages('components.Login', {
   signinwithjellyfin: 'Use your {mediaServerName} account',
   signinwithoverseerr: 'Use your {applicationTitle} account',
   orsigninwith: 'Or sign in with',
+  oidcErrorDisabled: 'Single sign-on is not set up.',
+  oidcErrorProvider:
+    'Could not sign in with the single sign-on provider. Try again, or ask your administrator to check the logs.',
+  oidcErrorExpired: 'The single sign-on attempt expired. Try again.',
+  oidcErrorDenied: 'The single sign-on provider did not sign you in.',
+  oidcErrorNoAccount:
+    'There is no account for you yet. Ask your administrator to invite you.',
+  oidcErrorMissingEmail:
+    'The single sign-on provider did not share your email address, which is needed to make your account.',
+  oidcErrorEmailTaken:
+    'An account with your email address already exists. Ask your administrator to link it.',
+  oidcErrorAlreadyLinked:
+    'The account with your email address is linked to someone else on the single sign-on provider.',
 });
+
+const oidcErrorMessages = {
+  disabled: messages.oidcErrorDisabled,
+  provider: messages.oidcErrorProvider,
+  expired: messages.oidcErrorExpired,
+  denied: messages.oidcErrorDenied,
+  'no-account': messages.oidcErrorNoAccount,
+  'missing-email': messages.oidcErrorMissingEmail,
+  'email-taken': messages.oidcErrorEmailTaken,
+  'already-linked': messages.oidcErrorAlreadyLinked,
+} as const;
 
 const plexOAuth = new PlexOAuth();
 
@@ -85,6 +110,21 @@ const Login = () => {
       login();
     }
   }, [authToken, revalidate]);
+
+  // Coming back from the single sign-on provider without being signed in
+  useEffect(() => {
+    const code = router.query.oidcError;
+
+    if (typeof code === 'string') {
+      setError(
+        intl.formatMessage(
+          code in oidcErrorMessages
+            ? oidcErrorMessages[code as keyof typeof oidcErrorMessages]
+            : messages.oidcErrorProvider
+        )
+      );
+    }
+  }, [router.query.oidcError, intl]);
 
   // A page opened from outside, such as the NoBookEnds app's connect page,
   // is kept for this tab too, in case a sign in method leaves this page
@@ -163,20 +203,33 @@ const Login = () => {
   const localLoginRef = useRef<HTMLDivElement>(null);
   const loginRef = mediaServerLogin ? mediaServerLoginRef : localLoginRef;
 
+  const oidcLogin = settings.currentSettings.oidcLogin;
+  // An admin can hide the email and password form when everyone signs in
+  // with single sign-on; /login?local=1 still shows it
+  const localLogin =
+    settings.currentSettings.localLogin &&
+    !(oidcLogin?.hideLocalLogin && router.query.local !== '1');
+
   const loginFormVisible =
-    (isJellyfin && settings.currentSettings.mediaServerLogin) ||
-    settings.currentSettings.localLogin;
+    (isJellyfin && settings.currentSettings.mediaServerLogin) || localLogin;
   const additionalLoginOptions = [
+    oidcLogin && (
+      <OidcLoginButton
+        key="oidc"
+        label={oidcLogin.buttonLabel}
+        isProcessing={isProcessing}
+      />
+    ),
     settings.currentSettings.mediaServerLogin &&
       (settings.currentSettings.mediaServerType === MediaServerType.PLEX ? (
         <PlexLoginButton
           key="plex"
           isProcessing={isProcessing}
           onAuthToken={(authToken) => setAuthToken(authToken)}
-          large={!isJellyfin && !settings.currentSettings.localLogin}
+          large={!isJellyfin && !localLogin}
         />
       ) : (
-        settings.currentSettings.localLogin &&
+        localLogin &&
         (mediaServerLogin ? (
           <Button
             key="seerr"
@@ -297,17 +350,13 @@ const Login = () => {
                   }}
                 >
                   <div ref={loginRef} className="button-container">
-                    {isJellyfin &&
-                    (mediaServerLogin ||
-                      !settings.currentSettings.localLogin) ? (
+                    {isJellyfin && (mediaServerLogin || !localLogin) ? (
                       <JellyfinLogin
                         serverType={settings.currentSettings.mediaServerType}
                         revalidate={revalidate}
                       />
                     ) : (
-                      settings.currentSettings.localLogin && (
-                        <LocalLogin revalidate={revalidate} />
-                      )
+                      localLogin && <LocalLogin revalidate={revalidate} />
                     )}
                   </div>
                 </CSSTransition>

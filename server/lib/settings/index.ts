@@ -462,6 +462,43 @@ interface PublicSettings {
   initialized: boolean;
 }
 
+// Signing in to Allseerr with an outside OpenID Connect provider, such as
+// Authentik, Authelia, Keycloak or Pocket ID. Not to be confused with
+// userAccess.oidc, where Allseerr is the provider other apps sign in with.
+export interface OidcLoginSettings {
+  enabled: boolean;
+  issuerUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  buttonLabel: string;
+  // Make an account for people the provider signs in who have none yet
+  autoCreateUsers: boolean;
+  // Link a first sign in to the account with the same email address
+  matchByEmail: boolean;
+  // Leave the email and password form off the sign in page
+  hideLocalLogin: boolean;
+}
+
+export const defaultOidcLoginSettings = (): OidcLoginSettings => ({
+  enabled: false,
+  issuerUrl: '',
+  clientId: '',
+  clientSecret: '',
+  scopes: 'openid profile email',
+  buttonLabel: '',
+  autoCreateUsers: false,
+  matchByEmail: true,
+  hideLocalLogin: false,
+});
+
+/**
+ * Whether people can sign in with the outside OpenID Connect provider: it is
+ * turned on and has an issuer and a client id
+ */
+export const isOidcLoginReady = (oidcLogin: OidcLoginSettings): boolean =>
+  oidcLogin.enabled && !!oidcLogin.issuerUrl.trim() && !!oidcLogin.clientId;
+
 /**
  * The Chaptarr server book requests are sent to: the default one, or the
  * only one when none is marked as default
@@ -508,6 +545,8 @@ interface FullPublicSettings extends PublicSettings {
   hideRequested: boolean;
   localLogin: boolean;
   mediaServerLogin: boolean;
+  // Sign in with an outside OpenID Connect provider, when it is set up
+  oidcLogin?: { buttonLabel: string; hideLocalLogin: boolean };
   movie4kEnabled: boolean;
   series4kEnabled: boolean;
   booksEnabled: boolean;
@@ -732,6 +771,7 @@ export interface AllSettings {
   audiobookshelf: AudiobookshelfSettings;
   nobookendsSync: NoBookEndsSyncSettings;
   userAccess: UserAccessSettings;
+  oidcLogin: OidcLoginSettings;
   // Private keys Allseerr signs OpenID Connect tokens with, as JWKs
   oidcJwks?: { keys: Record<string, unknown>[] };
   radarr: RadarrSettings[];
@@ -847,6 +887,7 @@ class Settings {
         readingApps: defaultReadingAppChoices(),
         nobookendsDirectory: false,
       },
+      oidcLogin: defaultOidcLoginSettings(),
       metadataSettings: {
         tv: MetadataProviderType.TMDB,
         anime: MetadataProviderType.TMDB,
@@ -1155,6 +1196,17 @@ class Settings {
     this.data.userAccess = mergeSettings(this.userAccess, data);
   }
 
+  get oidcLogin(): OidcLoginSettings {
+    return {
+      ...defaultOidcLoginSettings(),
+      ...(this.data.oidcLogin ?? {}),
+    };
+  }
+
+  set oidcLogin(data: OidcLoginSettings) {
+    this.data.oidcLogin = { ...this.oidcLogin, ...data };
+  }
+
   get oidcJwks(): { keys: Record<string, unknown>[] } | undefined {
     return this.data.oidcJwks;
   }
@@ -1243,6 +1295,12 @@ class Settings {
       hideRequested: this.data.main.hideRequested,
       localLogin: this.data.main.localLogin,
       mediaServerLogin: this.data.main.mediaServerLogin,
+      oidcLogin: isOidcLoginReady(this.oidcLogin)
+        ? {
+            buttonLabel: this.oidcLogin.buttonLabel,
+            hideLocalLogin: this.oidcLogin.hideLocalLogin,
+          }
+        : undefined,
       jellyfinExternalHost: this.data.jellyfin.externalHostname,
       jellyfinForgotPasswordUrl: this.data.jellyfin.jellyfinForgotPasswordUrl,
       movie4kEnabled: this.data.radarr.some(

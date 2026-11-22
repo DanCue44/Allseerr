@@ -1905,6 +1905,38 @@ components:
         label:
           type: string
           example: A Label
+    OidcLoginSettings:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          example: false
+        issuerUrl:
+          type: string
+          example: https://auth.example.com/application/o/allseerr/
+        clientId:
+          type: string
+        clientSecret:
+          type: string
+        scopes:
+          type: string
+          example: openid profile email
+        buttonLabel:
+          type: string
+          description: Text of the sign in button, empty for the default
+        autoCreateUsers:
+          type: boolean
+          description: Make an account for people who have none yet
+        matchByEmail:
+          type: boolean
+          description: Link a first sign in to the account with the same email address
+        hideLocalLogin:
+          type: boolean
+          description: Leave the email and password form off the sign in page
+        redirectUri:
+          type: string
+          readOnly: true
+          description: The redirect URI to register with the provider
     PublicSettings:
       type: object
       required:
@@ -6407,6 +6439,55 @@ paths:
                       $ref: '#/components/schemas/PlexDefaultChange'
         '400':
           description: Default access for Plex users is turned off
+  /settings/oidc-login:
+    get:
+      summary: Get the sign in with an OpenID Connect provider settings
+      description: Settings for signing in to Allseerr with an outside OpenID Connect provider, such as Authentik, Authelia, Keycloak or Pocket ID, and the redirect URI to register with it.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcLoginSettings'
+    post:
+      summary: Save the sign in with an OpenID Connect provider settings
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcLoginSettings'
+      responses:
+        '200':
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OidcLoginSettings'
+        '400':
+          description: The settings are not valid
+  /settings/oidc-login/test:
+    post:
+      summary: Check that the OpenID Connect provider can be reached
+      description: Looks the provider up through its discovery document with the given settings, without saving them.
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OidcLoginSettings'
+      responses:
+        '204':
+          description: The provider answered
+        '502':
+          description: The provider could not be reached
   /settings/user-access/oidc:
     get:
       summary: Get the sign in with Allseerr settings
@@ -9083,6 +9164,40 @@ paths:
                       $ref: '#/components/schemas/UserAccessNewPassword'
         '404':
           description: The invite is not valid anymore
+  /auth/oidc-login/start:
+    get:
+      summary: Start signing in with the OpenID Connect provider
+      description: Redirects the browser to the outside OpenID Connect provider set up under the user settings. Redirects to `/login?oidcError=disabled` when it is not set up.
+      security: []
+      tags:
+        - auth
+      responses:
+        '302':
+          description: To the provider, or back to the sign in page
+  /auth/oidc-login/callback:
+    get:
+      summary: Finish signing in with the OpenID Connect provider
+      description: Where the provider sends the browser back to. Signs the user in and redirects to `/login`, which sends them on, or redirects to `/login?oidcError=<reason>`.
+      security: []
+      tags:
+        - auth
+      x-eov-allow-unknown-query-parameters: true
+      parameters:
+        - in: query
+          name: code
+          schema:
+            type: string
+        - in: query
+          name: state
+          schema:
+            type: string
+        - in: query
+          name: error
+          schema:
+            type: string
+      responses:
+        '302':
+          description: To the sign in page
   /auth/oidc/interaction/{uid}:
     get:
       summary: Finish a sign in with Allseerr

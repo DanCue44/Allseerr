@@ -72,6 +72,7 @@ import lidarrRoutes from './lidarr';
 import metadataRoutes from './metadata';
 import nobookendsSyncRoutes from './nobookendsSync';
 import notificationRoutes from './notifications';
+import oidcLoginSettingsRoutes from './oidcLogin';
 import radarrRoutes from './radarr';
 import sonarrRoutes from './sonarr';
 import userAccessSettingsRoutes from './userAccess';
@@ -86,6 +87,7 @@ settingsRoutes.use('/chaptarr', chaptarrRoutes);
 settingsRoutes.use('/audiobookshelf', audiobookshelfRoutes);
 settingsRoutes.use('/nobookends-sync', nobookendsSyncRoutes);
 settingsRoutes.use('/user-access', userAccessSettingsRoutes);
+settingsRoutes.use('/oidc-login', oidcLoginSettingsRoutes);
 settingsRoutes.use('/discover', discoverSettingRoutes);
 settingsRoutes.use('/metadatas', metadataRoutes);
 

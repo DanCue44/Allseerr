@@ -47,6 +47,8 @@ export interface PublicSettingsResponse {
   hideAvailable: boolean;
   hideBlocklisted: boolean;
   hideRequested: boolean;
+  // Sign in with an outside OpenID Connect provider, when it is set up
+  oidcLogin?: { buttonLabel: string; hideLocalLogin: boolean };
   localLogin: boolean;
   mediaServerLogin: boolean;
   movie4kEnabled: boolean;
