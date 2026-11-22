@@ -40,6 +40,9 @@ const messages = defineMessages('components.Settings.SettingsUsers', {
   tvRequestLimitLabel: 'Global Series Request Limit',
   musicRequestLimitLabel: 'Global Music Request Limit',
   bookRequestLimitLabel: 'Global Book Request Limit',
+  unwatchedRequestLimitLabel: 'Global Unwatched Request Limit',
+  unwatchedRequestLimitTip:
+    'Hold new movie and series requests while more than this many of the titles a user requested have been available this long and are still unwatched. Applies only to users signed in with {mediaServerName}, whose watch history Allseerr reads.',
   hideUnrequestable: "Hide What Users Can't Request",
   hideUnrequestableTip:
     'Leave movies, series, music or books out of the navigation and search of users who cannot request them. Admins and users with Manage Requests see everything.',
@@ -123,6 +126,8 @@ const SettingsUsers = () => {
             musicQuotaDays: data?.defaultQuotas.music?.quotaDays ?? 7,
             bookQuotaLimit: data?.defaultQuotas.book?.quotaLimit ?? 0,
             bookQuotaDays: data?.defaultQuotas.book?.quotaDays ?? 7,
+            unwatchedQuotaLimit: data?.defaultQuotas.unwatched?.quotaLimit ?? 0,
+            unwatchedQuotaDays: data?.defaultQuotas.unwatched?.quotaDays ?? 14,
             defaultPermissions: data?.defaultPermissions ?? 0,
             hideUnrequestable: data?.hideUnrequestable ?? false,
           }}
@@ -150,6 +155,10 @@ const SettingsUsers = () => {
                   book: {
                     quotaLimit: values.bookQuotaLimit,
                     quotaDays: values.bookQuotaDays,
+                  },
+                  unwatched: {
+                    quotaLimit: values.unwatchedQuotaLimit,
+                    quotaDays: values.unwatchedQuotaDays,
                   },
                 },
                 defaultPermissions: values.defaultPermissions,
@@ -325,6 +334,29 @@ const SettingsUsers = () => {
                         mediaType="book"
                         defaultDays={values.bookQuotaDays}
                         defaultLimit={values.bookQuotaLimit}
+                      />
+                    </div>
+                  </div>
+                )}
+                {mediaServerFormatValues.mediaServerName && (
+                  <div className="form-row">
+                    <label htmlFor="unwatchedQuotaLimit" className="text-label">
+                      {intl.formatMessage(messages.unwatchedRequestLimitLabel)}
+                      <span className="label-tip">
+                        {intl.formatMessage(
+                          messages.unwatchedRequestLimitTip,
+                          mediaServerFormatValues
+                        )}
+                      </span>
+                    </label>
+                    <div className="form-input-area">
+                      <QuotaSelector
+                        onChange={setFieldValue}
+                        dayFieldName="unwatchedQuotaDays"
+                        limitFieldName="unwatchedQuotaLimit"
+                        mediaType="unwatched"
+                        defaultDays={values.unwatchedQuotaDays}
+                        defaultLimit={values.unwatchedQuotaLimit}
                       />
                     </div>
                   </div>

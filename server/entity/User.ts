@@ -13,6 +13,7 @@ import { getEmailLayoutLocals } from '@server/lib/email/format';
 import type { PermissionCheckOptions } from '@server/lib/permissions';
 import { Permission, hasPermission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
+import { getUnwatchedQuota } from '@server/lib/unwatchedQuota';
 import logger from '@server/logger';
 import type { AvailableLocale } from '@server/types/languages';
 import { DbAwareColumn, resolveDbType } from '@server/utils/DbColumnHelper';
@@ -181,6 +182,12 @@ export class User {
 
   @Column({ nullable: true })
   public bookQuotaDays?: number;
+
+  @Column({ type: 'integer', nullable: true })
+  public unwatchedQuotaLimit?: number | null;
+
+  @Column({ type: 'integer', nullable: true })
+  public unwatchedQuotaDays?: number | null;
 
   @Column({ type: 'varchar', nullable: true })
   public movieRatingLimit?: string | null;
@@ -482,11 +489,20 @@ export class User {
         ).reduce((sum: number, req: MediaRequest) => sum + req.seasonCount, 0)
       : 0;
 
+    const unwatched = await getUnwatchedQuota(
+      this,
+      !canBypass
+        ? (this.unwatchedQuotaLimit ?? defaultQuotas.unwatched?.quotaLimit)
+        : 0,
+      this.unwatchedQuotaDays ?? defaultQuotas.unwatched?.quotaDays
+    );
+
     return {
       movie: getStatus(movieQuotaDays, movieQuotaLimit, movieQuotaUsed),
       tv: getStatus(tvQuotaDays, tvQuotaLimit, tvQuotaUsed),
       music: getStatus(musicQuotaDays, musicQuotaLimit, musicQuotaUsed),
       book: getStatus(bookQuotaDays, bookQuotaLimit, bookQuotaUsed),
+      unwatched,
     };
   }
 }

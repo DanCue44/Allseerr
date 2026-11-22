@@ -6,6 +6,7 @@ import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import EpisodeSelector from '@app/components/RequestModal/EpisodeSelector';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import SearchByNameModal from '@app/components/RequestModal/SearchByNameModal';
+import UnwatchedQuotaNotice from '@app/components/RequestModal/UnwatchedQuotaNotice';
 import { formatEpisodeNumbers } from '@app/components/RequestSeasonBadges';
 import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
@@ -767,7 +768,8 @@ const TvRequestModal = ({
       okDisabled={
         editRequest
           ? false
-          : ratingRestricted
+          : ratingRestricted ||
+              (quota?.unwatched?.restricted && !requestOverrides?.ignoreQuota)
             ? true
             : isCurrentOnly
               ? getSelectionCount() === 0
@@ -838,6 +840,16 @@ const TvRequestModal = ({
             />
           </div>
         )}
+      {quota?.unwatched?.restricted && (
+        <UnwatchedQuotaNotice
+          quota={quota.unwatched}
+          userOverride={
+            requestOverrides?.user && requestOverrides.user.id !== user?.id
+              ? requestOverrides?.user?.id
+              : undefined
+          }
+        />
+      )}
       {(quota?.tv.limit ?? 0) > 0 && (
         <QuotaDisplay
           mediaType="tv"

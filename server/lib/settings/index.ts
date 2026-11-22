@@ -395,6 +395,10 @@ export interface MainSettings {
     tv: Quota;
     music: Quota;
     book: Quota;
+    // Off unless a limit is set: new movie and series requests are held
+    // while more than quotaLimit of the user's requested titles have been
+    // available and unwatched for quotaDays days
+    unwatched?: Quota;
   };
   hideAvailable: boolean;
   hideBlocklisted: boolean;
@@ -775,6 +779,7 @@ class Settings {
           tv: {},
           music: {},
           book: {},
+          unwatched: {},
         },
         hideAvailable: false,
         hideBlocklisted: false,

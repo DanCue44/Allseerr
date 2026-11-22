@@ -11,16 +11,19 @@ const messages = defineMessages('components.QuotaSelector', {
     '{quotaLimit} <quotaUnits>{albums} per {quotaDays} {days}</quotaUnits>',
   bookRequests:
     '{quotaLimit} <quotaUnits>{books} per {quotaDays} {days}</quotaUnits>',
+  unwatchedRequests:
+    '{quotaLimit} <quotaUnits>{titles} left unwatched after {quotaDays} {days}</quotaUnits>',
   movies: '{count, plural, one {movie} other {movies}}',
   seasons: '{count, plural, one {season} other {seasons}}',
   albums: '{count, plural, one {album} other {albums}}',
   books: '{count, plural, one {book} other {books}}',
+  titles: '{count, plural, one {title} other {titles}}',
   days: '{count, plural, one {day} other {days}}',
   unlimited: 'Unlimited',
 });
 
 interface QuotaSelectorProps {
-  mediaType: 'movie' | 'tv' | 'music' | 'book';
+  mediaType: 'movie' | 'tv' | 'music' | 'book' | 'unwatched';
   defaultDays?: number;
   defaultLimit?: number;
   dayOverride?: number;
@@ -64,6 +67,7 @@ const QuotaSelector = ({
           tv: messages.tvRequests,
           music: messages.musicRequests,
           book: messages.bookRequests,
+          unwatched: messages.unwatchedRequests,
         }[mediaType],
         {
           quotaLimit: (
@@ -91,7 +95,9 @@ const QuotaSelector = ({
               disabled={isDisabled}
             >
               <option value="0">
-                {intl.formatMessage(messages.unlimited)}
+                {mediaType === 'unwatched'
+                  ? '0'
+                  : intl.formatMessage(messages.unlimited)}
               </option>
               {[...Array(100)].map((_item, i) => (
                 <option value={i + 1} key={`${mediaType}-days-${i + 1}`}>
@@ -104,6 +110,7 @@ const QuotaSelector = ({
           seasons: intl.formatMessage(messages.seasons, { count: quotaLimit }),
           albums: intl.formatMessage(messages.albums, { count: quotaLimit }),
           books: intl.formatMessage(messages.books, { count: quotaLimit }),
+          titles: intl.formatMessage(messages.titles, { count: quotaLimit }),
           days: intl.formatMessage(messages.days, { count: quotaDays }),
           quotaUnits: function quotaUnits(msg) {
             return (

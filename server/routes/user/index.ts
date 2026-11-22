@@ -19,6 +19,7 @@ import type {
 } from '@server/interfaces/api/userInterfaces';
 import { Permission, hasPermission } from '@server/lib/permissions';
 import { getSettings } from '@server/lib/settings';
+import { nameUnwatchedTitles } from '@server/lib/unwatchedQuota';
 import { grantPlexDefaults } from '@server/lib/userAccess/plexDefaults';
 import {
   getPlexUserWatchlist,
@@ -864,6 +865,13 @@ router.get<{ id: string }, QuotaResponse>(
       });
 
       const quotas = await user.getQuota();
+
+      // The request window lists the titles waiting to be watched
+      if (quotas.unwatched) {
+        quotas.unwatched.titles = quotas.unwatched.restricted
+          ? await nameUnwatchedTitles(quotas.unwatched.titles)
+          : [];
+      }
 
       return res.status(200).json(quotas);
     } catch (e) {
