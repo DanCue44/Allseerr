@@ -7,6 +7,7 @@ import Issue from '@server/entity/Issue';
 import IssueComment from '@server/entity/IssueComment';
 import Media from '@server/entity/Media';
 import { MediaRequest } from '@server/entity/MediaRequest';
+import MediaRequestInterest from '@server/entity/MediaRequestInterest';
 import MetadataAlbum from '@server/entity/MetadataAlbum';
 import MetadataArtist from '@server/entity/MetadataArtist';
 import MetadataBookAudio from '@server/entity/MetadataBookAudio';
@@ -50,6 +51,7 @@ const entities = [
   IssueComment,
   Media,
   MediaRequest,
+  MediaRequestInterest,
   MetadataAlbum,
   MetadataArtist,
   MetadataBookAudio,

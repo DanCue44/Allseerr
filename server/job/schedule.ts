@@ -12,6 +12,7 @@ import {
 } from '@server/lib/nobookendsDirectory';
 import { cleanUpOidcPayloads } from '@server/lib/oidc/adapter';
 import refreshToken from '@server/lib/refreshToken';
+import requestNotFoundJob from '@server/lib/requestNotFound';
 import {
   chaptarrRecentScanner,
   chaptarrScanner,
@@ -552,6 +553,29 @@ export const startJobs = (): void => {
     }),
     running: () => isDirectoryJobRunning(),
     inUse: () => !!getSettings().userAccess.nobookendsDirectory,
+  });
+
+  // Marks approved requests that found nothing for a while as not found,
+  // while that is turned on
+  scheduledJobs.push({
+    id: 'request-not-found',
+    name: 'Request Not Found Check',
+    type: 'process',
+    interval: 'days',
+    cronSchedule: jobs['request-not-found'].schedule,
+    job: schedule.scheduleJob(jobs['request-not-found'].schedule, () => {
+      logger.debug('Starting scheduled job: Request Not Found Check', {
+        label: 'Jobs',
+      });
+      requestNotFoundJob.run().catch((e) => {
+        logger.error('Failed to check for requests not found', {
+          label: 'Jobs',
+          errorMessage: e.message,
+        });
+      });
+    }),
+    running: () => requestNotFoundJob.running,
+    inUse: () => !!getSettings().main.requestNotFound?.enabled,
   });
 
   logger.info('Scheduled jobs loaded', { label: 'Jobs' });

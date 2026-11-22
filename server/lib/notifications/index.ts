@@ -28,6 +28,8 @@ export enum Notification {
   ACCESS_REQUESTED = 2097152,
   ACCESS_GRANTED = 4194304,
   APP_USERNAME_CHANGED = 8388608,
+  // An approved request that found nothing for a while
+  MEDIA_NOT_FOUND = 16777216,
 }
 
 export const hasNotificationType = (
@@ -64,6 +66,7 @@ export const getAdminPermission = (type: Notification): Permission => {
     case Notification.MEDIA_EPISODES_AVAILABLE:
     case Notification.MEDIA_FAILED:
     case Notification.MEDIA_DECLINED:
+    case Notification.MEDIA_NOT_FOUND:
     case Notification.MEDIA_AUTO_APPROVED:
     case Notification.REMOVAL_PENDING:
     case Notification.REMOVAL_APPROVED:

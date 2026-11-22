@@ -80,6 +80,8 @@ const jobDescriptions: { [jobId: string]: MessageDescriptor } = defineMessages(
       "Keeps the accounts Allseerr manages in other apps in line with each person's access.",
     'nobookends-directory':
       'Keeps this server listed in the NoBookEnds directory for Sign in with Plex.',
+    'request-not-found':
+      'Marks approved requests that found nothing for the set number of days as not found.',
   }
 );
 
@@ -158,6 +160,7 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'followed-releases': 'Followed Artist and Author Releases',
     'user-access-sync': 'User Access Sync',
     'nobookends-directory': 'NoBookEnds Directory',
+    'request-not-found': 'Request Not Found Check',
     editJobSchedule: 'Modify Job',
     jobScheduleEditSaved: 'Job edited successfully!',
     jobScheduleEditFailed: 'Something went wrong while saving the job.',

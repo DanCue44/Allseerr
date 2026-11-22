@@ -131,6 +131,10 @@ class PushoverAgent
           status = intl.formatMessage(globalMessages.declined);
           priority = 1;
           break;
+        case Notification.MEDIA_NOT_FOUND:
+          status = intl.formatMessage(globalMessages.notFound);
+          priority = 1;
+          break;
         case Notification.MEDIA_FAILED:
           status = intl.formatMessage(globalMessages.failed);
           priority = 1;

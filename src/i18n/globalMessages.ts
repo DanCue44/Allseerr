@@ -12,6 +12,7 @@ const globalMessages = defineMessages('i18n', {
   request: 'Request',
   request4k: 'Request in 4K',
   failed: 'Failed',
+  notFound: 'Not Found',
   pending: 'Pending',
   declined: 'Declined',
   approved: 'Approved',

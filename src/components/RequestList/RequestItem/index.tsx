@@ -7,6 +7,9 @@ import FormatIcon, {
   getRequestFormat,
 } from '@app/components/Common/FormatIcon';
 import DeclineRequestModal from '@app/components/DeclineRequestModal';
+import RequestInterestNote, {
+  interestMessages,
+} from '@app/components/NotifyMeButton/RequestInterestNote';
 import RequestModal from '@app/components/RequestModal';
 import RequestSeasonBadges from '@app/components/RequestSeasonBadges';
 import RequestedVolumes, {
@@ -28,6 +31,7 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { isNotFound } from '@app/utils/requestNotFound';
 import {
   ArrowPathIcon,
   CheckIcon,
@@ -705,6 +709,17 @@ const RequestItem = ({ request, revalidateList }: RequestItemProps) => {
                 >
                   {intl.formatMessage(globalMessages.failed)}
                 </Badge>
+              ) : isNotFound(requestData) ? (
+                <>
+                  <Badge badgeType="warning">
+                    {intl.formatMessage(globalMessages.notFound)}
+                  </Badge>
+                  {requestData.notFoundReason && (
+                    <span className="ml-2 truncate text-gray-300">
+                      {requestData.notFoundReason}
+                    </span>
+                  )}
+                </>
               ) : requestData.status === MediaRequestStatus.PENDING &&
                 getRequestMediaStatus(requestData) === MediaStatus.DELETED ? (
                 <Badge
@@ -740,6 +755,21 @@ const RequestItem = ({ request, revalidateList }: RequestItemProps) => {
                 />
               )}
             </div>
+            {request.interest &&
+              (request.interest.count > 0 || request.interest.interested) && (
+                <div className="card-field">
+                  <span className="card-field-name">
+                    {intl.formatMessage(interestMessages.label)}
+                  </span>
+                  <RequestInterestNote
+                    requestId={request.id}
+                    interest={request.interest}
+                    isRequester={requestData.requestedBy.id === user?.id}
+                    onChange={revalidateList}
+                    className="truncate text-sm text-gray-300"
+                  />
+                </div>
+              )}
             <div className="card-field">
               {hasPermission(
                 [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],

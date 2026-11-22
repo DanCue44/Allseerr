@@ -292,6 +292,7 @@ CoreApp.getInitialProps = async (initialProps) => {
     allowCurrentSeasonRequests: false,
     hideUnrequestable: false,
     selfRemoval: false,
+    requestNotFoundEnabled: false,
     defaultBookFormat: 'both',
     bookLanguage: 'en',
     enableSpecialEpisodes: false,

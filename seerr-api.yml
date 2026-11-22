@@ -619,6 +619,41 @@ components:
           minimum: 0
           example: 3
           description: Days admins are notified before older seasons of a current season request are deleted.
+        requestNotFound:
+          type: object
+          description: Marks approved requests that found nothing for a number of days as not found, and tells the requester. Off by default.
+          properties:
+            enabled:
+              type: boolean
+              example: false
+            unmonitor:
+              type: boolean
+              example: false
+              description: Also unmonitor the title in its arr, so it is no longer searched for.
+            days:
+              type: object
+              description: Days per media type before a request is not found. 0 leaves the media type out.
+              properties:
+                movie:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                tv:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                music:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                book:
+                  type: integer
+                  minimum: 0
+                  example: 30
+                comic:
+                  type: integer
+                  minimum: 0
+                  example: 30
         localLogin:
           type: boolean
           example: true
@@ -3427,6 +3462,18 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WatchProviders'
+    RequestInterest:
+      type: object
+      properties:
+        requestId:
+          type: number
+          example: 1
+        count:
+          type: number
+          example: 2
+        interested:
+          type: boolean
+          example: true
     MediaRequest:
       type: object
       properties:
@@ -3463,6 +3510,17 @@ components:
           type: boolean
           example: false
           description: Books only. True for an audiobook request, false for an ebook request.
+        notFoundAt:
+          type: string
+          nullable: true
+          readOnly: true
+          example: '2020-10-12T10:00:27.000Z'
+          description: When the Request Not Found check marked this approved request as not found. The request stays approved.
+        notFoundReason:
+          type: string
+          nullable: true
+          readOnly: true
+          example: Nothing was found in 30 days. It is still being looked for.
         language:
           type: string
           nullable: true
@@ -13270,6 +13328,32 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BulkRequestResponse'
+  /request/interest:
+    get:
+      summary: Notify me too for a title
+      description: |
+        Returns the requests of a title still on their way (pending or approved), with how many users asked to be told when each becomes available and whether the current user is one of them.
+      tags:
+        - request
+      parameters:
+        - in: query
+          name: mediaId
+          required: true
+          schema:
+            type: number
+            example: 1
+      responses:
+        '200':
+          description: Interest returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/RequestInterest'
   /request/count:
     get:
       summary: Gets request counts
@@ -13430,6 +13514,47 @@ paths:
       responses:
         '204':
           description: Succesfully removed request
+  /request/{requestId}/interest:
+    post:
+      summary: Ask to be told when a request is available
+      description: |
+        Adds the current user to someone else's pending or approved request, so they get the same availability notification as the requester. It is not a request of their own and does not use their quota. Requires the permission to make the same request.
+      tags:
+        - request
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema:
+            type: string
+            example: '1'
+      responses:
+        '200':
+          description: Interest added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestInterest'
+        '403':
+          description: The user cannot make this kind of request
+        '404':
+          description: Request not found
+        '409':
+          description: The request is the user's own, or no longer in progress
+    delete:
+      summary: Stop being told about a request
+      tags:
+        - request
+      parameters:
+        - in: path
+          name: requestId
+          required: true
+          schema:
+            type: string
+            example: '1'
+      responses:
+        '204':
+          description: Interest removed
   /request/{requestId}/retry:
     post:
       summary: Retry failed request

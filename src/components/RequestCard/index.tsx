@@ -26,6 +26,7 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { isNotFound } from '@app/utils/requestNotFound';
 import { withProperties } from '@app/utils/typeHelpers';
 import {
   ArrowPathIcon,
@@ -602,6 +603,12 @@ const RequestCard = ({ request, onTitleData }: RequestCardProps) => {
               >
                 {intl.formatMessage(globalMessages.failed)}
               </Badge>
+            ) : isNotFound(requestData) ? (
+              <Tooltip content={requestData.notFoundReason ?? ''}>
+                <Badge badgeType="warning">
+                  {intl.formatMessage(globalMessages.notFound)}
+                </Badge>
+              </Tooltip>
             ) : requestData.status === MediaRequestStatus.PENDING &&
               getRequestMediaStatus(requestData) === MediaStatus.DELETED ? (
               <Badge

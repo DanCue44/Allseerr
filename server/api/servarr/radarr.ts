@@ -320,6 +320,21 @@ class RadarrAPI extends ServarrBase<{ movieId: number }> {
     }
   };
 
+  /**
+   * Turns monitoring of movies on or off, so Radarr stops (or starts)
+   * searching for them
+   */
+  public async setMoviesMonitored(
+    movieIds: number[],
+    monitored: boolean
+  ): Promise<void> {
+    if (movieIds.length === 0) {
+      return;
+    }
+
+    await this.axios.put('/movie/editor', { movieIds, monitored });
+  }
+
   public async searchMovie(movieId: number): Promise<void> {
     logger.info('Executing movie search command', {
       label: 'Radarr API',

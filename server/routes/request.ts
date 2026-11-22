@@ -33,6 +33,7 @@ import type {
   BulkRequestResponse,
   DiscographyRequestBody,
   MediaRequestBody,
+  RequestInterestResponse,
   RequestResultsResponse,
 } from '@server/interfaces/api/requestInterfaces';
 import {
@@ -53,6 +54,14 @@ import {
   getTmdbSeasonInfo,
 } from '@server/lib/episodeRequests';
 import { Permission } from '@server/lib/permissions';
+import {
+  INTEREST_STATUSES,
+  InterestError,
+  addInterest,
+  getInterestSummaries,
+  isInterested,
+  removeInterest,
+} from '@server/lib/requestInterest';
 import { getAvailableSeasonNumbers } from '@server/lib/seasonRollover';
 import { getSettings } from '@server/lib/settings';
 import logger from '@server/logger';
@@ -64,6 +73,11 @@ import requestLock, {
   userKey,
 } from '@server/utils/requestLock';
 import { Router } from 'express';
+import { In } from 'typeorm';
+
+// Requests the user asked to be told about ("Notify me too"), for :id
+const INTERESTED_REQUESTS_SQL =
+  'request.id IN (SELECT "requestId" FROM "media_request_interest" WHERE "userId" = :id)';
 
 const requestRoutes = Router();
 
@@ -192,9 +206,16 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
           });
         }
 
-        query = query.andWhere('requestedBy.id = :id', {
-          id: req.user?.id,
-        });
+        // Their own requests, and the ones they asked to be told about
+        query = query.andWhere(
+          `(requestedBy.id = :id OR ${INTERESTED_REQUESTS_SQL})`,
+          { id: req.user?.id }
+        );
+      } else if (requestedBy && requestedBy === req.user?.id) {
+        query = query.andWhere(
+          `(requestedBy.id = :id OR ${INTERESTED_REQUESTS_SQL})`,
+          { id: requestedBy }
+        );
       } else if (requestedBy) {
         query = query.andWhere('requestedBy.id = :id', {
           id: requestedBy,
@@ -367,6 +388,24 @@ requestRoutes.get<Record<string, unknown>, RequestResultsResponse>(
           }
         });
       }
+
+      const interests = await getInterestSummaries(
+        mappedRequests.map((r) => r.id),
+        req.user
+      );
+      mappedRequests = mappedRequests.map((r) => {
+        const summary = interests.get(r.id);
+
+        return summary
+          ? {
+              ...r,
+              interest: {
+                count: summary.count,
+                interested: summary.interested,
+              },
+            }
+          : r;
+      });
 
       return res.status(200).json({
         pageInfo: {
@@ -623,6 +662,91 @@ requestRoutes.get('/count', async (_req, res, next) => {
   }
 });
 
+/**
+ * "Notify me too": the requests of a title still on their way, with how
+ * many users asked to be told about each and whether the user asking did
+ */
+requestRoutes.get<never, RequestInterestResponse>(
+  '/interest',
+  async (req, res, next) => {
+    const mediaId = Number(req.query.mediaId);
+
+    if (!Number.isInteger(mediaId) || mediaId <= 0) {
+      return next({ status: 400, message: 'A media id is required.' });
+    }
+
+    try {
+      const requests = await getRepository(MediaRequest).find({
+        where: { media: { id: mediaId }, status: In(INTEREST_STATUSES) },
+      });
+      const summaries = await getInterestSummaries(
+        requests.map((request) => request.id),
+        req.user
+      );
+
+      return res.status(200).json({ results: [...summaries.values()] });
+    } catch (e) {
+      logger.error('Something went wrong retrieving request interest', {
+        label: 'API',
+        errorMessage: e.message,
+        mediaId,
+      });
+      next({ status: 500, message: 'Unable to retrieve request interest.' });
+    }
+  }
+);
+
+requestRoutes.post<{ requestId: string }>(
+  '/:requestId/interest',
+  async (req, res, next) => {
+    if (!req.user) {
+      return next({ status: 401, message: 'You must be logged in.' });
+    }
+
+    try {
+      await addInterest(Number(req.params.requestId), req.user);
+      const summary = (
+        await getInterestSummaries([Number(req.params.requestId)], req.user)
+      ).get(Number(req.params.requestId));
+
+      return res.status(200).json(summary);
+    } catch (e) {
+      if (e instanceof InterestError) {
+        return next({ status: e.status, message: e.message });
+      }
+
+      logger.error('Something went wrong adding request interest', {
+        label: 'API',
+        errorMessage: e.message,
+        requestId: req.params.requestId,
+      });
+      next({ status: 500, message: 'Unable to add your interest.' });
+    }
+  }
+);
+
+requestRoutes.delete<{ requestId: string }>(
+  '/:requestId/interest',
+  async (req, res, next) => {
+    if (!req.user) {
+      return next({ status: 401, message: 'You must be logged in.' });
+    }
+
+    try {
+      await removeInterest(Number(req.params.requestId), req.user);
+
+      return res.status(204).send();
+    } catch (e) {
+      logger.error('Something went wrong removing request interest', {
+        label: 'API',
+        errorMessage: e.message,
+        requestId: req.params.requestId,
+      });
+      next({ status: 500, message: 'Unable to remove your interest.' });
+    }
+  }
+);
+
 requestRoutes.get('/:requestId', async (req, res, next) => {
   const requestRepository = getRepository(MediaRequest);
 
@@ -637,7 +761,9 @@ requestRoutes.get('/:requestId', async (req, res, next) => {
       !req.user?.hasPermission(
         [Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW],
         { type: 'or' }
-      )
+      ) &&
+      // A user who asked to be told about it sees it in their list too
+      !(await isInterested(request.id, req.user))
     ) {
       return next({
         status: 403,

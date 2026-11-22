@@ -247,11 +247,18 @@ const RequestBlock = ({ request, onUpdate }: RequestBlockProps) => {
                   </Badge>
                 </span>
               )}
-              {request.status === MediaRequestStatus.APPROVED && (
-                <Badge badgeType="success">
-                  {intl.formatMessage(globalMessages.approved)}
-                </Badge>
-              )}
+              {request.status === MediaRequestStatus.APPROVED &&
+                (request.notFoundAt ? (
+                  <Tooltip content={request.notFoundReason ?? ''}>
+                    <Badge badgeType="warning">
+                      {intl.formatMessage(globalMessages.notFound)}
+                    </Badge>
+                  </Tooltip>
+                ) : (
+                  <Badge badgeType="success">
+                    {intl.formatMessage(globalMessages.approved)}
+                  </Badge>
+                ))}
               {request.status === MediaRequestStatus.DECLINED &&
                 (request.declineReason ? (
                   <Tooltip content={request.declineReason}>

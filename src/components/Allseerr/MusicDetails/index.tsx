@@ -32,6 +32,7 @@ import FavoriteButton from '@app/components/FavoriteButton';
 import IssueModal from '@app/components/IssueModal';
 import ManageSlideOver from '@app/components/ManageSlideOver';
 import { formatTrackLength } from '@app/components/MusicDetails';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import RemovalRequestButton from '@app/components/RemovalRequestButton';
 import RequestModal from '@app/components/RequestModal';
 import WatchlistButton from '@app/components/WatchlistButton';
@@ -446,6 +447,12 @@ const MusicDetails = ({ album }: MusicDetailsProps) => {
             title={data.title}
             media={data.mediaInfo}
             onUpdate={() => revalidate()}
+            ambient
+          />
+          <NotifyMeButton
+            media={data.mediaInfo}
+            title={data.title}
+            className={pillSecondaryCollapse}
             ambient
           />
           <RemovalRequestButton

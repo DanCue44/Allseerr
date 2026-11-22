@@ -26,6 +26,7 @@ const messages = defineMessages('notifications.agents.webpush', {
   episodesAvailable:
     'New episodes of your {quality}{mediaType} request are now available!',
   declined: 'Your {quality}{mediaType} request was declined.',
+  notFound: 'Nothing has been found yet for your {quality}{mediaType} request.',
   failed: 'Failed to process {quality}{mediaType} request.',
   pending:
     'Approval required for a new {quality}{mediaType} request from {userName}.',
@@ -143,6 +144,12 @@ class WebPushAgent
         break;
       case Notification.MEDIA_DECLINED:
         message = intl.formatMessage(messages.declined, {
+          quality,
+          mediaType,
+        });
+        break;
+      case Notification.MEDIA_NOT_FOUND:
+        message = intl.formatMessage(messages.notFound, {
           quality,
           mediaType,
         });

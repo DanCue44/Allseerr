@@ -6,7 +6,11 @@ import {
 } from '@app/components/Allseerr/Title';
 import Biography from '@app/components/Allseerr/Title/Biography';
 import StatusPill from '@app/components/Allseerr/Title/StatusPill';
-import { chip, pillPrimary } from '@app/components/Allseerr/Title/styles';
+import {
+  chip,
+  pillPrimary,
+  pillSecondaryCollapse,
+} from '@app/components/Allseerr/Title/styles';
 import ComicVolumes, {
   listComicVolumes,
 } from '@app/components/ComicDetails/ComicVolumes';
@@ -14,6 +18,7 @@ import Button from '@app/components/Common/Button';
 import FormatIcon, { useFormatLabel } from '@app/components/Common/FormatIcon';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
 import PageTitle from '@app/components/Common/PageTitle';
+import NotifyMeButton from '@app/components/NotifyMeButton';
 import {
   getComicStatus,
   getMissingVolumes,
@@ -384,6 +389,12 @@ const ComicDetails = () => {
 
         <div className="flex flex-wrap items-center gap-2.5">
           {canRequest && requestButton}
+          <NotifyMeButton
+            media={data.mediaInfo}
+            title={data.title}
+            className={pillSecondaryCollapse}
+            ambient
+          />
           {comicsEnabled === false && (
             <span className="text-sm text-as-ink-faint">
               {intl.formatMessage(messages.comicsoff)}

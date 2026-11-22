@@ -10,6 +10,9 @@ import FormatIcon, {
 import Tooltip from '@app/components/Common/Tooltip';
 import DeclineRequestModal from '@app/components/DeclineRequestModal';
 import DownloadBlock from '@app/components/DownloadBlock';
+import RequestInterestNote, {
+  interestMessages,
+} from '@app/components/NotifyMeButton/RequestInterestNote';
 import RequestModal from '@app/components/RequestModal';
 import RequestSeasonBadges from '@app/components/RequestSeasonBadges';
 import useClickOutside from '@app/hooks/useClickOutside';
@@ -28,6 +31,7 @@ import {
   getRequestDownloadStatus,
   refreshIntervalHelper,
 } from '@app/utils/refreshIntervalHelper';
+import { isNotFound } from '@app/utils/requestNotFound';
 import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/react';
 import {
   ArrowPathIcon,
@@ -1046,6 +1050,31 @@ const RequestCard = ({
       key: 'profile',
       label: intl.formatMessage(messages.labelProfile),
       value: request.profileName,
+    });
+  }
+  if (
+    request.interest &&
+    (request.interest.count > 0 || request.interest.interested)
+  ) {
+    details.push({
+      key: 'notify',
+      label: intl.formatMessage(interestMessages.label),
+      value: (
+        <RequestInterestNote
+          requestId={request.id}
+          interest={request.interest}
+          isRequester={requestData.requestedBy.id === user?.id}
+          onChange={revalidateList}
+        />
+      ),
+    });
+  }
+  if (isNotFound(requestData)) {
+    details.push({
+      key: 'notFound',
+      label: intl.formatMessage(globalMessages.notFound),
+      value: requestData.notFoundReason ?? '',
+      title: requestData.notFoundReason ?? undefined,
     });
   }
   if (

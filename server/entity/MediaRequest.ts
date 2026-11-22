@@ -1824,6 +1824,16 @@ export class MediaRequest {
   @Column({ type: 'text', nullable: true })
   public declineReason?: string | null;
 
+  // Set by the Request Not Found check on an approved request that found
+  // nothing for the number of days set in Settings, with the reason shown
+  // to the requester. The request stays approved, so it still completes
+  // when the file turns up later.
+  @DbAwareColumn({ type: 'datetime', nullable: true })
+  public notFoundAt?: Date | null;
+
+  @Column({ type: 'text', nullable: true })
+  public notFoundReason?: string | null;
+
   // Audiobooks on Talearr only: the request is for another recording of an
   // audiobook that is already available, such as the unabridged reading.
   // Null for every other request. A recording request is sent to Talearr's
@@ -2036,12 +2046,22 @@ export class MediaRequest {
         case Notification.MEDIA_FAILED:
           event = `${entity.is4k ? '4K ' : ''}${mediaType} Request Failed`;
           break;
+        case Notification.MEDIA_NOT_FOUND:
+          event = `${entity.is4k ? '4K ' : ''}${mediaType} Request Not Found`;
+          notifyAdmin = false;
+          break;
       }
 
-      const declineReasonExtra =
-        type === Notification.MEDIA_DECLINED && entity.declineReason
-          ? [{ name: 'Reason', value: entity.declineReason }]
-          : undefined;
+      // The decline reason, or why nothing was found
+      const reason =
+        type === Notification.MEDIA_DECLINED
+          ? entity.declineReason
+          : type === Notification.MEDIA_NOT_FOUND
+            ? entity.notFoundReason
+            : undefined;
+      const declineReasonExtra = reason
+        ? [{ name: 'Reason', value: reason }]
+        : undefined;
 
       if (entity.type === MediaType.MOVIE) {
         const movie = await tmdb.getMovie({ movieId: media.tmdbId });
