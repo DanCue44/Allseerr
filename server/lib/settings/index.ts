@@ -14,6 +14,11 @@ import {
   USER_ACCESS_APPS,
   defaultReadingAppChoices,
 } from '@server/constants/userAccess';
+import type { BlockedGenres } from '@server/lib/genreBlock';
+import {
+  emptyBlockedGenres,
+  normalizeBlockedGenres,
+} from '@server/lib/genreBlock';
 import { Permission } from '@server/lib/permissions';
 import { runMigrations } from '@server/lib/settings/migrator';
 import type { AvailableLocale } from '@server/types/languages';
@@ -427,11 +432,18 @@ export interface MainSettings {
   blocklistedTags: string;
   blocklistedTagsLimit: number;
   blockedWatchProviders: string;
+  // Genres that cannot be requested, per media type, unless a user has
+  // their own list
+  blockedGenres: BlockedGenres;
   mediaServerType: number;
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
   // Media types a user cannot request leave their navigation and search
   hideUnrequestable: boolean;
+  // Users may remove media only they requested without waiting for approval
+  selfRemoval: boolean;
+  // ...unless someone else has watched it on the media server
+  selfRemovalUnwatchedOnly: boolean;
   defaultBookFormat: BookFormatChoice;
   // Language books are requested in, unless a user picks their own
   bookLanguage: BookLanguage;
@@ -571,6 +583,7 @@ interface FullPublicSettings extends PublicSettings {
   discoverRegion: string;
   streamingRegion: string;
   blockedWatchProviders: string;
+  blockedGenres: BlockedGenres;
   musicEnabled: boolean;
   subtitlesEnabled: boolean;
   audiobookshelfEnabled: boolean;
@@ -584,6 +597,7 @@ interface FullPublicSettings extends PublicSettings {
   partialRequestsEnabled: boolean;
   allowCurrentSeasonRequests: boolean;
   hideUnrequestable: boolean;
+  selfRemoval: boolean;
   defaultBookFormat: BookFormatChoice;
   bookLanguage: BookLanguage;
   // Talearr only, the Audiobook Versions setting in effect
@@ -864,10 +878,13 @@ class Settings {
         blocklistedTags: '',
         blocklistedTagsLimit: 50,
         blockedWatchProviders: '',
+        blockedGenres: emptyBlockedGenres(),
         mediaServerType: MediaServerType.NOT_CONFIGURED,
         partialRequestsEnabled: true,
         allowCurrentSeasonRequests: false,
         hideUnrequestable: false,
+        selfRemoval: false,
+        selfRemovalUnwatchedOnly: true,
         defaultBookFormat: 'both',
         bookLanguage: 'en',
         audiobookVersions: 'both',
@@ -1357,6 +1374,9 @@ class Settings {
       discoverRegion: this.data.main.discoverRegion,
       streamingRegion: this.data.main.streamingRegion,
       blockedWatchProviders: this.data.main.blockedWatchProviders,
+      blockedGenres:
+        normalizeBlockedGenres(this.data.main.blockedGenres ?? {}) ??
+        emptyBlockedGenres(),
       musicEnabled: this.data.lidarr.length > 0,
       subtitlesEnabled: !!(
         this.data.bazarr?.hostname &&
@@ -1383,6 +1403,7 @@ class Settings {
       allowCurrentSeasonRequests:
         this.data.main.allowCurrentSeasonRequests ?? false,
       hideUnrequestable: this.data.main.hideUnrequestable ?? false,
+      selfRemoval: this.data.main.selfRemoval ?? false,
       defaultBookFormat: this.data.main.defaultBookFormat ?? 'both',
       bookLanguage: getEffectiveBookLanguage(
         undefined,

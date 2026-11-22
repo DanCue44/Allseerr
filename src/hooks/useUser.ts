@@ -27,6 +27,10 @@ export interface User {
   requestCount: number;
   movieRatingLimit?: string | null;
   tvRatingLimit?: string | null;
+  // Their own blocked genres as JSON, null to follow the server's list
+  blockedGenres?: string | null;
+  // With Advanced Requests, the request options they may choose; null is all
+  advancedRequestOptions?: number | null;
   settings?: UserSettings;
 }
 

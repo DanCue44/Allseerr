@@ -1,4 +1,5 @@
 import MusicBrainz from '@server/api/musicbrainz';
+import type { MbReleaseGroup } from '@server/api/musicbrainz/interfaces';
 import OpenLibrary, { getOlId } from '@server/api/openlibrary';
 import TheMovieDb from '@server/api/themoviedb';
 import type {
@@ -31,6 +32,11 @@ import {
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import type { MediaRequestBody } from '@server/interfaces/api/requestInterfaces';
+import {
+  AdvancedRequestOption,
+  getAdvancedRequestOptions,
+  hasAdvancedRequestOption,
+} from '@server/lib/advancedRequestOptions';
 import {
   getBookFormatName,
   getBookNotificationDetails,
@@ -68,6 +74,12 @@ import {
   getFutureSeasonNumbers,
   getTmdbSeasonInfo,
 } from '@server/lib/episodeRequests';
+import type { GenreBlockType } from '@server/lib/genreBlock';
+import {
+  findBlockedGenres,
+  getEffectiveBlockedGenres,
+  parseGenreList,
+} from '@server/lib/genreBlock';
 import { getMusicNotificationDetails } from '@server/lib/musicNotifications';
 import notificationManager, { Notification } from '@server/lib/notifications';
 import overrideRules, {
@@ -124,6 +136,7 @@ export class NoSeasonsAvailableError extends Error {}
 export class BlocklistedMediaError extends Error {}
 export class WatchProviderBlockedError extends Error {}
 export class ContentRatingRestrictedError extends Error {}
+export class GenreBlockedError extends Error {}
 export class InvalidBookLanguageError extends Error {}
 export class InvalidRecordingRequestError extends Error {}
 export class InvalidAudiobookVersionError extends Error {}
@@ -381,6 +394,15 @@ export class MediaRequest {
       );
     }
 
+    MediaRequest.checkBlockedGenres(
+      requestBody.mediaType === MediaType.MOVIE ? 'movie' : 'tv',
+      tmdbMedia.genres,
+      user,
+      requestUser,
+      options,
+      { tmdbId: tmdbMedia.id }
+    );
+
     let media = await mediaRepository.findOne({
       where: {
         tmdbId,
@@ -472,13 +494,18 @@ export class MediaRequest {
       }
     }
 
-    const isAdvanced = user.hasPermission(
-      [Permission.MANAGE_REQUESTS, Permission.REQUEST_ADVANCED],
-      { type: 'or' }
+    const advancedOptions = getAdvancedRequestOptions(
+      user.permissions,
+      user.advancedRequestOptions
     );
+    const isAdvanced = advancedOptions !== 0;
+    const canChoose = (option: AdvancedRequestOption) =>
+      hasAdvancedRequestOption(advancedOptions, option);
 
     const requestsServer =
-      isAdvanced && requestBody.serverId != null && requestBody.serverId >= 0;
+      canChoose(AdvancedRequestOption.SERVER) &&
+      requestBody.serverId != null &&
+      requestBody.serverId >= 0;
 
     // An unknown serverId, or one for the other 4K type, falls back to the default server
     const requestedServiceId =
@@ -496,12 +523,22 @@ export class MediaRequest {
     const useRequestedOptions =
       isAdvanced && (!requestsServer || requestedServiceId !== undefined);
 
-    let rootFolder = useRequestedOptions ? requestBody.rootFolder : undefined;
-    let profileId = useRequestedOptions ? requestBody.profileId : undefined;
-    let tags = useRequestedOptions ? requestBody.tags : undefined;
-    const languageProfileId = useRequestedOptions
-      ? requestBody.languageProfileId
-      : undefined;
+    let rootFolder =
+      useRequestedOptions && canChoose(AdvancedRequestOption.ROOT_FOLDER)
+        ? requestBody.rootFolder
+        : undefined;
+    let profileId =
+      useRequestedOptions && canChoose(AdvancedRequestOption.PROFILE)
+        ? requestBody.profileId
+        : undefined;
+    let tags =
+      useRequestedOptions && canChoose(AdvancedRequestOption.TAGS)
+        ? requestBody.tags
+        : undefined;
+    const languageProfileId =
+      useRequestedOptions && canChoose(AdvancedRequestOption.PROFILE)
+        ? requestBody.languageProfileId
+        : undefined;
 
     const ruleResult = await overrideRules({
       mediaType: requestBody.mediaType,
@@ -812,10 +849,24 @@ export class MediaRequest {
       MediaType.MUSIC
     );
 
-    // Makes sure the release group exists before anything is saved
-    const releaseGroup = options.skipMetadataLookup
-      ? { id: mbId }
-      : await new MusicBrainz().getAlbum({ releaseGroupId: mbId });
+    // Makes sure the release group exists before anything is saved. A bulk
+    // request looks it up only when its genres have to be checked.
+    const releaseGroup: Pick<MbReleaseGroup, 'id' | 'genres' | 'tags'> =
+      options.skipMetadataLookup &&
+      !MediaRequest.hasBlockedGenres('music', user, requestUser, options)
+        ? { id: mbId }
+        : await new MusicBrainz().getAlbum({ releaseGroupId: mbId });
+
+    MediaRequest.checkBlockedGenres(
+      'music',
+      [...(releaseGroup.genres ?? []), ...(releaseGroup.tags ?? [])].map(
+        (genre) => genre.name
+      ),
+      user,
+      requestUser,
+      options,
+      { mbId }
+    );
 
     let media = await mediaRepository.findOne({
       where: { mbId: releaseGroup.id, mediaType: MediaType.MUSIC },
@@ -866,21 +917,34 @@ export class MediaRequest {
       );
     }
 
-    let rootFolder = requestBody.rootFolder;
-    let profileId = requestBody.profileId;
-    let tags = requestBody.tags;
+    // Only the options the user may choose are kept, as for movies
+    const advancedOptions = getAdvancedRequestOptions(
+      user.permissions,
+      user.advancedRequestOptions
+    );
+    const isAdvanced = advancedOptions !== 0;
+    const canChoose = (option: AdvancedRequestOption) =>
+      hasAdvancedRequestOption(advancedOptions, option);
+    const serverId = canChoose(AdvancedRequestOption.SERVER)
+      ? requestBody.serverId
+      : undefined;
+    let rootFolder = canChoose(AdvancedRequestOption.ROOT_FOLDER)
+      ? requestBody.rootFolder
+      : undefined;
+    let profileId = canChoose(AdvancedRequestOption.PROFILE)
+      ? requestBody.profileId
+      : undefined;
+    let tags = canChoose(AdvancedRequestOption.TAGS)
+      ? requestBody.tags
+      : undefined;
 
     const ruleResult = await overrideRules({
       mediaType: MediaType.MUSIC,
       is4k: false,
       requestUser,
       tags,
-      serviceId: requestBody.serverId ?? undefined,
+      serviceId: serverId ?? undefined,
     });
-    const isAdvanced = user.hasPermission(
-      [Permission.MANAGE_REQUESTS, Permission.REQUEST_ADVANCED],
-      { type: 'or' }
-    );
     // Advanced users pick these in the modal, so we don't want to override them if they are set
     if (ruleResult.rootFolder && (!isAdvanced || !rootFolder)) {
       rootFolder = ruleResult.rootFolder;
@@ -904,7 +968,7 @@ export class MediaRequest {
         mediaType: MediaType.MUSIC,
         is4k: false,
         requestUser,
-        serviceId: requestBody.serverId ?? undefined,
+        serviceId: serverId ?? undefined,
       }));
 
     await mediaRepository.save(media);
@@ -918,7 +982,7 @@ export class MediaRequest {
         : MediaRequestStatus.PENDING,
       modifiedBy: hasAutoApprovePermission ? user : undefined,
       is4k: false,
-      serverId: requestBody.serverId,
+      serverId,
       profileId,
       rootFolder,
       tags,
@@ -929,6 +993,74 @@ export class MediaRequest {
 
     await requestRepository.save(request);
     return request;
+  }
+
+  /**
+   * Whether a genre block can refuse this request: the person it is for has
+   * blocked genres of this type, and it is not a manager requesting by hand.
+   */
+  private static hasBlockedGenres(
+    type: GenreBlockType,
+    user: User,
+    requestUser: User,
+    options: MediaRequestOptions
+  ): boolean {
+    if (
+      !options.isAutoRequest &&
+      user.hasPermission(Permission.MANAGE_REQUESTS)
+    ) {
+      return false;
+    }
+
+    return (
+      parseGenreList(
+        getEffectiveBlockedGenres(
+          requestUser.blockedGenres,
+          getSettings().main.blockedGenres
+        )[type]
+      ).length > 0
+    );
+  }
+
+  /**
+   * Refuses a title in a genre blocked for the person a request is for.
+   * Managers may request it by hand, but never through an auto-request
+   * such as watchlist sync.
+   */
+  private static checkBlockedGenres(
+    type: GenreBlockType,
+    genres: { id?: number; name: string }[] | string[] | undefined,
+    user: User,
+    requestUser: User,
+    options: MediaRequestOptions,
+    logDetails: Record<string, unknown>
+  ): void {
+    if (!MediaRequest.hasBlockedGenres(type, user, requestUser, options)) {
+      return;
+    }
+
+    const blocked = findBlockedGenres(
+      type,
+      genres,
+      getEffectiveBlockedGenres(
+        requestUser.blockedGenres,
+        getSettings().main.blockedGenres
+      )
+    );
+
+    if (blocked.length > 0) {
+      logger.warn('Request for media blocked due to its genre', {
+        ...logDetails,
+        mediaType: type,
+        genres: blocked,
+        userId: requestUser.id,
+        label: 'Media Request',
+      });
+
+      throw new GenreBlockedError(
+        `This title is in a blocked genre (${blocked.join(', ')}) and cannot be requested.`
+      );
+    }
   }
 
   /**
@@ -1047,10 +1179,22 @@ export class MediaRequest {
 
     // Makes sure the work exists before anything is saved. A merged work is
     // requested as the work it was merged into.
-    const work = options.skipMetadataLookup
-      ? null
-      : await new OpenLibrary().getWork(String(requestBody.mediaId));
+    // A bulk request looks it up only when its genres have to be checked.
+    const work =
+      options.skipMetadataLookup &&
+      !MediaRequest.hasBlockedGenres('book', user, requestUser, options)
+        ? null
+        : await new OpenLibrary().getWork(String(requestBody.mediaId));
     const olId = work ? getOlId(work.key) : String(requestBody.mediaId);
+
+    MediaRequest.checkBlockedGenres(
+      'book',
+      work?.subjects,
+      user,
+      requestUser,
+      options,
+      { olId }
+    );
 
     // A person with an age limit cannot request a book written for adults,
     // and their requests wait for someone who manages requests

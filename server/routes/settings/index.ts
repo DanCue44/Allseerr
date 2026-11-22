@@ -29,6 +29,7 @@ import {
 } from '@server/lib/branding';
 import type { AvailableCacheIds } from '@server/lib/cache';
 import cacheManager from '@server/lib/cache';
+import { normalizeBlockedGenres } from '@server/lib/genreBlock';
 import ImageProxy from '@server/lib/imageproxy';
 import { Permission } from '@server/lib/permissions';
 import type { PlexAddress } from '@server/lib/plexConnection';
@@ -151,6 +152,18 @@ settingsRoutes.post('/main', async (req, res, next) => {
     !isAudiobookVersionsMode(body.audiobookVersions)
   ) {
     return next({ status: 400, message: 'Unknown audiobook versions.' });
+  }
+
+  if (body.blockedGenres !== undefined) {
+    const blockedGenres = normalizeBlockedGenres(body.blockedGenres);
+
+    if (!blockedGenres) {
+      return next({ status: 400, message: 'Invalid blocked genres.' });
+    }
+
+    // Replaced as a whole, so a cleared list does not keep its old entries
+    settings.main.blockedGenres = blockedGenres;
+    delete body.blockedGenres;
   }
 
   settings.main = merge(settings.main, body);

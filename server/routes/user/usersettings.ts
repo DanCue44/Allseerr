@@ -12,11 +12,16 @@ import type {
   UserSettingsGeneralResponse,
   UserSettingsNotificationsResponse,
 } from '@server/interfaces/api/userSettingsInterfaces';
+import { normalizeAdvancedRequestOptions } from '@server/lib/advancedRequestOptions';
 import {
   MOVIE_RATINGS,
   TV_RATINGS,
   parseRatingLimit,
 } from '@server/lib/contentRatingLimit';
+import {
+  normalizeBlockedGenres,
+  parseUserBlockedGenres,
+} from '@server/lib/genreBlock';
 import {
   getNoBookEndsAllseerrUrl,
   getNoBookEndsConnectTarget,
@@ -92,6 +97,7 @@ userSettingsRoutes.get<{ id: string }, UserSettingsGeneralResponse>(
         unwatchedQuotaDays: user.unwatchedQuotaDays,
         movieRatingLimit: user.movieRatingLimit,
         tvRatingLimit: user.tvRatingLimit,
+        blockedGenres: parseUserBlockedGenres(user.blockedGenres),
         globalMovieQuotaDays: defaultQuotas.movie.quotaDays,
         globalMovieQuotaLimit: defaultQuotas.movie.quotaLimit,
         globalTvQuotaDays: defaultQuotas.tv.quotaDays,
@@ -193,6 +199,23 @@ userSettingsRoutes.post<
       user.tvRatingLimit = parseRatingLimit(TV_RATINGS, req.body.tvRatingLimit);
     }
 
+    // So can a user's own blocked genres; null follows the server's list
+    if (
+      req.user?.hasPermission(Permission.MANAGE_USERS) &&
+      req.body.blockedGenres !== undefined
+    ) {
+      const blockedGenres =
+        req.body.blockedGenres === null
+          ? null
+          : normalizeBlockedGenres(req.body.blockedGenres);
+
+      if (req.body.blockedGenres !== null && !blockedGenres) {
+        return next({ status: 400, message: 'Invalid blocked genres.' });
+      }
+
+      user.blockedGenres = blockedGenres ? JSON.stringify(blockedGenres) : null;
+    }
+
     // An empty or invalid color falls back to the server accent
     const accentColor = normalizeHexColor(req.body.accentColor) ?? null;
 
@@ -252,6 +275,7 @@ userSettingsRoutes.post<
       hideWatched: savedUser.settings?.hideWatched,
       movieRatingLimit: savedUser.movieRatingLimit,
       tvRatingLimit: savedUser.tvRatingLimit,
+      blockedGenres: parseUserBlockedGenres(savedUser.blockedGenres),
       email: savedUser.email,
     });
   } catch (e) {
@@ -875,7 +899,10 @@ userSettingsRoutes.post<{ id: string }, UserSettingsNotificationsResponse>(
   }
 );
 
-userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
+userSettingsRoutes.get<
+  { id: string },
+  { permissions?: number; advancedRequestOptions?: number | null }
+>(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
   async (req, res, next) => {
@@ -890,7 +917,10 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
         return next({ status: 404, message: 'User not found.' });
       }
 
-      return res.status(200).json({ permissions: user.permissions });
+      return res.status(200).json({
+        permissions: user.permissions,
+        advancedRequestOptions: user.advancedRequestOptions ?? null,
+      });
     } catch (e) {
       next({ status: 500, message: e.message });
     }
@@ -899,8 +929,8 @@ userSettingsRoutes.get<{ id: string }, { permissions?: number }>(
 
 userSettingsRoutes.post<
   { id: string },
-  { permissions?: number },
-  { permissions: number }
+  { permissions?: number; advancedRequestOptions?: number | null },
+  { permissions: number; advancedRequestOptions?: number | null }
 >(
   '/permissions',
   isAuthenticated(Permission.MANAGE_USERS),
@@ -939,9 +969,19 @@ userSettingsRoutes.post<
       }
       user.permissions = req.body.permissions;
 
+      // Left out keeps the stored options, null gives every option
+      if (req.body.advancedRequestOptions !== undefined) {
+        user.advancedRequestOptions = normalizeAdvancedRequestOptions(
+          req.body.advancedRequestOptions
+        );
+      }
+
       await userRepository.save(user);
 
-      return res.status(200).json({ permissions: user.permissions });
+      return res.status(200).json({
+        permissions: user.permissions,
+        advancedRequestOptions: user.advancedRequestOptions ?? null,
+      });
     } catch (e) {
       next({ status: 500, message: e.message });
     }

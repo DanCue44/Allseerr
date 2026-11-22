@@ -93,6 +93,22 @@ servers:
 
 components:
   schemas:
+    BlockedGenres:
+      type: object
+      description: Genres that cannot be requested, each a comma separated list. Movies and series take TMDB genre IDs; music (MusicBrainz genres and tags) and books (OpenLibrary subjects) take names, matched as whole words.
+      properties:
+        movie:
+          type: string
+          example: '27,10749'
+        tv:
+          type: string
+          example: '16'
+        music:
+          type: string
+          example: 'christmas'
+        book:
+          type: string
+          example: 'horror'
     Blocklist:
       type: object
       properties:
@@ -434,6 +450,12 @@ components:
           nullable: true
           description: 'Highest US TV rating the user may request (TV-Y, TV-Y7, TV-G, TV-PG, TV-14 or TV-MA). Null means no limit. Only users with the `MANAGE_USERS` permission can change it.'
           example: 'TV-PG'
+        blockedGenres:
+          type: object
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/BlockedGenres'
+          description: "The user's own blocked genres. Null follows the server's list. Only users with the `MANAGE_USERS` permission can change it."
         globalMovieQuotaDays:
           type: number
           nullable: true
@@ -531,6 +553,16 @@ components:
           type: boolean
           example: false
           description: Keeps the media types a user cannot request out of their navigation and search. Admins and users with Manage Requests see everything.
+        blockedGenres:
+          $ref: '#/components/schemas/BlockedGenres'
+        selfRemoval:
+          type: boolean
+          example: false
+          description: A removal request from the only person who requested a title (every request on it that is not declined is theirs) is approved at once and the title is removed from its service. Off by default.
+        selfRemovalUnwatchedOnly:
+          type: boolean
+          example: true
+          description: With selfRemoval on, movies and series someone else has watched on the media server still wait for an admin.
         defaultBookFormat:
           type: string
           enum: [ebook, audiobook, both]
@@ -11305,6 +11337,11 @@ paths:
                   permissions:
                     type: number
                     example: 2
+                  advancedRequestOptions:
+                    type: number
+                    nullable: true
+                    example: 6
+                    description: With Advanced Requests, the request options the user may choose as bits (1 server, 2 quality and language profile, 4 root folder, 8 tags). Null means all of them.
     post:
       summary: Update permission settings for a user
       description: Updates and returns permission settings for a specific user. Requires `MANAGE_USERS` permission if editing other users.
@@ -11325,6 +11362,11 @@ paths:
               properties:
                 permissions:
                   type: number
+                advancedRequestOptions:
+                  type: number
+                  nullable: true
+                  example: 6
+                  description: With Advanced Requests, the request options the user may choose as bits (1 server, 2 quality and language profile, 4 root folder, 8 tags). Null means all of them.
               required:
                 - permissions
       responses:

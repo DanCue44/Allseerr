@@ -54,6 +54,12 @@ const messages = defineMessages('components.Settings.SettingsUsers', {
   hideUnrequestable: "Hide What Users Can't Request",
   hideUnrequestableTip:
     'Leave movies, series, music or books out of the navigation and search of users who cannot request them. Admins and users with Manage Requests see everything.',
+  selfRemoval: 'Let Users Remove What Only They Requested',
+  selfRemovalTip:
+    'A removal request from the only person who requested a title is approved at once and the title is removed from its service. Titles others requested still wait for an admin.',
+  selfRemovalUnwatchedOnly: 'Only When No One Else Watched It',
+  selfRemovalUnwatchedOnlyTip:
+    'Movies and series someone else has watched on the media server still wait for an admin.',
   defaultPermissions: 'Default Permissions',
   defaultPermissionsTip: 'Initial permissions assigned to new users',
   disabledMediaServerLoginWarning:
@@ -140,6 +146,8 @@ const SettingsUsers = () => {
             hideUnrequestable: data?.hideUnrequestable ?? false,
             watchedCleanupEnabled: data?.watchedCleanup?.enabled ?? false,
             watchedCleanupDays: data?.watchedCleanup?.days ?? 0,
+            selfRemoval: data?.selfRemoval ?? false,
+            selfRemovalUnwatchedOnly: data?.selfRemovalUnwatchedOnly ?? true,
           }}
           validationSchema={schema}
           enableReinitialize
@@ -177,6 +185,8 @@ const SettingsUsers = () => {
                   enabled: values.watchedCleanupEnabled,
                   days: Math.max(0, Number(values.watchedCleanupDays) || 0),
                 },
+                selfRemoval: values.selfRemoval,
+                selfRemovalUnwatchedOnly: values.selfRemovalUnwatchedOnly,
               });
               mutate('/api/v1/settings/public');
 
@@ -451,6 +461,52 @@ const SettingsUsers = () => {
                     />
                   </div>
                 </div>
+                <div className="form-row">
+                  <label htmlFor="selfRemoval" className="checkbox-label">
+                    {intl.formatMessage(messages.selfRemoval)}
+                    <span className="label-tip">
+                      {intl.formatMessage(messages.selfRemovalTip)}
+                    </span>
+                  </label>
+                  <div className="form-input-area">
+                    <Field
+                      type="checkbox"
+                      id="selfRemoval"
+                      name="selfRemoval"
+                      onChange={() => {
+                        setFieldValue('selfRemoval', !values.selfRemoval);
+                      }}
+                    />
+                  </div>
+                </div>
+                {values.selfRemoval && (
+                  <div className="form-row">
+                    <label
+                      htmlFor="selfRemovalUnwatchedOnly"
+                      className="checkbox-label"
+                    >
+                      {intl.formatMessage(messages.selfRemovalUnwatchedOnly)}
+                      <span className="label-tip">
+                        {intl.formatMessage(
+                          messages.selfRemovalUnwatchedOnlyTip
+                        )}
+                      </span>
+                    </label>
+                    <div className="form-input-area">
+                      <Field
+                        type="checkbox"
+                        id="selfRemovalUnwatchedOnly"
+                        name="selfRemovalUnwatchedOnly"
+                        onChange={() => {
+                          setFieldValue(
+                            'selfRemovalUnwatchedOnly',
+                            !values.selfRemovalUnwatchedOnly
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
                 <div
                   role="group"
                   aria-labelledby="group-label"

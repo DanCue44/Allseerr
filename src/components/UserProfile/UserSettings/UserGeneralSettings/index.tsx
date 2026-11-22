@@ -1,3 +1,4 @@
+import BlockedGenresFields from '@app/components/BlockedGenresFields';
 import Badge from '@app/components/Common/Badge';
 import Button from '@app/components/Common/Button';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
@@ -74,6 +75,9 @@ const messages = defineMessages(
     seriesratinglimit: 'Series Rating Limit',
     seriesratinglimitTip: 'Highest US TV rating this user can request',
     noratinglimit: 'No Limit',
+    ownBlockedGenres: 'Own Blocked Genres',
+    ownBlockedGenresTip:
+      "Block a different set of genres for this user instead of the server's list. Leave the lists empty to block nothing.",
     applanguage: 'Display Language',
     accentColor: 'Accent Color',
     accentColorTip: 'Accent color of the Ambient interface for this account',
@@ -213,6 +217,14 @@ const UserGeneralSettings = () => {
           unwatchedQuotaDays: data?.unwatchedQuotaDays ?? undefined,
           movieRatingLimit: data?.movieRatingLimit ?? '',
           tvRatingLimit: data?.tvRatingLimit ?? '',
+          ownBlockedGenres: !!data?.blockedGenres,
+          blockedGenres: data?.blockedGenres ??
+            currentSettings.blockedGenres ?? {
+              movie: '',
+              tv: '',
+              music: '',
+              book: '',
+            },
           watchlistSyncMovies: data?.watchlistSyncMovies,
           watchlistSyncTv: data?.watchlistSyncTv,
           hideWatched: data?.hideWatched,
@@ -253,6 +265,9 @@ const UserGeneralSettings = () => {
                 ? {
                     movieRatingLimit: values.movieRatingLimit || null,
                     tvRatingLimit: values.tvRatingLimit || null,
+                    blockedGenres: values.ownBlockedGenres
+                      ? values.blockedGenres
+                      : null,
                   }
                 : {}),
               watchlistSyncMovies: values.watchlistSyncMovies,
@@ -846,6 +861,41 @@ const UserGeneralSettings = () => {
                       </div>
                     </div>
                   </div>
+                  <div className="form-row">
+                    <label
+                      htmlFor="ownBlockedGenres"
+                      className="checkbox-label"
+                    >
+                      <span>
+                        {intl.formatMessage(messages.ownBlockedGenres)}
+                      </span>
+                      <span className="label-tip">
+                        {intl.formatMessage(messages.ownBlockedGenresTip)}
+                      </span>
+                    </label>
+                    <div className="form-input-area">
+                      <Field
+                        type="checkbox"
+                        id="ownBlockedGenres"
+                        name="ownBlockedGenres"
+                        onChange={() => {
+                          setFieldValue(
+                            'ownBlockedGenres',
+                            !values.ownBlockedGenres
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                  {values.ownBlockedGenres && (
+                    <BlockedGenresFields
+                      id="userBlockedGenres"
+                      value={values.blockedGenres}
+                      onChange={(blockedGenres) =>
+                        setFieldValue('blockedGenres', blockedGenres)
+                      }
+                    />
+                  )}
                 </>
               )}
               {user?.userType !== UserType.LOCAL && (

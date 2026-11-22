@@ -662,6 +662,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             tmdbId={data.id}
             watchProviders={data.watchProviders}
             contentRating={getMovieCertification(data.releases)}
+            genres={data.genres}
             onUpdate={() => revalidate()}
           />
           <RemovalRequestButton media={data.mediaInfo} title={data.title} />

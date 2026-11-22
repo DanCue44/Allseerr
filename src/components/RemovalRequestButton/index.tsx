@@ -1,6 +1,7 @@
 import Button from '@app/components/Common/Button';
 import Modal from '@app/components/Common/Modal';
 import Tooltip from '@app/components/Common/Tooltip';
+import useSettings from '@app/hooks/useSettings';
 import useToasts from '@app/hooks/useToasts';
 import { Permission, useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
@@ -29,6 +30,8 @@ const messages = defineMessages('components.RemovalRequestButton', {
   removalModalTitle: 'Request Removal',
   removalModalSubtitle:
     'Ask to remove {title} and its files from the server. An admin will review it.',
+  removalModalSubtitleSelf:
+    'Ask to remove {title} and its files from the server. If you are the only one who requested it, it is removed right away. Otherwise an admin will review it.',
   submit: 'Request Removal',
   submitting: 'Requesting…',
   reason: 'Reason',
@@ -37,6 +40,7 @@ const messages = defineMessages('components.RemovalRequestButton', {
   reasonPlaceholderMusic: 'We do not listen to it anymore',
   reasonPlaceholderBook: 'We finished reading it',
   success: 'Removal requested for <strong>{title}</strong>.',
+  removed: '<strong>{title}</strong> was removed.',
   alreadyRequested: 'A removal request for this title already exists.',
   error: 'Something went wrong while requesting removal.',
   format: 'Format',
@@ -65,6 +69,7 @@ const RemovalRequestButton = ({
   const intl = useIntl();
   const { addToast } = useToasts();
   const { hasPermission } = useUser();
+  const settings = useSettings();
   const [showModal, setShowModal] = useState(false);
   const [reason, setReason] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -113,7 +118,9 @@ const RemovalRequestButton = ({
   const submit = async () => {
     setIsSubmitting(true);
     try {
-      await axios.post('/api/v1/removal', {
+      const { data: removal } = await axios.post<{
+        status: RemovalRequestStatus;
+      }>('/api/v1/removal', {
         mediaId: media?.id,
         is4k,
         reason: reason.trim() || undefined,
@@ -128,8 +135,9 @@ const RemovalRequestButton = ({
             }
           : {}),
       });
+      const removed = removal?.status === RemovalRequestStatus.APPROVED;
       addToast(
-        intl.formatMessage(messages.success, {
+        intl.formatMessage(removed ? messages.removed : messages.success, {
           title,
           strong: (msg: React.ReactNode) => <strong>{msg}</strong>,
         }),
@@ -142,6 +150,10 @@ const RemovalRequestButton = ({
         mutate(removalsKey);
       }
       mutate('/api/v1/removal/count');
+      if (removed) {
+        // The title is gone, so its page and cards change state
+        mutate(() => true);
+      }
     } catch (e) {
       addToast(
         intl.formatMessage(
@@ -171,9 +183,13 @@ const RemovalRequestButton = ({
         <Modal
           backgroundClickable
           title={intl.formatMessage(messages.removalModalTitle)}
-          subTitle={intl.formatMessage(messages.removalModalSubtitle, {
-            title,
-          })}
+          subTitle={intl.formatMessage(
+            settings.currentSettings.selfRemoval &&
+              !hasPermission(Permission.MANAGE_REQUESTS)
+              ? messages.removalModalSubtitleSelf
+              : messages.removalModalSubtitle,
+            { title }
+          )}
           onCancel={() => setShowModal(false)}
           onOk={() => submit()}
           okText={

@@ -724,6 +724,7 @@ const TvDetails = ({ tv }: TvDetailsProps) => {
             is4kShowComplete={is4kComplete}
             watchProviders={data?.watchProviders}
             contentRating={getTvContentRating(data.contentRatings)}
+            genres={data.genres}
           />
           <RemovalRequestButton media={data?.mediaInfo} title={data.name} />
           {(data.mediaInfo?.status === MediaStatus.AVAILABLE ||

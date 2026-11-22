@@ -21,6 +21,10 @@ import {
   TV_RATINGS,
   exceedsRatingLimit,
 } from '@server/lib/contentRatingLimit';
+import {
+  findBlockedGenres,
+  getEffectiveBlockedGenres,
+} from '@server/lib/genreBlock';
 import type { WatchProviders } from '@server/models/common';
 import axios from 'axios';
 import { useMemo, useState } from 'react';
@@ -29,6 +33,7 @@ import { mutate } from 'swr';
 
 const messages = defineMessages('components.RequestButton', {
   streamingblocked: 'Streaming on {providers}',
+  genreblocked: 'Blocked Genre: {genres}',
   ratingrestricted: 'Not Available for Your Profile',
   viewrequest: 'View Request',
   viewrequest4k: 'View 4K Request',
@@ -65,6 +70,7 @@ interface RequestButtonProps {
   watchProviders?: WatchProviders[];
   ambient?: boolean;
   contentRating?: string;
+  genres?: { id: number; name: string }[];
 }
 
 const RequestButton = ({
@@ -77,6 +83,7 @@ const RequestButton = ({
   watchProviders,
   ambient = false,
   contentRating,
+  genres,
 }: RequestButtonProps) => {
   const intl = useIntl();
   const settings = useSettings();
@@ -425,6 +432,17 @@ const RequestButton = ({
       contentRating,
       mediaType === 'movie' ? user?.movieRatingLimit : user?.tvRatingLimit
     );
+  // So are titles in a genre blocked for the user
+  const blockedGenres = hasPermission(Permission.MANAGE_REQUESTS)
+    ? []
+    : findBlockedGenres(
+        mediaType,
+        genres,
+        getEffectiveBlockedGenres(
+          user?.blockedGenres,
+          settings.currentSettings.blockedGenres
+        )
+      );
   const requestButtonIds = [
     'request',
     'request-more',
@@ -432,7 +450,7 @@ const RequestButton = ({
     'request-more-4k',
   ];
   const visibleButtons =
-    blockingProviders.length || ratingRestricted
+    blockingProviders.length || ratingRestricted || blockedGenres.length
       ? buttons.filter((button) => !requestButtonIds.includes(button.id))
       : buttons;
 
@@ -446,6 +464,28 @@ const RequestButton = ({
             <>
               <NoSymbolIcon />
               <span>{intl.formatMessage(messages.ratingrestricted)}</span>
+            </>
+          }
+          buttonType={ambient ? 'ambient' : 'ghost'}
+          disabled
+          className={
+            ambient ? 'cursor-default opacity-60' : 'ml-2 cursor-default'
+          }
+        />
+      );
+    }
+
+    if (blockedGenres.length) {
+      return (
+        <ButtonWithDropdown
+          text={
+            <>
+              <NoSymbolIcon />
+              <span>
+                {intl.formatMessage(messages.genreblocked, {
+                  genres: blockedGenres.join(', '),
+                })}
+              </span>
             </>
           }
           buttonType={ambient ? 'ambient' : 'ghost'}

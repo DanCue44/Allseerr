@@ -1,13 +1,16 @@
 import type { BookFormatChoice } from '@server/constants/media';
 import {
+  MediaRequestStatus,
   MediaStatus,
   MediaType,
   RemovalRequestStatus,
 } from '@server/constants/media';
 import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
+import { MediaRequest } from '@server/entity/MediaRequest';
 import RemovalRequest from '@server/entity/RemovalRequest';
 import type { User } from '@server/entity/User';
+import WatchedItem from '@server/entity/WatchedItem';
 import { getBookFormatName } from '@server/lib/bookNotifications';
 import {
   getBookFormatChoiceName,
@@ -15,10 +18,13 @@ import {
 } from '@server/lib/mediaNotificationDetails';
 import { removeMediaFromService } from '@server/lib/mediaRemoval';
 import notificationManager, { Notification } from '@server/lib/notifications';
+import { Permission } from '@server/lib/permissions';
+import { getSettings } from '@server/lib/settings';
+import { hasViewState } from '@server/lib/watchedState';
 import logger from '@server/logger';
 import { runInBackground } from '@server/utils/backgroundTasks';
 import { truncate } from 'lodash';
-import { In } from 'typeorm';
+import { In, Not } from 'typeorm';
 
 export class RemovalNotAllowedError extends Error {}
 export class DuplicateRemovalRequestError extends Error {}
@@ -55,6 +61,102 @@ export const getRemovableBookFormat = (
   }
 
   return ebook ? 'ebook' : audiobook ? 'audiobook' : undefined;
+};
+
+/**
+ * Whether the user is the only one who asked for what a removal covers: every
+ * request that is not declined, for each 4K type or book format removed,
+ * belongs to them, and there is at least one. Media added without a request
+ * belongs to no one, so it always waits for an admin.
+ */
+export const isOnlyRequester = (
+  requests: Pick<
+    MediaRequest,
+    'status' | 'is4k' | 'isAudiobook' | 'requestedBy'
+  >[],
+  userId: number,
+  {
+    mediaType,
+    is4k,
+    bookFormat,
+  }: {
+    mediaType: MediaType;
+    is4k: boolean;
+    bookFormat?: BookFormatChoice | null;
+  }
+): boolean => {
+  const live = requests.filter(
+    (request) => request.status !== MediaRequestStatus.DECLINED
+  );
+  const groups =
+    mediaType === MediaType.BOOK
+      ? (bookFormat === 'both'
+          ? [false, true]
+          : [bookFormat === 'audiobook']
+        ).map((isAudiobook) =>
+          live.filter((request) => !!request.isAudiobook === isAudiobook)
+        )
+      : [live.filter((request) => !!request.is4k === is4k)];
+
+  return groups.every(
+    (group) =>
+      group.length > 0 &&
+      group.every((request) => request.requestedBy?.id === userId)
+  );
+};
+
+/**
+ * Whether a user may remove media at once instead of asking an admin: the
+ * Users setting is on, they do not already manage requests, they are the
+ * only requester and, when the setting asks for it, nobody else has watched
+ * the movie or series on the media server. Music and books have no watched
+ * state, so only the requests count for them.
+ */
+const canRemoveOwnMedia = async (
+  media: Media,
+  user: User,
+  is4k: boolean,
+  bookFormat?: BookFormatChoice | null
+): Promise<boolean> => {
+  const { main } = getSettings();
+
+  if (!main.selfRemoval || user.hasPermission(Permission.MANAGE_REQUESTS)) {
+    return false;
+  }
+
+  const requests = await getRepository(MediaRequest).find({
+    where: { media: { id: media.id } },
+  });
+
+  if (
+    !isOnlyRequester(requests, user.id, {
+      mediaType: media.mediaType,
+      is4k,
+      bookFormat,
+    })
+  ) {
+    return false;
+  }
+
+  if (
+    (main.selfRemovalUnwatchedOnly ?? true) &&
+    (media.mediaType === MediaType.MOVIE || media.mediaType === MediaType.TV) &&
+    media.tmdbId != null
+  ) {
+    const watchedByOthers = await getRepository(WatchedItem).find({
+      where: {
+        tmdbId: media.tmdbId,
+        mediaType: media.mediaType,
+        user: { id: Not(user.id) },
+      },
+    });
+
+    if (watchedByOthers.some((row) => hasViewState(row))) {
+      return false;
+    }
+  }
+
+  return true;
 };
 
 const getMediaTypeName = (removal: RemovalRequest): string => {
@@ -211,6 +313,31 @@ export const createRemovalRequest = async (
       status: RemovalRequestStatus.PENDING,
     })
   );
+
+  // Media only this user asked for is removed at once, through the same
+  // approval an admin gives. If the service call fails the request stays
+  // (failed) for an admin, who is told about it as for any new request.
+  if (await canRemoveOwnMedia(media, user, removalIs4k, removableBookFormat)) {
+    try {
+      return await approveRemovalRequest(removal.id, user);
+    } catch (e) {
+      logger.warn('Could not remove media for its only requester', {
+        label: 'Removal Request',
+        removalRequestId: removal.id,
+        errorMessage: e.message,
+      });
+
+      const failed = await removalRepository.findOneOrFail({
+        where: { id: removal.id },
+      });
+
+      runInBackground(
+        sendRemovalNotification(Notification.REMOVAL_PENDING, failed)
+      );
+
+      return failed;
+    }
+  }
 
   runInBackground(
     sendRemovalNotification(Notification.REMOVAL_PENDING, removal)

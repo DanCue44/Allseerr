@@ -21,6 +21,7 @@ import OverrideRule from '@server/entity/OverrideRule';
 import Season from '@server/entity/Season';
 import SeasonRequest from '@server/entity/SeasonRequest';
 import { User } from '@server/entity/User';
+import { AdvancedRequestOption } from '@server/lib/advancedRequestOptions';
 import { Notification } from '@server/lib/notifications';
 import { Permission } from '@server/lib/permissions';
 import type { RadarrSettings, SonarrSettings } from '@server/lib/settings';
@@ -372,6 +373,8 @@ async function seedUser(
     musicQuotaLimit?: number;
     bookQuotaLimit?: number;
     permissions?: number;
+    blockedGenres?: string | null;
+    advancedRequestOptions?: number | null;
   } = {}
 ) {
   const userRepo = getRepository(User);
@@ -1987,6 +1990,69 @@ describe('POST /request, advanced options', () => {
   });
 });
 
+describe('POST and PUT /request, narrowed advanced options', () => {
+  it('keeps only the options an admin left the user', async () => {
+    configureRadarr([{ id: 1, isDefault: true, is4k: false }, { id: 2 }]);
+    getSettings().sonarr = [];
+    await seedUser('demo@seerr.dev', {
+      permissions: Permission.REQUEST | Permission.REQUEST_ADVANCED,
+      advancedRequestOptions:
+        AdvancedRequestOption.PROFILE | AdvancedRequestOption.TAGS,
+    });
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.post('/request').send({
+      mediaType: MediaType.MOVIE,
+      mediaId: 88030,
+      ...movieOptions,
+    });
+
+    assert.strictEqual(res.status, 201);
+
+    const saved = await getRepository(MediaRequest).findOneOrFail({
+      where: { id: res.body.id },
+    });
+    assert.deepStrictEqual(storedOptions(saved), {
+      ...noOptions,
+      profileId: movieOptions.profileId,
+      tags: movieOptions.tags,
+    });
+  });
+
+  it('changes only the allowed options on an edit', async () => {
+    const requestRepo = getRepository(MediaRequest);
+    await seedUser('demo@seerr.dev', {
+      permissions: Permission.REQUEST | Permission.REQUEST_ADVANCED,
+      advancedRequestOptions: AdvancedRequestOption.ROOT_FOLDER,
+    });
+    const mediaRequest = await seedRequest();
+    const stored = {
+      serverId: 1,
+      profileId: 5,
+      rootFolder: '/stored',
+      languageProfileId: null,
+      tags: [6],
+    };
+    await requestRepo.save(Object.assign(mediaRequest, stored));
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.put(`/request/${mediaRequest.id}`).send({
+      mediaType: MediaType.MOVIE,
+      ...movieOptions,
+    });
+
+    assert.strictEqual(res.status, 200);
+
+    const saved = await requestRepo.findOneOrFail({
+      where: { id: mediaRequest.id },
+    });
+    assert.deepStrictEqual(storedOptions(saved), {
+      ...stored,
+      rootFolder: movieOptions.rootFolder,
+    });
+  });
+});
+
 describe('DELETE /request/:requestId, orphaned season status reset', () => {
   // Seeding an approved request sends it to any configured Sonarr
   beforeEach(() => {
@@ -2192,6 +2258,79 @@ describe('POST /request, blocked streaming providers', () => {
     const res = await agent.post('/request').send({
       mediaType: MediaType.MOVIE,
       mediaId: 89003,
+    });
+
+    assert.strictEqual(res.status, 201);
+  });
+});
+
+describe('POST /request, blocked genres', () => {
+  const horrorMovie = (movieId: number) =>
+    ({
+      ...fakeTmdbMovie(movieId),
+      genres: [{ id: 27, name: 'Horror' }],
+    }) as unknown as TmdbMovieDetails;
+
+  beforeEach(() => {
+    configureRadarr([{ id: 0, isDefault: true, is4k: false }]);
+    getSettings().sonarr = [];
+  });
+
+  const block = (t: { after: (fn: () => void) => void }, movie: string) => {
+    const priorImpl = getMovieImpl;
+    getMovieImpl = async ({ movieId }) => horrorMovie(movieId);
+    getSettings().main.blockedGenres = {
+      movie,
+      tv: '',
+      music: '',
+      book: '',
+    };
+    t.after(() => {
+      getMovieImpl = priorImpl;
+      getSettings().main.blockedGenres = {
+        movie: '',
+        tv: '',
+        music: '',
+        book: '',
+      };
+    });
+  };
+
+  it('refuses a movie in a blocked genre and says which', async (t) => {
+    block(t, '27,10749');
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.post('/request').send({
+      mediaType: MediaType.MOVIE,
+      mediaId: 89101,
+    });
+
+    assert.strictEqual(res.status, 403);
+    assert.match(res.body.message, /blocked genre \(Horror\)/);
+  });
+
+  it("follows a user's own list over the server's", async (t) => {
+    block(t, '27');
+    await seedUser('demo@seerr.dev', {
+      blockedGenres: JSON.stringify({ movie: '', tv: '', music: '', book: '' }),
+    });
+
+    const agent = await loginAs('demo@seerr.dev', 'test1234');
+    const res = await agent.post('/request').send({
+      mediaType: MediaType.MOVIE,
+      mediaId: 89102,
+    });
+
+    assert.strictEqual(res.status, 201);
+  });
+
+  it('lets a manager request a blocked genre by hand', async (t) => {
+    block(t, '27');
+
+    const agent = await loginAs('admin@seerr.dev', 'test1234');
+    const res = await agent.post('/request').send({
+      mediaType: MediaType.MOVIE,
+      mediaId: 89103,
     });
 
     assert.strictEqual(res.status, 201);

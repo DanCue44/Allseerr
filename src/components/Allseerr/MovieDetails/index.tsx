@@ -777,6 +777,7 @@ const MovieDetails = ({ movie }: MovieDetailsProps) => {
             tmdbId={data.id}
             watchProviders={data.watchProviders}
             contentRating={getMovieCertification(data.releases)}
+            genres={data.genres}
             onUpdate={() => revalidate()}
             ambient
           />

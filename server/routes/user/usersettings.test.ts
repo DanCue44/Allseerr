@@ -242,6 +242,68 @@ describe('content rating limits', () => {
   });
 });
 
+describe('blocked genres', () => {
+  it("lets an admin give a user their own list and go back to the server's", async () => {
+    const { userId } = await loginAs('demo@seerr.dev', 'test1234');
+    const { agent: admin } = await loginAs('admin@seerr.dev', 'test1234');
+
+    const res = await admin.post(`/user/${userId}/settings/main`).send({
+      username: 'demo',
+      blockedGenres: { movie: '27', tv: '', music: 'Christmas', book: '' },
+    });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body.blockedGenres, {
+      movie: '27',
+      tv: '',
+      music: 'christmas',
+      book: '',
+    });
+
+    const cleared = await admin
+      .post(`/user/${userId}/settings/main`)
+      .send({ username: 'demo', blockedGenres: null });
+    assert.strictEqual(cleared.body.blockedGenres, null);
+  });
+
+  it('does not let a user change their own list', async () => {
+    const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
+
+    await agent.post(`/user/${userId}/settings/main`).send({
+      username: 'demo',
+      blockedGenres: { movie: '27', tv: '', music: '', book: '' },
+    });
+
+    const stored = await getRepository(User).findOneOrFail({
+      where: { id: userId },
+    });
+    assert.strictEqual(stored.blockedGenres ?? null, null);
+  });
+});
+
+describe('advanced request options', () => {
+  it('lets an admin narrow and widen the options of a user', async () => {
+    const { userId } = await loginAs('demo@seerr.dev', 'test1234');
+    const { agent: admin } = await loginAs('admin@seerr.dev', 'test1234');
+    const permissions = Permission.REQUEST | Permission.REQUEST_ADVANCED;
+
+    const narrowed = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions, advancedRequestOptions: 2 });
+    assert.strictEqual(narrowed.status, 200);
+    assert.strictEqual(narrowed.body.advancedRequestOptions, 2);
+
+    const kept = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions });
+    assert.strictEqual(kept.body.advancedRequestOptions, 2);
+
+    const widened = await admin
+      .post(`/user/${userId}/settings/permissions`)
+      .send({ permissions, advancedRequestOptions: 15 });
+    assert.strictEqual(widened.body.advancedRequestOptions, null);
+  });
+});
+
 describe('book language', () => {
   it('lets a user pick their book language and go back to the default', async () => {
     const { agent, userId } = await loginAs('demo@seerr.dev', 'test1234');
