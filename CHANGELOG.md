@@ -2,6 +2,12 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.8 - 2026-11-27
+
+### Fixed
+
+- Saving a user's settings through the API no longer fails for users who follow the server's blocked genres.
+
 ## 3.5.2.7 - 2026-11-27
 
 ### Fixed
