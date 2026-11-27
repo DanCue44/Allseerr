@@ -96,7 +96,7 @@ describe('deriveAccentShades', () => {
 describe('accentColorCss', () => {
   it('overrides every accent variable while a palette is set', () => {
     const css = accentColorCss('#4F8EF7');
-    assert.ok(css?.startsWith(':root[data-palette]{'));
+    assert.ok(css?.startsWith(':root[data-palette],:root [data-palette]{'));
     for (const name of [
       '--as-accent:',
       '--as-accent-soft:',

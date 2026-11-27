@@ -181,7 +181,9 @@ export const accentColorCss = (value?: string | null): string | undefined => {
   }
 
   return (
-    `:root[data-palette]{` +
+    // The Ambient shell sets data-palette on its own wrapper too, so the
+    // override has to reach that element, not only the root
+    `:root[data-palette],:root [data-palette]{` +
     `--as-accent:${channels(shades.accent)};` +
     `--as-accent-soft:${channels(shades.soft)};` +
     `--as-accent-strong:${channels(shades.strong)};` +
