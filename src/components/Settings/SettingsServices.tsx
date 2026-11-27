@@ -10,6 +10,7 @@ import PageTitle from '@app/components/Common/PageTitle';
 import AudiobookshelfModal from '@app/components/Settings/AudiobookshelfModal';
 import BazarrModal from '@app/components/Settings/BazarrModal';
 import ChaptarrModal from '@app/components/Settings/ChaptarrModal';
+import GrimmoryModal from '@app/components/Settings/GrimmoryModal';
 import LazyLibrarianModal from '@app/components/Settings/LazyLibrarianModal';
 import LidarrModal from '@app/components/Settings/LidarrModal';
 import NoBookEndsSyncModal from '@app/components/Settings/NoBookEndsSyncModal';
@@ -40,6 +41,7 @@ import type OverrideRule from '@server/entity/OverrideRule';
 import type { OverrideRuleResultsResponse } from '@server/interfaces/api/overrideRuleInterfaces';
 import type {
   AudiobookshelfSettingsResponse,
+  GrimmorySettingsResponse,
   NoBookEndsSyncSettingsResponse,
 } from '@server/interfaces/api/settingsInterfaces';
 import type {
@@ -67,6 +69,18 @@ const messages = defineMessages('components.Settings', {
   audiobookshelfSettingsDescription:
     'Link available books to your Audiobookshelf server, so users can open them from book pages.',
   configureaudiobookshelf: 'Configure Audiobookshelf',
+  grimmorysettings: 'Grimmory Settings',
+  grimmorySettingsDescription:
+    'Connect Grimmory (formerly BookLore) to serve ebooks, audiobooks or both in place of Audiobookshelf: book pages link to the book in Grimmory and requested books show as available once Grimmory has them.',
+  configuregrimmory: 'Configure Grimmory',
+  deletegrimmory: 'Remove Grimmory',
+  deletegrimmoryconfirm:
+    'Are you sure you want to remove Grimmory? Book pages will no longer link to it.',
+  grimmoryserves: 'Serves',
+  grimmoryservesnothing: 'Nothing yet',
+  grimmoryservesebooks: 'Ebooks',
+  grimmoryservesaudiobooks: 'Audiobooks',
+  grimmoryservesboth: 'Ebooks and audiobooks',
   deleteaudiobookshelf: 'Remove Audiobookshelf',
   deleteaudiobookshelfconfirm:
     'Are you sure you want to remove Audiobookshelf? Book pages will no longer link to it.',
@@ -421,6 +435,13 @@ const SettingsServices = () => {
   const [deleteAudiobookshelfModal, setDeleteAudiobookshelfModal] =
     useState(false);
   const {
+    data: grimmoryData,
+    error: grimmoryError,
+    mutate: revalidateGrimmory,
+  } = useSWR<GrimmorySettingsResponse>('/api/v1/settings/grimmory');
+  const [editGrimmoryModal, setEditGrimmoryModal] = useState(false);
+  const [deleteGrimmoryModal, setDeleteGrimmoryModal] = useState(false);
+  const {
     data: nobookendsSyncData,
     error: nobookendsSyncError,
     mutate: revalidateNoBookEndsSync,
@@ -556,6 +577,20 @@ const SettingsServices = () => {
     });
     setDeleteAudiobookshelfModal(false);
     revalidateAudiobookshelf();
+  };
+
+  // Grimmory is a single server, removing it clears the address and sign in
+  const deleteGrimmory = async () => {
+    await axios.post('/api/v1/settings/grimmory', {
+      url: '',
+      publicUrl: '',
+      username: '',
+      password: '',
+      ebooks: false,
+      audiobooks: false,
+    });
+    setDeleteGrimmoryModal(false);
+    revalidateGrimmory();
   };
 
   // NoBookEnds Sync is a single server, removing it clears and disables it
@@ -1168,6 +1203,91 @@ const SettingsServices = () => {
                     <PlusIcon />
                     <span>
                       {intl.formatMessage(messages.configureaudiobookshelf)}
+                    </span>
+                  </Button>
+                </div>
+              </li>
+            )}
+          </ul>
+        )}
+      </div>
+      <div className="mb-6 mt-10">
+        <h3 className="heading">
+          {intl.formatMessage(messages.grimmorysettings)}
+        </h3>
+        <p className="description">
+          {intl.formatMessage(messages.grimmorySettingsDescription)}
+        </p>
+      </div>
+      {editGrimmoryModal && grimmoryData && (
+        <GrimmoryModal
+          grimmory={grimmoryData}
+          onClose={() => setEditGrimmoryModal(false)}
+          onSave={() => {
+            revalidateGrimmory();
+            setEditGrimmoryModal(false);
+          }}
+        />
+      )}
+      <Transition
+        as={Fragment}
+        show={deleteGrimmoryModal}
+        enter="transition-opacity ease-in-out duration-300"
+        enterFrom="opacity-0"
+        enterTo="opacity-100"
+        leave="transition-opacity ease-in-out duration-300"
+        leaveFrom="opacity-100"
+        leaveTo="opacity-0"
+      >
+        <Modal
+          okText={intl.formatMessage(globalMessages.delete)}
+          okButtonType="danger"
+          onOk={() => deleteGrimmory()}
+          onCancel={() => setDeleteGrimmoryModal(false)}
+          title={intl.formatMessage(messages.deletegrimmory)}
+        >
+          {intl.formatMessage(messages.deletegrimmoryconfirm)}
+        </Modal>
+      </Transition>
+      <div className="section">
+        {!grimmoryData && !grimmoryError && <LoadingSpinner />}
+        {grimmoryData && !grimmoryError && (
+          <ul className="grid max-w-6xl grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+            {grimmoryData.url ? (
+              <ServerInstance
+                name="Grimmory"
+                hostname=""
+                port={0}
+                url={grimmoryData.url}
+                externalUrl={grimmoryData.publicUrl || undefined}
+                profileName="-"
+                isSSL={grimmoryData.url.startsWith('https://')}
+                isAudiobookshelf
+                detail={{
+                  label: intl.formatMessage(messages.grimmoryserves),
+                  value: intl.formatMessage(
+                    grimmoryData.ebooks && grimmoryData.audiobooks
+                      ? messages.grimmoryservesboth
+                      : grimmoryData.ebooks
+                        ? messages.grimmoryservesebooks
+                        : grimmoryData.audiobooks
+                          ? messages.grimmoryservesaudiobooks
+                          : messages.grimmoryservesnothing
+                  ),
+                }}
+                onEdit={() => setEditGrimmoryModal(true)}
+                onDelete={() => setDeleteGrimmoryModal(true)}
+              />
+            ) : (
+              <li className="col-span-1 h-32 rounded-lg border-2 border-dashed border-gray-400 shadow sm:h-44">
+                <div className="flex h-full w-full items-center justify-center">
+                  <Button
+                    buttonType="ghost"
+                    onClick={() => setEditGrimmoryModal(true)}
+                  >
+                    <PlusIcon />
+                    <span>
+                      {intl.formatMessage(messages.configuregrimmory)}
                     </span>
                   </Button>
                 </div>

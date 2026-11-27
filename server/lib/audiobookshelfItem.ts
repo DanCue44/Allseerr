@@ -443,23 +443,24 @@ export interface AudiobookshelfLinks {
 export const getAudiobookshelfLinks = async (
   settings: AudiobookshelfSettings,
   book: AudiobookshelfBook,
-  media?: Media
+  media?: Media,
+  // Formats another library serves, such as Grimmory, which get no link
+  skipFormats: NoBookEndsFormat[] = []
 ): Promise<AudiobookshelfLinks> => {
   const baseUrl = settings.url?.replace(/\/+$/, '');
+  const skipEbook = skipFormats.includes('ebook');
+  const skipAudiobook = skipFormats.includes('audiobook');
   const searchLinks: AudiobookshelfLinks = {
-    audiobookshelfUrl: getAudiobookshelfUrl(settings, book.title, media),
-    audiobookshelfEbookUrl: getAudiobookshelfUrl(
-      settings,
-      book.title,
-      media,
-      'ebook'
-    ),
-    audiobookshelfAudiobookUrl: getAudiobookshelfUrl(
-      settings,
-      book.title,
-      media,
-      'audiobook'
-    ),
+    audiobookshelfUrl:
+      skipEbook && skipAudiobook
+        ? null
+        : getAudiobookshelfUrl(settings, book.title, media),
+    audiobookshelfEbookUrl: skipEbook
+      ? null
+      : getAudiobookshelfUrl(settings, book.title, media, 'ebook'),
+    audiobookshelfAudiobookUrl: skipAudiobook
+      ? null
+      : getAudiobookshelfUrl(settings, book.title, media, 'audiobook'),
     audiobookshelfEbookItemId: null,
     audiobookshelfAudiobookItemId: null,
     nobookendsEbookUrl: null,
@@ -520,9 +521,11 @@ export const getAudiobookshelfLinks = async (
   return {
     // Like the search link, the audiobook when it is available
     audiobookshelfUrl:
-      media?.statusAudio === MediaStatus.AVAILABLE
-        ? audiobookUrl
-        : (ebookUrl ?? searchLinks.audiobookshelfUrl),
+      skipEbook && skipAudiobook
+        ? null
+        : media?.statusAudio === MediaStatus.AVAILABLE && !skipAudiobook
+          ? audiobookUrl
+          : (ebookUrl ?? searchLinks.audiobookshelfUrl),
     audiobookshelfEbookUrl: ebookUrl,
     audiobookshelfAudiobookUrl: audiobookUrl,
     audiobookshelfEbookItemId: ebookItemId,

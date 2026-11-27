@@ -102,6 +102,7 @@ beforeEach(() => {
     audiobookshelf: { url: abs.url, apiKey: 'abs-key' },
     kavita: { url: kavita.url, apiKey: 'kavita-key' },
     komga: { url: komga.url, apiKey: 'komga-key' },
+    grimmory: {},
     emailPasswords: true,
     oidc: { enabled: false, clients: [] },
     plexDefault: defaultPlexDefaultAccess(),
@@ -235,6 +236,7 @@ describe('user access people', () => {
         ['audiobookshelf', true],
         ['kavita', true],
         ['komga', true],
+        ['grimmory', false],
       ]
     );
   });

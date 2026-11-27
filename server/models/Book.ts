@@ -64,6 +64,9 @@ export interface BookDetails {
   audiobookshelfAudiobookItemId?: string | null;
   nobookendsEbookUrl?: string | null;
   nobookendsAudiobookUrl?: string | null;
+  // Formats Grimmory serves, once available
+  grimmoryEbookUrl?: string | null;
+  grimmoryAudiobookUrl?: string | null;
   audiobookEdition?: AudiobookEdition | null;
   mediaInfo?: Media;
   onUserWatchlist?: boolean;

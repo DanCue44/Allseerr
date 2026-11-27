@@ -18,6 +18,7 @@ export const readingAppMessages = defineMessages('components.ReadingApps', {
   purposeaudiobookshelf: 'Audiobooks and ebooks',
   purposekavita: 'Comics and manga',
   purposekomga: 'Comics and manga',
+  purposegrimmory: 'Ebooks and audiobooks',
   username: 'Username',
   password: 'Password',
   shownOnce:

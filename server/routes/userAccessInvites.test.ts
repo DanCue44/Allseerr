@@ -89,6 +89,7 @@ beforeEach(() => {
     audiobookshelf: {},
     kavita: { url: kavita.url, apiKey: 'kavita-key' },
     komga: {},
+    grimmory: {},
     emailPasswords: true,
     oidc: { enabled: false, clients: [] },
     plexDefault: defaultPlexDefaultAccess(),

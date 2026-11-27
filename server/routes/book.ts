@@ -9,6 +9,7 @@ import { getRepository } from '@server/datasource';
 import Media from '@server/entity/Media';
 import MetadataBookAudio from '@server/entity/MetadataBookAudio';
 import { getAudiobookshelfLinks } from '@server/lib/audiobookshelfItem';
+import { getGrimmoryLinks, grimmoryServes } from '@server/lib/grimmoryItem';
 import { getSettings } from '@server/lib/settings';
 import { getBookRecordings } from '@server/lib/talearrRecordings';
 import { isOnUserWatchlist } from '@server/lib/watchlistStatus';
@@ -295,20 +296,28 @@ bookRoutes.get<{ id: string }>('/:id', async (req, res, next) => {
       media: media?.filter(req.user),
     });
 
-    // Links wait a moment at most for Audiobookshelf, see LOOKUP_BUDGET
-    const [onUserWatchlist, audiobookshelfLinks] = await Promise.all([
-      isOnUserWatchlist(req.user, MediaType.BOOK, workId),
-      getAudiobookshelfLinks(
-        getSettings().audiobookshelf,
-        {
-          olId: workId,
-          title: book.title,
-          authors: book.authors.map((author) => author.name).filter(Boolean),
-          asin: audiobookEdition?.asin,
-        },
-        media
-      ),
-    ]);
+    // Links wait a moment at most for Audiobookshelf and Grimmory, see
+    // LOOKUP_BUDGET. Formats Grimmory serves link there instead.
+    const settings = getSettings();
+    const linkBook = {
+      olId: workId,
+      title: book.title,
+      authors: book.authors.map((author) => author.name).filter(Boolean),
+      asin: audiobookEdition?.asin,
+    };
+    const [onUserWatchlist, audiobookshelfLinks, grimmoryLinks] =
+      await Promise.all([
+        isOnUserWatchlist(req.user, MediaType.BOOK, workId),
+        getAudiobookshelfLinks(
+          settings.audiobookshelf,
+          linkBook,
+          media,
+          (['ebook', 'audiobook'] as const).filter((format) =>
+            grimmoryServes(settings.grimmory, format)
+          )
+        ),
+        getGrimmoryLinks(settings.grimmory, linkBook, media),
+      ]);
 
     return res.status(200).json({
       ...book,
@@ -316,6 +325,7 @@ bookRoutes.get<{ id: string }>('/:id', async (req, res, next) => {
       posterPath: book.posterPath ?? audiobookEdition?.coverUrl ?? null,
       onUserWatchlist,
       ...audiobookshelfLinks,
+      ...grimmoryLinks,
       audiobookEdition,
     });
   } catch (e) {

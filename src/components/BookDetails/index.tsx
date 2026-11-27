@@ -67,6 +67,8 @@ const messages = defineMessages('components.BookDetails', {
   managebook: 'Manage Book',
   readinaudiobookshelf: 'Read in Audiobookshelf',
   listeninaudiobookshelf: 'Listen in Audiobookshelf',
+  readingrimmory: 'Read in Grimmory',
+  listeningrimmory: 'Listen in Grimmory',
   openinnobookends: 'Open in NoBookEnds',
   readinnobookends: 'Read in NoBookEnds',
   listeninnobookends: 'Listen in NoBookEnds',
@@ -144,6 +146,22 @@ const BookDetails = ({ book }: BookDetailsProps) => {
     mediaLinks.push({
       text: intl.formatMessage(messages.listeninaudiobookshelf),
       url: data.audiobookshelfAudiobookUrl,
+      svg: <PlayIcon />,
+    });
+  }
+
+  if (data.grimmoryEbookUrl) {
+    mediaLinks.push({
+      text: intl.formatMessage(messages.readingrimmory),
+      url: data.grimmoryEbookUrl,
+      svg: <BookOpenIcon />,
+    });
+  }
+
+  if (data.grimmoryAudiobookUrl) {
+    mediaLinks.push({
+      text: intl.formatMessage(messages.listeningrimmory),
+      url: data.grimmoryAudiobookUrl,
       svg: <PlayIcon />,
     });
   }

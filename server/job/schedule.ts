@@ -17,6 +17,7 @@ import {
   chaptarrRecentScanner,
   chaptarrScanner,
 } from '@server/lib/scanners/chaptarr';
+import { grimmoryScanner } from '@server/lib/scanners/grimmory';
 import {
   jellyfinFullScanner,
   jellyfinRecentScanner,
@@ -308,6 +309,30 @@ export const startJobs = (): void => {
     running: () => lazyLibrarianScanner.status().running,
     cancelFn: () => lazyLibrarianScanner.cancel(),
     inUse: () => resolveBookService(getSettings()) === 'lazylibrarian',
+  });
+
+  // Marks requested books available once Grimmory has them, twice an hour
+  scheduledJobs.push({
+    id: 'grimmory-scan',
+    name: 'Grimmory Scan',
+    type: 'process',
+    interval: 'minutes',
+    cronSchedule: jobs['grimmory-scan'].schedule,
+    job: schedule.scheduleJob(jobs['grimmory-scan'].schedule, () => {
+      if (grimmoryScanner.status().running) {
+        return;
+      }
+      logger.info('Starting scheduled job: Grimmory Scan', {
+        label: 'Jobs',
+      });
+      grimmoryScanner.run();
+    }),
+    running: () => grimmoryScanner.status().running,
+    cancelFn: () => grimmoryScanner.cancel(),
+    inUse: () => {
+      const { grimmory } = getSettings();
+      return !!grimmory.url && (!!grimmory.ebooks || !!grimmory.audiobooks);
+    },
   });
 
   // Checks the books Allseerr is waiting on every 15 minutes

@@ -90,6 +90,7 @@ beforeEach(async () => {
       publicUrl: 'https://kavita.example.com',
     },
     komga: {},
+    grimmory: {},
     emailPasswords: false,
     oidc: { enabled: false, clients: [] },
     plexDefault: defaultPlexDefaultAccess(),

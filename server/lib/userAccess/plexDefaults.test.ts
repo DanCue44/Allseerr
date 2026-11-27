@@ -47,6 +47,7 @@ beforeEach(async () => {
     audiobookshelf: {},
     kavita: {},
     komga: {},
+    grimmory: {},
     emailPasswords: false,
     oidc: { enabled: false, clients: [] },
     plexDefault: { ...defaultPlexDefaultAccess(), enabled: true },

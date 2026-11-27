@@ -89,6 +89,7 @@ const DEFAULT_PURPOSES: Record<UserAccessApp, string> = {
   audiobookshelf: 'Audiobooks and ebooks',
   kavita: 'Comics and manga',
   komga: 'Comics and manga',
+  grimmory: 'Ebooks and audiobooks',
 };
 
 export const kindsServedBy = (

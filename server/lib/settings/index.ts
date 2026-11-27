@@ -153,6 +153,7 @@ export interface PlexDefaultAccessSettings {
     audiobookshelf: { enabled: boolean; libraryIds: string[] | null };
     kavita: { enabled: boolean; libraryIds: string[] | null };
     komga: { enabled: boolean; libraryIds: string[] | null };
+    grimmory: { enabled: boolean; libraryIds: string[] | null };
   };
   // none (null) means no age limit
   ageLimit: string | null;
@@ -165,6 +166,9 @@ export const defaultPlexDefaultAccess = (): PlexDefaultAccessSettings => ({
     audiobookshelf: { enabled: true, libraryIds: null },
     kavita: { enabled: true, libraryIds: null },
     komga: { enabled: true, libraryIds: null },
+    // Off, so servers that set this up before Grimmory was supported do not
+    // hand it out to everyone on upgrade
+    grimmory: { enabled: false, libraryIds: null },
   },
   ageLimit: null,
   includeUnrated: false,
@@ -174,6 +178,7 @@ export interface UserAccessSettings {
   audiobookshelf: UserAccessAppConnection;
   kavita: UserAccessAppConnection;
   komga: UserAccessAppConnection;
+  grimmory: UserAccessAppConnection;
   // Sends new app passwords to people by email when email is set up
   emailPasswords: boolean;
   oidc: {
@@ -259,6 +264,28 @@ export const resolveAudiobookshelfSettings = ({
       audiobookshelf?.libraryId || lazylibrarian?.audiobookshelfLibraryId,
   };
 };
+
+/**
+ * Grimmory (formerly BookLore), a library for ebooks and audiobooks. For the
+ * formats it serves, book pages link to the book there and its scan marks
+ * requested books available once Grimmory has them.
+ */
+export interface GrimmorySettings {
+  // Address this server reaches Grimmory at
+  url?: string;
+  // Address people open Grimmory at, when it differs from url
+  publicUrl?: string;
+  // Grimmory has no API keys, Allseerr signs in as this user. The password
+  // is never sent back to the settings page.
+  username?: string;
+  password?: string;
+  // Libraries the formats are kept in, any library when unset
+  ebookLibraryId?: string;
+  audiobookLibraryId?: string;
+  // The formats Grimmory serves in place of Audiobookshelf
+  ebooks?: boolean;
+  audiobooks?: boolean;
+}
 
 export interface NoBookEndsSyncSettings {
   // Queues audiobook and ebook pairs for Listen and Read alignment
@@ -807,6 +834,7 @@ export type JobId =
   | 'sonarr-scan'
   | 'lidarr-scan'
   | 'lazylibrarian-scan'
+  | 'grimmory-scan'
   | 'chaptarr-scan'
   | 'chaptarr-full-scan'
   | 'download-sync'
@@ -838,6 +866,7 @@ export interface AllSettings {
   bazarr: BazarrSettings;
   lazylibrarian: LazyLibrarianSettings;
   audiobookshelf: AudiobookshelfSettings;
+  grimmory: GrimmorySettings;
   nobookendsSync: NoBookEndsSyncSettings;
   userAccess: UserAccessSettings;
   oidcLogin: OidcLoginSettings;
@@ -949,6 +978,7 @@ class Settings {
       bazarr: {},
       lazylibrarian: {},
       audiobookshelf: {},
+      grimmory: {},
       nobookendsSync: {
         enabled: false,
         url: '',
@@ -960,6 +990,7 @@ class Settings {
         audiobookshelf: {},
         kavita: {},
         komga: {},
+        grimmory: {},
         emailPasswords: true,
         oidc: {
           enabled: false,
@@ -1121,6 +1152,9 @@ class Settings {
         'lazylibrarian-scan': {
           schedule: '0 */30 * * * *',
         },
+        'grimmory-scan': {
+          schedule: '0 10,40 * * * *',
+        },
         'chaptarr-scan': {
           schedule: '0 */15 * * * *',
         },
@@ -1269,12 +1303,21 @@ class Settings {
     }
   }
 
+  get grimmory(): GrimmorySettings {
+    return this.data.grimmory ?? {};
+  }
+
+  set grimmory(data: GrimmorySettings) {
+    this.data.grimmory = mergeSettings(this.data.grimmory ?? {}, data);
+  }
+
   get userAccess(): UserAccessSettings {
     return mergeSettings<UserAccessSettings>(
       {
         audiobookshelf: {},
         kavita: {},
         komga: {},
+        grimmory: {},
         emailPasswords: true,
         oidc: { enabled: false, clients: [] },
         plexDefault: defaultPlexDefaultAccess(),

@@ -2,12 +2,18 @@ import defineMessages from '@app/utils/defineMessages';
 import type { UserAccessApp } from '@server/constants/userAccess';
 import type { AgeLimit } from '@server/interfaces/api/userAccessInterfaces';
 
-export const APPS: UserAccessApp[] = ['audiobookshelf', 'kavita', 'komga'];
+export const APPS: UserAccessApp[] = [
+  'audiobookshelf',
+  'kavita',
+  'komga',
+  'grimmory',
+];
 
 export const APP_NAMES: Record<UserAccessApp, string> = {
   audiobookshelf: 'Audiobookshelf',
   kavita: 'Kavita',
   komga: 'Komga',
+  grimmory: 'Grimmory',
 };
 
 export const AGE_LIMIT_OPTIONS: AgeLimit[] = ['none', 'teen', 'tween', 'kids'];

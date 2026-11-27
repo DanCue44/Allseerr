@@ -27,8 +27,8 @@ const messages = defineMessages(
 
 // The apps each kind can be read or heard in
 const OPTIONS: Record<ReadingKind, UserAccessApp[]> = {
-  audiobook: ['audiobookshelf'],
-  ebook: ['audiobookshelf', 'kavita'],
+  audiobook: ['audiobookshelf', 'grimmory'],
+  ebook: ['audiobookshelf', 'kavita', 'grimmory'],
   comic: ['kavita', 'komga'],
 };
 

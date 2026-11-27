@@ -1,5 +1,10 @@
 // Apps whose accounts Allseerr can manage for the people it knows
-export const USER_ACCESS_APPS = ['audiobookshelf', 'kavita', 'komga'] as const;
+export const USER_ACCESS_APPS = [
+  'audiobookshelf',
+  'kavita',
+  'komga',
+  'grimmory',
+] as const;
 
 export type UserAccessApp = (typeof USER_ACCESS_APPS)[number];
 
@@ -11,6 +16,7 @@ export const USER_ACCESS_APP_NAMES: Record<UserAccessApp, string> = {
   audiobookshelf: 'Audiobookshelf',
   kavita: 'Kavita',
   komga: 'Komga',
+  grimmory: 'Grimmory',
 };
 
 /**
@@ -49,8 +55,8 @@ export const isReadingKind = (value: unknown): value is ReadingKind =>
 // The apps the admin can pick to serve each kind
 export const READING_KIND_APPS: Record<ReadingKind, readonly UserAccessApp[]> =
   {
-    audiobook: ['audiobookshelf'],
-    ebook: ['audiobookshelf', 'kavita'],
+    audiobook: ['audiobookshelf', 'grimmory'],
+    ebook: ['audiobookshelf', 'kavita', 'grimmory'],
     comic: ['kavita', 'komga'],
   };
 

@@ -3,7 +3,8 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 /**
- * Stand-ins for Audiobookshelf, Kavita and Komga that keep their accounts
+ * Stand-ins for Audiobookshelf, Kavita, Komga and Grimmory that keep their
+ * accounts
  * in memory and answer the admin calls Allseerr makes, shaped like the real
  * apps' answers, and for the NoBookEnds directory
  */
@@ -579,6 +580,179 @@ export const startFakeKomga = async (apiKey: string) => {
   });
 
   return { ...app, users };
+};
+
+export interface FakeGrimmoryUser {
+  id: number;
+  username: string;
+  name: string;
+  email: string;
+  password: string;
+  assignedLibraries: { id: number; name: string }[];
+  permissions: Record<string, boolean>;
+}
+
+/**
+ * Grimmory, shaped after its API reference (grimmory.org/api): signs in
+ * with a username and password for a bearer token, keeps users, libraries
+ * and books. Books hold a primary file and alternative formats.
+ */
+export const startFakeGrimmory = async ({
+  username,
+  password,
+}: {
+  username: string;
+  password: string;
+}) => {
+  const libraries = [
+    { id: 1, name: 'Ebooks', allowedFormats: ['EPUB', 'PDF'] },
+    { id: 2, name: 'Audiobooks', allowedFormats: ['AUDIOBOOK'] },
+  ];
+  const users: FakeGrimmoryUser[] = [
+    {
+      id: 1,
+      username,
+      name: 'Admin',
+      email: 'admin@example.com',
+      password,
+      assignedLibraries: libraries.map(({ id, name }) => ({ id, name })),
+      permissions: { admin: true, canDownload: true },
+    },
+  ];
+  const books: Record<string, unknown>[] = [];
+  const tokens = new Map<string, number>();
+  let nextUser = 2;
+  let nextToken = 1;
+
+  const app = await startFake((req, url, body) => {
+    const b = (body ?? {}) as Record<string, unknown>;
+
+    if (url.pathname === '/api/v1/auth/login' && req.method === 'POST') {
+      const user = users.find(
+        (u) => u.username === b.username && u.password === b.password
+      );
+      if (!user) {
+        return { status: 401, body: { message: 'Invalid credentials' } };
+      }
+      const token = `token-${nextToken++}`;
+      tokens.set(token, user.id);
+      return {
+        status: 200,
+        body: {
+          accessToken: token,
+          refreshToken: `refresh-${token}`,
+          expires: Date.now() + 3600_000,
+          isDefaultPassword: false,
+        },
+      };
+    }
+
+    const auth = req.headers.authorization ?? '';
+    const me = users.find(
+      (u) => u.id === tokens.get(auth.replace(/^Bearer /, ''))
+    );
+    if (!me) {
+      return { status: 401 };
+    }
+    const isAdmin = !!me.permissions.admin;
+    const userMatch = url.pathname.match(/^\/api\/v1\/users\/(\d+)$/);
+
+    if (url.pathname === '/api/v1/users/me') {
+      return { status: 200, body: me };
+    }
+    if (url.pathname === '/api/v1/version') {
+      return { status: 200, body: { current: 'v1.4.0' } };
+    }
+    if (url.pathname === '/api/v1/libraries') {
+      return { status: 200, body: libraries };
+    }
+    if (url.pathname === '/api/v1/books') {
+      return { status: 200, body: books };
+    }
+    if (url.pathname === '/api/v1/app/books/search') {
+      const q = (url.searchParams.get('q') ?? '').toLowerCase();
+      const content = books
+        .filter((book) => JSON.stringify(book).toLowerCase().includes(q))
+        .map((book) => {
+          const metadata = (book.metadata ?? {}) as Record<string, unknown>;
+          const primary = (book.primaryFile ?? {}) as Record<string, unknown>;
+          return {
+            id: book.id,
+            libraryId: book.libraryId,
+            title: metadata.title ?? book.title,
+            authors: metadata.authors ?? [],
+            isbn13: metadata.isbn13,
+            primaryFileType: primary.bookType,
+          };
+        });
+      return {
+        status: 200,
+        body: { content, page: 0, size: 20, totalElements: content.length },
+      };
+    }
+    if (!isAdmin) {
+      return { status: 403 };
+    }
+    if (url.pathname === '/api/v1/users' && req.method === 'GET') {
+      return { status: 200, body: users };
+    }
+    if (url.pathname === '/api/v1/auth/register' && req.method === 'POST') {
+      if (users.some((u) => u.username === b.username)) {
+        return { status: 409, body: { message: 'Username taken' } };
+      }
+      const selected = (b.selectedLibraries as number[]) ?? [];
+      users.push({
+        id: nextUser++,
+        username: String(b.username),
+        name: String(b.name),
+        email: String(b.email),
+        password: String(b.password),
+        assignedLibraries: libraries
+          .filter((library) => selected.includes(library.id))
+          .map(({ id, name }) => ({ id, name })),
+        permissions: {
+          admin: false,
+          canDownload: !!b.permissionDownload,
+          canSyncKobo: !!b.permissionSyncKobo,
+        },
+      });
+      return { status: 204 };
+    }
+    if (url.pathname === '/api/v1/users/change-user-password') {
+      const user = users.find((u) => u.id === b.userId);
+      if (!user) {
+        return { status: 404 };
+      }
+      user.password = String(b.newPassword);
+      return { status: 200, body: {} };
+    }
+    if (userMatch && req.method === 'PUT') {
+      const user = users.find((u) => u.id === Number(userMatch[1]));
+      if (!user) {
+        return { status: 404 };
+      }
+      const assigned = (b.assignedLibraries as number[]) ?? [];
+      user.name = String(b.name ?? user.name);
+      user.permissions =
+        (b.permissions as Record<string, boolean>) ?? user.permissions;
+      user.assignedLibraries = libraries
+        .filter((library) => assigned.includes(library.id))
+        .map(({ id, name }) => ({ id, name }));
+      return { status: 200, body: user };
+    }
+    if (userMatch && req.method === 'DELETE') {
+      const index = users.findIndex((u) => u.id === Number(userMatch[1]));
+      if (index < 0) {
+        return { status: 404 };
+      }
+      users.splice(index, 1);
+      return { status: 204 };
+    }
+
+    return { status: 404 };
+  });
+
+  return { ...app, users, books, tokens };
 };
 
 export interface FakeDirectoryEntry {

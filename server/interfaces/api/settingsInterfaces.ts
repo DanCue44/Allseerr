@@ -10,7 +10,11 @@ import type {
   DockerStatus,
   InstallState,
 } from '@server/lib/nobookendsSyncSetup';
-import type { AudiobookshelfSettings, BookService } from '@server/lib/settings';
+import type {
+  AudiobookshelfSettings,
+  BookService,
+  GrimmorySettings,
+} from '@server/lib/settings';
 import type { DnsEntries, DnsStats } from 'dns-caching';
 import type { PaginatedResponse } from './common';
 
@@ -207,6 +211,10 @@ export type AudiobookshelfSettingsResponse = Omit<
   'adminApiKey'
 > & {
   adminApiKeySet: boolean;
+};
+
+export type GrimmorySettingsResponse = Omit<GrimmorySettings, 'password'> & {
+  passwordSet: boolean;
 };
 
 export interface AudiobookshelfAuthorMatchResponse {

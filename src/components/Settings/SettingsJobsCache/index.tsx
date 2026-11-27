@@ -82,6 +82,8 @@ const jobDescriptions: { [jobId: string]: MessageDescriptor } = defineMessages(
       'Keeps this server listed in the NoBookEnds directory for Sign in with Plex.',
     'request-not-found':
       'Marks approved requests that found nothing for the set number of days as not found.',
+    'grimmory-scan':
+      'Marks requested books available once Grimmory has them, for the formats Grimmory serves.',
   }
 );
 
@@ -161,6 +163,7 @@ const messages: { [messageName: string]: MessageDescriptor } = defineMessages(
     'user-access-sync': 'User Access Sync',
     'nobookends-directory': 'NoBookEnds Directory',
     'request-not-found': 'Request Not Found Check',
+    'grimmory-scan': 'Grimmory Scan',
     editJobSchedule: 'Modify Job',
     jobScheduleEditSaved: 'Job edited successfully!',
     jobScheduleEditFailed: 'Something went wrong while saving the job.',

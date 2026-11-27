@@ -93,6 +93,8 @@ const messages = defineMessages('components.Allseerr.BookDetails', {
   managebook: 'Manage Book',
   readinaudiobookshelf: 'Read in Audiobookshelf',
   listeninaudiobookshelf: 'Listen in Audiobookshelf',
+  readingrimmory: 'Read in Grimmory',
+  listeningrimmory: 'Listen in Grimmory',
   moreby: 'More by {author}',
   seeall: 'See all',
   requestedby: 'Requested by {user} on {date}',
@@ -256,6 +258,26 @@ const BookDetails = ({ book }: BookDetailsProps) => {
           },
         ]
       : []),
+    ...(data.grimmoryEbookUrl
+      ? [
+          {
+            key: 'read-grimmory',
+            href: data.grimmoryEbookUrl,
+            label: messages.readingrimmory,
+            icon: <BookOpenIcon />,
+          },
+        ]
+      : []),
+    ...(data.grimmoryAudiobookUrl
+      ? [
+          {
+            key: 'listen-grimmory',
+            href: data.grimmoryAudiobookUrl,
+            label: messages.listeningrimmory,
+            icon: <PlayIcon />,
+          },
+        ]
+      : []),
   ];
 
   const externalLinks = [
@@ -342,13 +364,21 @@ const BookDetails = ({ book }: BookDetailsProps) => {
                   status={data.mediaInfo?.status}
                   downloads={data.mediaInfo?.downloadStatus}
                   label={intl.formatMessage(globalMessages.ebook)}
-                  href={data.audiobookshelfEbookUrl ?? undefined}
+                  href={
+                    data.audiobookshelfEbookUrl ??
+                    data.grimmoryEbookUrl ??
+                    undefined
+                  }
                 />
                 <StatusPill
                   status={data.mediaInfo?.statusAudio}
                   downloads={data.mediaInfo?.downloadStatusAudio}
                   label={intl.formatMessage(globalMessages.audiobook)}
-                  href={data.audiobookshelfAudiobookUrl ?? undefined}
+                  href={
+                    data.audiobookshelfAudiobookUrl ??
+                    data.grimmoryAudiobookUrl ??
+                    undefined
+                  }
                 />
               </>
             )}

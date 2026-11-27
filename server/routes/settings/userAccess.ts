@@ -84,6 +84,7 @@ export const maskUserAccessSettings = (
   audiobookshelf: maskConnection(settings.audiobookshelf),
   kavita: maskConnection(settings.kavita),
   komga: maskConnection(settings.komga),
+  grimmory: maskConnection(settings.grimmory),
   emailPasswords: settings.emailPasswords,
   matchPlexUsernames: settings.matchPlexUsernames !== false,
 });
@@ -149,6 +150,7 @@ userAccessSettingsRoutes.post<
     ),
     kavita: mergeConnection(current.kavita, req.body.kavita),
     komga: mergeConnection(current.komga, req.body.komga),
+    grimmory: mergeConnection(current.grimmory, req.body.grimmory),
     emailPasswords:
       typeof req.body.emailPasswords === 'boolean'
         ? req.body.emailPasswords

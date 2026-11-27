@@ -30,6 +30,7 @@ export interface UserAccessSettingsResponse {
   audiobookshelf: UserAccessAppConnectionResponse;
   kavita: UserAccessAppConnectionResponse;
   komga: UserAccessAppConnectionResponse;
+  grimmory: UserAccessAppConnectionResponse;
   emailPasswords: boolean;
   // Keeps linked app usernames the same as Plex usernames
   matchPlexUsernames: boolean;

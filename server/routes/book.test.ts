@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, before, beforeEach, describe, it, mock } from 'node:test';
 
+import Audible from '@server/api/audible';
+import type { AudibleProduct } from '@server/api/audible/interfaces';
 import type { AudiobookshelfBookItem } from '@server/api/audiobookshelf';
 import AudiobookshelfAPI from '@server/api/audiobookshelf';
 import LazyLibrarianAPI from '@server/api/lazylibrarian';
@@ -185,6 +187,13 @@ Object.defineProperty(TheMovieDb.prototype, 'searchMulti', {
 // Settings routes save to the settings file, which tests leave alone
 mock.method(getSettings(), 'save', async () => undefined);
 
+// Searches also look for narrators named like the query
+let narratorProducts: AudibleProduct[] = [];
+mock.method(Audible.prototype, 'searchNarrator', async () => ({
+  products: narratorProducts,
+  total: narratorProducts.length,
+}));
+
 let getVersionImpl: () => Promise<string>;
 mock.method(LazyLibrarianAPI.prototype, 'getVersion', () => getVersionImpl());
 
@@ -270,6 +279,7 @@ before(() => {
 setupTestDb();
 
 beforeEach(() => {
+  narratorProducts = [];
   getWorkCalls = [];
   workCovers = [-1, 6498519, 8904777];
   absSearchCalls = [];
@@ -639,6 +649,32 @@ describe('GET /search (books)', () => {
         ['author', AUTHOR_ID],
       ]
     );
+  });
+
+  it('leads the book search with a narrator named like the query', async () => {
+    narratorProducts = [
+      {
+        asin: 'B0BB3F6HKX',
+        title: 'Fantastic Mr. Fox',
+        authors: [{ name: 'Roald Dahl' }],
+        narrators: [{ name: 'Chris ODowd' }],
+      },
+    ];
+    const agent = await login();
+    const res = await agent.get('/search').query({
+      query: 'chris odowd',
+      type: 'book',
+    });
+
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual(res.body.results[0], {
+      id: 'Chris ODowd',
+      mediaType: 'narrator',
+      name: 'Chris ODowd',
+      bookCount: 1,
+      topWork: 'Fantastic Mr. Fox',
+      profilePath: null,
+    });
   });
 
   it('adds books to the regular search only once LazyLibrarian is configured', async () => {

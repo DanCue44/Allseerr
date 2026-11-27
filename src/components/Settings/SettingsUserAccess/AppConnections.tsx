@@ -40,6 +40,8 @@ const messages = defineMessages(
       'The API key (auth key) of a Kavita admin, from the admin user settings',
     apiKeyHelpKomga:
       'An API key of a Komga admin, from the admin account settings',
+    usernameHelpGrimmory:
+      'Grimmory has no API keys, Allseerr signs in as this admin',
     savedSecret: 'Saved. Leave empty to keep it.',
     username: 'Admin username',
     usernameHelp: 'Instead of an API key',
@@ -68,6 +70,7 @@ const EXAMPLE_HOSTS: Record<UserAccessApp, string> = {
   audiobookshelf: 'audiobookshelf:80',
   kavita: 'kavita:5000',
   komga: 'komga:25600',
+  grimmory: 'grimmory:6060',
 };
 
 interface AppConnectionsProps {
@@ -85,6 +88,7 @@ const AppConnections = ({ settings, onChange }: AppConnectionsProps) => {
     audiobookshelf: intl.formatMessage(messages.apiKeyHelpAudiobookshelf),
     kavita: intl.formatMessage(messages.apiKeyHelpKavita),
     komga: intl.formatMessage(messages.apiKeyHelpKomga),
+    grimmory: '',
   };
 
   const isConnected = (app: UserAccessApp) =>
@@ -122,7 +126,7 @@ const AppConnections = ({ settings, onChange }: AppConnectionsProps) => {
       <p className="description">
         {intl.formatMessage(messages.appsDescription)}
       </p>
-      <ul className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <ul className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-4">
         {APPS.map((app) => (
           <li
             key={app}
@@ -337,26 +341,28 @@ const AppConnections = ({ settings, onChange }: AppConnectionsProps) => {
                       )}
                     </div>
                   </div>
-                  <div className="form-row">
-                    <label htmlFor="apiKey" className="text-label">
-                      {intl.formatMessage(messages.apiKey)}
-                      <span className="label-tip">
-                        {settings[editing].apiKeySet
-                          ? intl.formatMessage(messages.savedSecret)
-                          : apiKeyHelp[editing]}
-                      </span>
-                    </label>
-                    <div className="form-input-area">
-                      <div className="form-input-field">
-                        <SensitiveInput
-                          as="field"
-                          id="apiKey"
-                          name="apiKey"
-                          autoComplete="one-time-code"
-                        />
+                  {editing !== 'grimmory' && (
+                    <div className="form-row">
+                      <label htmlFor="apiKey" className="text-label">
+                        {intl.formatMessage(messages.apiKey)}
+                        <span className="label-tip">
+                          {settings[editing].apiKeySet
+                            ? intl.formatMessage(messages.savedSecret)
+                            : apiKeyHelp[editing]}
+                        </span>
+                      </label>
+                      <div className="form-input-area">
+                        <div className="form-input-field">
+                          <SensitiveInput
+                            as="field"
+                            id="apiKey"
+                            name="apiKey"
+                            autoComplete="one-time-code"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
                   {editing !== 'audiobookshelf' && (
                     <>
                       <div className="form-row">
@@ -367,7 +373,11 @@ const AppConnections = ({ settings, onChange }: AppConnectionsProps) => {
                               : messages.username
                           )}
                           <span className="label-tip">
-                            {intl.formatMessage(messages.usernameHelp)}
+                            {intl.formatMessage(
+                              editing === 'grimmory'
+                                ? messages.usernameHelpGrimmory
+                                : messages.usernameHelp
+                            )}
                           </span>
                         </label>
                         <div className="form-input-area">

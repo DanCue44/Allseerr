@@ -153,6 +153,7 @@ beforeEach(() => {
     audiobookshelf: {},
     kavita: {},
     komga: {},
+    grimmory: {},
     emailPasswords: true,
     oidc: { enabled: false, clients: [] },
     plexDefault: defaultPlexDefaultAccess(),

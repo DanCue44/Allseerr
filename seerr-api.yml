@@ -1048,6 +1048,8 @@ components:
           $ref: '#/components/schemas/UserAccessAppConnection'
         komga:
           $ref: '#/components/schemas/UserAccessAppConnection'
+        grimmory:
+          $ref: '#/components/schemas/UserAccessAppConnection'
         emailPasswords:
           type: boolean
           description: Emails new app passwords to people when email notifications are set up
@@ -1080,6 +1082,8 @@ components:
               $ref: '#/components/schemas/PlexDefaultApp'
             komga:
               $ref: '#/components/schemas/PlexDefaultApp'
+            grimmory:
+              $ref: '#/components/schemas/PlexDefaultApp'
         ageLimit:
           type: string
           nullable: true
@@ -1095,7 +1099,7 @@ components:
           type: string
         app:
           type: string
-          enum: [audiobookshelf, kavita, komga]
+          enum: [audiobookshelf, kavita, komga, grimmory]
         change:
           type: string
           enum: [granted, removed]
@@ -1111,7 +1115,7 @@ components:
       properties:
         app:
           type: string
-          enum: [audiobookshelf, kavita, komga]
+          enum: [audiobookshelf, kavita, komga, grimmory]
         name:
           type: string
         connected:
@@ -1190,6 +1194,8 @@ components:
               $ref: '#/components/schemas/UserAccessPersonApp'
             komga:
               $ref: '#/components/schemas/UserAccessPersonApp'
+            grimmory:
+              $ref: '#/components/schemas/UserAccessPersonApp'
     UserAccessNewPassword:
       type: object
       properties:
@@ -1205,10 +1211,10 @@ components:
       properties:
         audiobook:
           type: string
-          enum: [audiobookshelf]
+          enum: [audiobookshelf, grimmory]
         ebook:
           type: string
-          enum: [audiobookshelf, kavita]
+          enum: [audiobookshelf, kavita, grimmory]
         comic:
           type: string
           enum: [kavita, komga]
@@ -1228,7 +1234,7 @@ components:
       properties:
         app:
           type: string
-          enum: [audiobookshelf, kavita, komga]
+          enum: [audiobookshelf, kavita, komga, grimmory]
         name:
           type: string
           example: Kavita
@@ -1267,7 +1273,7 @@ components:
       properties:
         app:
           type: string
-          enum: [audiobookshelf, kavita, komga]
+          enum: [audiobookshelf, kavita, komga, grimmory]
         name:
           type: string
           example: Audiobookshelf
@@ -2673,6 +2679,37 @@ components:
         profilePath:
           type: string
           nullable: true
+    GrimmorySettings:
+      type: object
+      properties:
+        url:
+          type: string
+          description: Address Allseerr reaches Grimmory at
+          example: 'http://grimmory:6060'
+        publicUrl:
+          type: string
+          description: Address people open Grimmory at, for links
+        username:
+          type: string
+          description: Grimmory has no API keys, Allseerr signs in as this user
+        password:
+          type: string
+          writeOnly: true
+        passwordSet:
+          type: boolean
+          readOnly: true
+        ebookLibraryId:
+          type: string
+          description: Library the ebooks are kept in, any library when empty
+        audiobookLibraryId:
+          type: string
+          description: Library the audiobooks are kept in, any library when empty
+        ebooks:
+          type: boolean
+          description: Grimmory serves the ebooks in place of Audiobookshelf
+        audiobooks:
+          type: boolean
+          description: Grimmory serves the audiobooks in place of Audiobookshelf
     NarratorResult:
       type: object
       properties:
@@ -2823,6 +2860,14 @@ components:
           type: string
           nullable: true
           description: Where the audiobook opens in Audiobookshelf, once it is available. The book itself when an API key is set and the book is found in the library, otherwise a title search there
+        grimmoryEbookUrl:
+          type: string
+          nullable: true
+          description: Where the ebook opens in Grimmory, once it is available and Grimmory serves ebooks. The book itself when it is found, otherwise Grimmory's home page. The Audiobookshelf ebook links are then empty.
+        grimmoryAudiobookUrl:
+          type: string
+          nullable: true
+          description: Where the audiobook opens in Grimmory, once it is available and Grimmory serves audiobooks. The book itself when it is found, otherwise Grimmory's home page. The Audiobookshelf audiobook links are then empty.
         audiobookshelfEbookItemId:
           type: string
           nullable: true
@@ -5930,6 +5975,84 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LazyLibrarianSettings'
+  /settings/grimmory:
+    get:
+      summary: Get Grimmory settings
+      description: Retrieves the Grimmory connection and the formats it serves. The password is never returned, only whether one is saved.
+      tags:
+        - settings
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrimmorySettings'
+    post:
+      summary: Update Grimmory settings
+      description: Saves the Grimmory connection. For the formats Grimmory serves, book pages link to the book in Grimmory instead of Audiobookshelf and the Grimmory Scan job marks requested books available once Grimmory has them. A missing password keeps the saved one.
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GrimmorySettings'
+      responses:
+        '200':
+          description: 'Values were successfully updated'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrimmorySettings'
+        '400':
+          description: The URL is not an http or https address
+  /settings/grimmory/test:
+    post:
+      summary: Test Grimmory configuration
+      description: Signs in to Grimmory (POST /api/v1/auth/login), reads the signed in user and version and lists the libraries. A missing password tests with the saved one.
+      tags:
+        - settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  example: 'http://grimmory:6060'
+                username:
+                  type: string
+                password:
+                  type: string
+              required:
+                - url
+      responses:
+        '200':
+          description: Signed in to Grimmory
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  libraries:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        formats:
+                          type: array
+                          items:
+                            type: string
   /settings/audiobookshelf:
     get:
       summary: Get Audiobookshelf settings
@@ -6126,7 +6249,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: Deleted
@@ -6146,7 +6269,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The accounts
@@ -6197,7 +6320,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
         - in: path
           name: remoteUserId
           required: true
@@ -6268,7 +6391,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       requestBody:
         required: true
         content:
@@ -6304,7 +6427,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The person
@@ -6325,7 +6448,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The person and the new password, when an account was made
@@ -6351,7 +6474,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The new password, shown once
@@ -6791,7 +6914,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       requestBody:
         required: true
         content:
@@ -9335,7 +9458,7 @@ paths:
                       properties:
                         app:
                           type: string
-                          enum: [audiobookshelf, kavita, komga]
+                          enum: [audiobookshelf, kavita, komga, grimmory]
                         name:
                           type: string
                           example: Kavita
@@ -10919,7 +11042,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The app's new state. When the app could not make the account, the state is `error`.
@@ -10956,7 +11079,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The new password, shown once
@@ -10988,7 +11111,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The app's state, `requested` unless the user already has access
@@ -14051,7 +14174,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: How to sign in
@@ -14063,7 +14186,7 @@ paths:
                 properties:
                   app:
                     type: string
-                    enum: [audiobookshelf, kavita, komga]
+                    enum: [audiobookshelf, kavita, komga, grimmory]
                   serverUrl:
                     type: string
                     description: The app's public address
@@ -14114,7 +14237,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [audiobookshelf, kavita, komga]
+            enum: [audiobookshelf, kavita, komga, grimmory]
       responses:
         '200':
           description: The app's state, `requested` unless the user already has access

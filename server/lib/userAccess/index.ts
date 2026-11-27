@@ -1,4 +1,5 @@
 import { AudiobookshelfAdminAPI } from '@server/api/userAccess/audiobookshelfAdmin';
+import { GrimmoryAdminAPI } from '@server/api/userAccess/grimmoryAdmin';
 import { KavitaAdminAPI } from '@server/api/userAccess/kavitaAdmin';
 import { KomgaAdminAPI } from '@server/api/userAccess/komgaAdmin';
 import type {
@@ -94,6 +95,17 @@ const connectionFor = (app: UserAccessApp): UserAccessAppConnection => {
   const settings = getSettings();
   const connection = settings.userAccess[app];
 
+  // Grimmory set up in the services signs in the same way
+  if (app === 'grimmory' && !connection.url && settings.grimmory.url) {
+    return {
+      ...connection,
+      url: settings.grimmory.url,
+      publicUrl: connection.publicUrl || settings.grimmory.publicUrl,
+      username: connection.username || settings.grimmory.username,
+      password: connection.password || settings.grimmory.password,
+    };
+  }
+
   // Audiobookshelf is often already linked for book links
   if (app === 'audiobookshelf' && !connection.url) {
     return {
@@ -140,6 +152,8 @@ export const getAppClient = (
       return new KavitaAdminAPI(options);
     case 'komga':
       return new KomgaAdminAPI(options);
+    case 'grimmory':
+      return new GrimmoryAdminAPI(options);
   }
 };
 
