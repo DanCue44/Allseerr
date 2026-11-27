@@ -451,11 +451,24 @@ components:
           description: 'Highest US TV rating the user may request (TV-Y, TV-Y7, TV-G, TV-PG, TV-14 or TV-MA). Null means no limit. Only users with the `MANAGE_USERS` permission can change it.'
           example: 'TV-PG'
         blockedGenres:
+          # Inline instead of a $ref: the request validator ignores nullable next to allOf, so a
+          # null (the value GET returns for users who follow the server's list) was refused
           type: object
           nullable: true
-          allOf:
-            - $ref: '#/components/schemas/BlockedGenres'
-          description: "The user's own blocked genres. Null follows the server's list. Only users with the `MANAGE_USERS` permission can change it."
+          description: "The user's own blocked genres, in the same shape as BlockedGenres. Null follows the server's list. Only users with the `MANAGE_USERS` permission can change it."
+          properties:
+            movie:
+              type: string
+              example: '27,10749'
+            tv:
+              type: string
+              example: '16'
+            music:
+              type: string
+              example: 'christmas'
+            book:
+              type: string
+              example: 'horror'
         globalMovieQuotaDays:
           type: number
           nullable: true

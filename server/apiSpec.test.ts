@@ -156,6 +156,9 @@ describe('seerr-api.yml', () => {
     app.delete('/api/v1/user/:userId/settings/nobookends', (_req, res) => {
       res.status(204).send();
     });
+    app.post('/api/v1/user/:userId/settings/main', (_req, res) => {
+      res.status(200).json({});
+    });
     app.use(
       (
         err: { status?: number; message?: string },
@@ -572,6 +575,27 @@ describe('seerr-api.yml', () => {
       '/api/v1/settings/nobookends-sync/backfill'
     );
     assert.strictEqual(backfillSync.status, 200, backfillSync.body.message);
+
+    // GET returns null genre blocks for users who follow the server's list, and
+    // the same body has to save back
+    const followsServerGenres = await request(app)
+      .post('/api/v1/user/1/settings/main')
+      .send({ username: 'demo', accentColor: '#018E11', blockedGenres: null });
+    assert.strictEqual(
+      followsServerGenres.status,
+      200,
+      followsServerGenres.body.message
+    );
+
+    const ownGenres = await request(app)
+      .post('/api/v1/user/1/settings/main')
+      .send({ username: 'demo', blockedGenres: { movie: '27', book: '' } });
+    assert.strictEqual(ownGenres.status, 200, ownGenres.body.message);
+
+    const badGenres = await request(app)
+      .post('/api/v1/user/1/settings/main')
+      .send({ username: 'demo', blockedGenres: 'horror' });
+    assert.strictEqual(badGenres.status, 400);
 
     const testWithoutUrl = await request(app)
       .post('/api/v1/settings/audiobookshelf/test')
