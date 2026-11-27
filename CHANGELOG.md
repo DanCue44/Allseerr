@@ -2,6 +2,15 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.6 - 2026-11-27
+
+### Added
+
+- Narrator names on book pages link to a narrator page that lists the audiobooks they read, grouped by author and series in series order, with request status and filters.
+- Searching for a narrator's name now shows the narrator, both in the combined search and in the book search.
+- Grimmory (formerly BookLore) can be added under Settings > Services and chosen for ebooks, audiobooks or both. Book pages then link to the book in Grimmory, and requested books show as available once Grimmory has them ([#7](https://github.com/DanCue44/Allseerr/issues/7)).
+- Grimmory joins Audiobookshelf, Kavita and Komga in User Access, so Allseerr can create and manage people's Grimmory accounts and offer it as the reading app for ebooks or audiobooks.
+
 ## 3.5.2.5 - 2026-11-22
 
 ### Added
