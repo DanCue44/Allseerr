@@ -2673,6 +2673,26 @@ components:
         profilePath:
           type: string
           nullable: true
+    NarratorResult:
+      type: object
+      properties:
+        id:
+          type: string
+          description: The narrator's name as Audible spells it
+          example: Kate Reading
+        mediaType:
+          type: string
+          enum: [narrator]
+        name:
+          type: string
+          example: Kate Reading
+        bookCount:
+          type: number
+        topWork:
+          type: string
+        profilePath:
+          type: string
+          nullable: true
     BookLink:
       type: object
       properties:
@@ -11538,6 +11558,7 @@ paths:
                         - $ref: '#/components/schemas/ArtistResult'
                         - $ref: '#/components/schemas/BookResult'
                         - $ref: '#/components/schemas/AuthorResult'
+                        - $ref: '#/components/schemas/NarratorResult'
   /search/keyword:
     get:
       summary: Search for keywords
@@ -14463,6 +14484,42 @@ paths:
                 $ref: '#/components/schemas/ComicDetails'
         '404':
           description: Unknown comic ID, or a series no search has found
+  /narrator:
+    get:
+      summary: Get the audiobooks of a narrator
+      description: Lists the audiobooks a narrator read from the Audible catalog of the discover region, newest 200 recordings at most, one per book, grouped by author, then series in series order, then books outside a series. Books are matched to OpenLibrary works for their request status; matching waits a few seconds at most and `pending` counts the books still being matched, so the page can ask again.
+      tags:
+        - books
+      parameters:
+        - in: query
+          name: name
+          required: true
+          description: Narrator name
+          schema:
+            type: string
+            example: Kate Reading
+      responses:
+        '200':
+          description: The narrator's audiobooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  totalBooks:
+                    type: number
+                  truncated:
+                    type: boolean
+                  pending:
+                    type: number
+                  authors:
+                    type: array
+                    items:
+                      type: object
+        '404':
+          description: Audible lists no narrator by that name
   /author/{authorId}:
     get:
       summary: Get author details

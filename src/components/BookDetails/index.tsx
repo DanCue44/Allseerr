@@ -4,6 +4,7 @@ import BookFormatIndicators from '@app/components/Common/BookFormatIndicators';
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
+import NarratorLinks from '@app/components/Common/NarratorLinks';
 import PageTitle from '@app/components/Common/PageTitle';
 import type { PlayButtonLink } from '@app/components/Common/PlayButton';
 import PlayButton from '@app/components/Common/PlayButton';
@@ -536,7 +537,7 @@ const BookDetails = ({ book }: BookDetailsProps) => {
                   })}
                 </span>
                 <span className="media-fact-value">
-                  {audiobookEdition.narrators.join(', ')}
+                  <NarratorLinks narrators={audiobookEdition.narrators} />
                 </span>
               </div>
             )}

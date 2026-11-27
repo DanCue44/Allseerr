@@ -22,6 +22,7 @@ import type {
   CollectionResult,
   ComicResult,
   MovieResult,
+  NarratorResult,
   PersonResult,
   TvResult,
 } from '@server/models/Search';
@@ -37,6 +38,7 @@ type ListViewProps = {
     | ArtistResult
     | BookResult
     | AuthorResult
+    | NarratorResult
     | ComicResult
   )[];
   plexItems?: WatchlistItem[];
@@ -237,6 +239,18 @@ const ListView = ({
                   <BookTitleCard
                     id={title.id}
                     mediaType="author"
+                    title={title.name}
+                    subtitle={title.topWork}
+                    image={title.profilePath}
+                    canExpand
+                  />
+                );
+                break;
+              case 'narrator':
+                titleCard = (
+                  <BookTitleCard
+                    id={title.id}
+                    mediaType="narrator"
                     title={title.name}
                     subtitle={title.topWork}
                     image={title.profilePath}

@@ -28,6 +28,7 @@ import BookFormatIndicators from '@app/components/Common/BookFormatIndicators';
 import Button from '@app/components/Common/Button';
 import CachedImage from '@app/components/Common/CachedImage';
 import LoadingSpinner from '@app/components/Common/LoadingSpinner';
+import NarratorLinks from '@app/components/Common/NarratorLinks';
 import PageTitle from '@app/components/Common/PageTitle';
 import Tooltip from '@app/components/Common/Tooltip';
 import FavoriteButton from '@app/components/FavoriteButton';
@@ -674,7 +675,10 @@ const BookDetails = ({ book }: BookDetailsProps) => {
                       narratorCount: audiobookEdition.narrators.length,
                     })}
                   >
-                    {audiobookEdition.narrators.join(', ')}
+                    <NarratorLinks
+                      narrators={audiobookEdition.narrators}
+                      className="hover:text-as-ink hover:underline"
+                    />
                   </DetailRow>
                 )}
                 {!!audiobookEdition?.runtimeMinutes && (

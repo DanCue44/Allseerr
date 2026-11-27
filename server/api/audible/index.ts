@@ -13,6 +13,10 @@ const CACHE_TTL = 86400 * 7;
 const UNKNOWN_TTL = 600;
 const MAX_RPS = 5;
 const NUM_RESULTS = 10;
+// Narrator listings are asked a page of the most the catalog gives at a
+// time, and kept a day as new recordings come out
+const NARRATOR_PAGE_SIZE = 50;
+const NARRATOR_CACHE_TTL = 86400;
 // Saved answers are asked again after this long. Books without an
 // audiobook are checked more often, as editions keep being recorded.
 const FOUND_STALE_AFTER = 90 * 24 * 60 * 60 * 1000;
@@ -132,6 +136,35 @@ class Audible extends ExternalAPI {
     );
 
     return data.products ?? [];
+  }
+
+  /**
+   * One page of the audiobooks a narrator read, newest first. The catalog
+   * matches the name loosely, so callers check the narrators themselves.
+   */
+  public async searchNarrator(
+    name: string,
+    page = 0
+  ): Promise<{ products: AudibleProduct[]; total: number }> {
+    const data = await this.get<AudibleProductsResponse>(
+      '/catalog/products',
+      {
+        params: {
+          narrator: name,
+          num_results: String(NARRATOR_PAGE_SIZE),
+          page: String(page),
+          products_sort_by: '-ReleaseDate',
+          response_groups: 'contributors,product_attrs,media,series',
+          image_sizes: COVER_SIZE,
+        },
+      },
+      NARRATOR_CACHE_TTL
+    );
+
+    return {
+      products: data.products ?? [],
+      total: data.total_results ?? data.products?.length ?? 0,
+    };
   }
 
   /**
@@ -282,4 +315,5 @@ export const getAudible = (): Audible => {
   return instance;
 };
 
+export { NARRATOR_PAGE_SIZE };
 export default Audible;

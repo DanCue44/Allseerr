@@ -58,6 +58,7 @@ export const isResultShown = (
       return !hidden.includes('music');
     case 'book':
     case 'author':
+    case 'narrator':
     case 'comic':
       return !hidden.includes('book');
     default:

@@ -2,6 +2,7 @@ import { Card } from '@app/components/Allseerr/Title';
 import RecordingRequestModal from '@app/components/BookRecordings/RecordingRequestModal';
 import Badge from '@app/components/Common/Badge';
 import Button from '@app/components/Common/Button';
+import NarratorLinks from '@app/components/Common/NarratorLinks';
 import useSettings from '@app/hooks/useSettings';
 import { splitRuntime } from '@app/utils/audiobookEdition';
 import type {
@@ -203,8 +204,11 @@ const BookRecordings = ({
         <div key={`recording-${recording.bookId}`} className={rowClass}>
           <div className="flex min-w-0 flex-col">
             <span className={`truncate font-semibold ${strongClass}`}>
-              {recording.narrators.join(', ') ||
-                intl.formatMessage(messages.unknownnarrator)}
+              {recording.narrators.length ? (
+                <NarratorLinks narrators={recording.narrators} />
+              ) : (
+                intl.formatMessage(messages.unknownnarrator)
+              )}
             </span>
             <span className={`text-xs ${mutedClass}`}>
               {[

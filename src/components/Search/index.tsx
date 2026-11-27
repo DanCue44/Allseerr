@@ -16,6 +16,7 @@ import type {
   BookResult,
   ComicResult,
   MovieResult,
+  NarratorResult,
   PersonResult,
   TvResult,
 } from '@server/models/Search';
@@ -60,6 +61,7 @@ const Search = () => {
     | ArtistResult
     | BookResult
     | AuthorResult
+    | NarratorResult
     | ComicResult
   >(
     typeof router.query.query === 'string' ? router.query.query : undefined,

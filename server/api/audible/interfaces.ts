@@ -13,6 +13,17 @@ export interface AudibleProduct {
   runtime_length_min?: number;
   // From the media response group, keyed by image size
   product_images?: Record<string, string>;
+  // From the series response group, the series the book belongs to and
+  // its place there, such as "1" or "2.5"
+  series?: AudibleSeries[];
+  release_date?: string;
+  language?: string;
+}
+
+export interface AudibleSeries {
+  asin?: string;
+  title?: string;
+  sequence?: string;
 }
 
 export interface AudibleProductsResponse {

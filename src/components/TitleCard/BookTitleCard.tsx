@@ -20,7 +20,7 @@ import { useIntl } from 'react-intl';
 
 interface BookTitleCardProps {
   id: string;
-  mediaType: 'book' | 'author';
+  mediaType: 'book' | 'author' | 'narrator';
   title: string;
   // The authors, for book cards
   subtitle?: string;
@@ -32,7 +32,8 @@ interface BookTitleCardProps {
 }
 
 /**
- * Portrait card for books and authors, the book counterpart of TitleCard
+ * Portrait card for books, authors and narrators, the book counterpart of
+ * TitleCard
  */
 const BookTitleCard = ({
   id,
@@ -56,7 +57,20 @@ const BookTitleCard = ({
   const [currentStatusAudio, setCurrentStatusAudio] = useState(statusAudio);
   const [showDetail, setShowDetail] = useState(false);
   const [showRequestModal, setShowRequestModal] = useState(false);
-  const isAuthor = mediaType === 'author';
+  // Authors and narrators are people, shown round and without a request
+  const isAuthor = mediaType === 'author' || mediaType === 'narrator';
+  const href =
+    mediaType === 'narrator'
+      ? `/narrator/${encodeURIComponent(id)}`
+      : mediaType === 'author'
+        ? `/author/${id}`
+        : `/book/${id}`;
+  const kindLabel =
+    mediaType === 'narrator'
+      ? globalMessages.narrator
+      : isAuthor
+        ? globalMessages.author
+        : globalMessages.book;
 
   useEffect(() => {
     setCurrentStatus(status);
@@ -165,16 +179,14 @@ const BookTitleCard = ({
           <div className="absolute left-0 right-0 flex items-center justify-between p-2">
             {ambient ? (
               <FormatIcon
-                format={isAuthor ? 'author' : 'book'}
+                format={isAuthor ? mediaType : 'book'}
                 size="card"
                 className={`z-40 self-start ${isAuthor ? 'mx-auto' : ''}`}
               />
             ) : (
               <div className="pointer-events-none z-40 self-start rounded-full border border-amber-500 bg-amber-600/80 shadow-md">
                 <div className="flex h-4 items-center px-2 py-2 text-center text-xs font-medium uppercase tracking-wider text-white sm:h-5">
-                  {intl.formatMessage(
-                    isAuthor ? globalMessages.author : globalMessages.book
-                  )}
+                  {intl.formatMessage(kindLabel)}
                 </div>
               </div>
             )}
@@ -216,7 +228,7 @@ const BookTitleCard = ({
           >
             <div className="absolute inset-0 overflow-hidden rounded-xl">
               <Link
-                href={isAuthor ? `/author/${id}` : `/book/${id}`}
+                href={href}
                 className="absolute inset-0 h-full w-full cursor-pointer overflow-hidden text-left"
                 style={{
                   background: ambient
@@ -280,16 +292,14 @@ const BookTitleCard = ({
       </div>
       {ambient && (
         <Link
-          href={isAuthor ? `/author/${id}` : `/book/${id}`}
+          href={href}
           className={`mt-2.5 block ${isAuthor ? 'text-center' : ''}`}
         >
           <div className="line-clamp-2 whitespace-normal break-words font-bold text-as-ink hover:underline">
             {title}
           </div>
           <div className="truncate text-[13px] text-as-ink-faint">
-            {intl.formatMessage(
-              isAuthor ? globalMessages.author : globalMessages.book
-            )}
+            {intl.formatMessage(kindLabel)}
             {subtitle
               ? ` · ${subtitle}`
               : year

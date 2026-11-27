@@ -53,6 +53,7 @@ import libraryRoutes from './library';
 import mediaRoutes from './media';
 import movieRoutes from './movie';
 import musicRoutes from './music';
+import narratorRoutes from './narrator';
 import nobookendsRoutes, { nobookendsDirectoryCheck } from './nobookends';
 import oidcRoutes from './oidc';
 import oidcLoginRoutes from './oidcLogin';
@@ -197,6 +198,7 @@ router.use(
   userAccessRoutes
 );
 router.use('/author', isAuthenticated(), authorRoutes);
+router.use('/narrator', isAuthenticated(), narratorRoutes);
 router.use('/media/:mediaId/arr', isAuthenticated(), arrActionRoutes);
 router.use('/media', isAuthenticated(), mediaRoutes);
 router.use('/library', isAuthenticated(), libraryRoutes);

@@ -17,6 +17,7 @@ import type {
   CollectionResult,
   ComicResult,
   MovieResult,
+  NarratorResult,
   PersonResult,
   TvResult,
 } from '@server/models/Search';
@@ -64,6 +65,7 @@ type SearchResult =
   | ArtistResult
   | BookResult
   | AuthorResult
+  | NarratorResult
   | CollectionResult
   | ComicResult;
 

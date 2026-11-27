@@ -33,6 +33,7 @@ export type ItemFormat =
   | 'comic'
   | 'manga'
   | 'author'
+  | 'narrator'
   | 'person';
 
 type FormatIconSize = 'card' | 'inline' | 'small';
@@ -92,6 +93,11 @@ const formatStyles: Record<ItemFormat, FormatStyle> = {
     icon: UserIcon,
     classic: 'bg-amber-600/85 ring-amber-500 text-white',
     ambient: 'text-amber-300',
+  },
+  narrator: {
+    icon: HeadphonesIcon,
+    classic: 'bg-orange-600/85 ring-orange-500 text-white',
+    ambient: 'text-orange-300',
   },
   comic: {
     icon: ChatBubbleOvalLeftIcon,
@@ -155,6 +161,7 @@ export const useFormatLabel = (format: ItemFormat): string => {
       ebook: globalMessages.ebook,
       audiobook: globalMessages.audiobook,
       author: globalMessages.author,
+      narrator: globalMessages.narrator,
       comic: globalMessages.comic,
       manga: globalMessages.manga,
       person: messages.person,

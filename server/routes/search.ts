@@ -16,6 +16,7 @@ import {
   isResultShown,
 } from '@server/lib/hiddenMediaTypes';
 import { rankMusicResult } from '@server/lib/musicSearchRank';
+import { searchNarrators } from '@server/lib/narrators';
 import { findSearchProvider } from '@server/lib/search';
 import { rankCombinedResults } from '@server/lib/searchRank';
 import { getSettings } from '@server/lib/settings';
@@ -27,6 +28,7 @@ import type {
   AuthorResult,
   BookResult,
   ComicResult,
+  NarratorResult,
 } from '@server/models/Search';
 import { mapSearchResults } from '@server/models/Search';
 import { Router } from 'express';
@@ -137,7 +139,27 @@ export const searchComicResults = async (
   return mapComicResults(limit ? results.slice(0, limit) : results);
 };
 
-type ExtraResult = AlbumResult | ArtistResult | BookResult | AuthorResult;
+type ExtraResult =
+  | AlbumResult
+  | ArtistResult
+  | BookResult
+  | AuthorResult
+  | NarratorResult;
+
+/**
+ * Audiobook narrators named like the query, within the source budget and
+ * empty when Audible cannot be asked
+ */
+const searchNarratorResults = (query: string): Promise<NarratorResult[]> =>
+  withTimeout(searchNarrators(query), ALL_SEARCH_SOURCE_BUDGET_MS).catch(
+    (e) => {
+      logger.debug('Failed to search for narrators', {
+        label: 'API',
+        errorMessage: (e as Error).message,
+      });
+      return [];
+    }
+  );
 
 /**
  * Music, books and comics for the first page of the combined search, each
@@ -156,27 +178,32 @@ const searchExtras = async (
   const budget = <T>(promise: Promise<T>): Promise<T | undefined> =>
     withTimeout(promise, ALL_SEARCH_SOURCE_BUDGET_MS).catch(() => undefined);
 
-  const [musicResults, bookResults, comicResults] = await Promise.all([
-    shown('music') && settings.lidarr.length > 0
-      ? budget(searchMusic({ query }))
-      : undefined,
-    shown('book') && settings.bookService
-      ? budget(searchBooks({ query, bookLimit: 10, authorLimit: 3 }))
-      : undefined,
-    shown('comic')
-      ? budget(searchComicResults(query, { limit: ALL_SEARCH_COMICS_LIMIT }))
-      : undefined,
-  ]);
+  const booksShown = shown('book') && !!settings.bookService;
+  const [musicResults, bookResults, narratorResults, comicResults] =
+    await Promise.all([
+      shown('music') && settings.lidarr.length > 0
+        ? budget(searchMusic({ query }))
+        : undefined,
+      booksShown
+        ? budget(searchBooks({ query, bookLimit: 10, authorLimit: 3 }))
+        : undefined,
+      booksShown ? searchNarratorResults(query) : undefined,
+      shown('comic')
+        ? budget(searchComicResults(query, { limit: ALL_SEARCH_COMICS_LIMIT }))
+        : undefined,
+    ]);
 
   return {
     results: [
       ...(musicResults?.results ?? []),
       ...(bookResults?.results ?? []),
+      ...(narratorResults ?? []),
       ...(comicResults ?? []),
     ],
     totalResults:
       (musicResults?.totalResults ?? 0) +
       (bookResults?.results.length ?? 0) +
+      (narratorResults?.length ?? 0) +
       (comicResults?.length ?? 0),
   };
 };
@@ -223,13 +250,17 @@ searchRoutes.get('/', async (req, res, next) => {
     }
 
     if (searchType === 'book') {
-      const bookResults = await searchBooks({ query: queryString, page });
+      // Narrators named like the query lead the first page
+      const [bookResults, narratorResults] = await Promise.all([
+        searchBooks({ query: queryString, page }),
+        page === 1 ? searchNarratorResults(queryString) : [],
+      ]);
 
       return res.status(200).json({
         page,
         totalPages: bookResults.totalPages,
-        totalResults: bookResults.totalResults,
-        results: bookResults.results,
+        totalResults: bookResults.totalResults + narratorResults.length,
+        results: [...narratorResults, ...bookResults.results],
       });
     }
 

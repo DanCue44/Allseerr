@@ -13,7 +13,8 @@ const resultName = (result: Results): string =>
   result.mediaType === 'tv' ||
   result.mediaType === 'person' ||
   result.mediaType === 'artist' ||
-  result.mediaType === 'author'
+  result.mediaType === 'author' ||
+  result.mediaType === 'narrator'
     ? result.name
     : result.title;
 

@@ -137,6 +137,18 @@ export interface AuthorResult {
   profilePath: string | null;
 }
 
+// Audiobook narrators from the Audible catalog, keyed by their name as
+// Audible spells it
+export interface NarratorResult {
+  id: string;
+  mediaType: 'narrator';
+  name: string;
+  bookCount?: number;
+  // The latest audiobook they read
+  topWork?: string;
+  profilePath: string | null;
+}
+
 // Comic and manga series from Talearr's comics lookup, keyed by their comic
 // id, such as al-30013
 export interface ComicResult {
@@ -166,6 +178,7 @@ export type Results =
   | ArtistResult
   | BookResult
   | AuthorResult
+  | NarratorResult
   | ComicResult;
 
 export const mapMovieResult = (

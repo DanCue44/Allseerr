@@ -62,9 +62,10 @@ const TADB_MAX_KEYS = 1000;
 // One key per work, author, search or list page, each a small JSON document.
 const OPENLIBRARY_MAX_KEYS = 2000;
 
-// One key per catalog search, ten small products each. The answer per book
-// is also kept in metadata_book_audio.
-const AUDIBLE_MAX_KEYS = 2000;
+// One key per catalog search, ten small products each, and one tiny key per
+// narrated audiobook matched to its OpenLibrary work. The answer per book is
+// also kept in metadata_book_audio.
+const AUDIBLE_MAX_KEYS = 6000;
 
 // One key per volume search, twenty small volumes each. The answer per book
 // is also kept in metadata_book_ebook.
