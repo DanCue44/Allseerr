@@ -2,6 +2,12 @@
 
 Notable Allseerr changes are listed here, newest first. Versions are the Seerr version Allseerr is based on plus an Allseerr revision (for example 3.5.2.1); Seerr's own changes are in Seerr's release notes.
 
+## 3.5.2.7 - 2026-11-27
+
+### Fixed
+
+- A custom accent color (Settings > General, or your own profile settings) now shows across the Ambient interface instead of the default orange ([#8](https://github.com/DanCue44/Allseerr/issues/8)).
+
 ## 3.5.2.6 - 2026-11-27
 
 ### Added
