@@ -67,7 +67,7 @@ const filterTest: Record<BooksFilter, (book: NarratorBook) => boolean> = {
 };
 
 // Asks again while books are still being matched, a few times at most
-const MAX_REFRESHES = 10;
+const MAX_REFRESHES = 25;
 const REFRESH_INTERVAL_MS = 4000;
 
 const toBookResult = (book: NarratorBook, olId: string): BookResult => ({

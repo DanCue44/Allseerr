@@ -306,12 +306,12 @@ const GrimmoryModal = ({ grimmory, onClose, onSave }: GrimmoryModalProps) => {
                   </div>
                 </div>
                 <div className="form-row">
-                  <span className="text-label">
+                  <label htmlFor="ebooks" className="text-label">
                     {intl.formatMessage(messages.serves)}
                     <span className="label-tip">
                       {intl.formatMessage(messages.servesHelp)}
                     </span>
-                  </span>
+                  </label>
                   <div className="form-input-area flex flex-col gap-2">
                     <label className="flex items-center gap-2">
                       <Field type="checkbox" id="ebooks" name="ebooks" />
